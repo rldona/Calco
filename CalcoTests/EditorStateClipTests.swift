@@ -51,6 +51,26 @@ final class EditorStateClipTests: XCTestCase {
         XCTAssertEqual(state.project.clips.count, 1, "the last clip can't be deleted")
     }
 
+    func testMoveFrameKeepsSelection() throws {
+        let state = try makeState()
+        state.moveFrame(id: "000", to: 0)
+        state.moveFrame(id: "nope", to: 0)
+        XCTAssertFalse(state.isDirty, "no-op moves don't dirty the project")
+
+        state.addFrame(); state.addFrame(); state.addFrame()  // 000 001 002 003
+        XCTAssertEqual(state.frames.map(\.id), ["000", "001", "002", "003"])
+        state.frameIndex = 1  // 001
+
+        state.moveFrame(id: "003", to: 0)
+        XCTAssertEqual(state.frames.map(\.id), ["003", "000", "001", "002"])
+        XCTAssertEqual(state.currentFrame?.id, "001", "selection follows the selected frame")
+        XCTAssertTrue(state.isDirty)
+
+        state.moveFrame(id: "001", to: 99)
+        XCTAssertEqual(state.frames.map(\.id), ["003", "000", "002", "001"], "destination is clamped")
+        XCTAssertEqual(state.frameIndex, 3)
+    }
+
     func testPivotIsClamped() throws {
         let state = try makeState()
         state.setPivot(Pivot(x: 1.7, y: -0.2))

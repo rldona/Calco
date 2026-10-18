@@ -1,9 +1,11 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Bottom strip: play, frame thumbnails, and per-frame actions.
-/// Reordering is by arrows for now; drag comes once the strip is stable.
+/// Reorder by long-pressing a thumbnail and dragging it, or step by step with the arrows.
 struct TimelineView: View {
     @ObservedObject var state: EditorState
+    @State private var draggingFrameID: String?
 
     var body: some View {
         VStack(spacing: 8) {
@@ -69,6 +71,12 @@ struct TimelineView: View {
                                 selected: index == state.frameIndex)
                             .id(frame.id)
                             .onTapGesture { state.frameIndex = index }
+                            .onDrag {
+                                draggingFrameID = frame.id
+                                return NSItemProvider(object: frame.id as NSString)
+                            }
+                            .onDrop(of: [.text], delegate: FrameDropDelegate(
+                                targetID: frame.id, state: state, dragging: $draggingFrameID))
                         }
                     }
                     .padding(.horizontal, 4)
@@ -82,6 +90,26 @@ struct TimelineView: View {
         }
         .padding(12)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+/// Live reorder: the dragged frame takes the slot of whichever thumbnail it is over.
+private struct FrameDropDelegate: DropDelegate {
+    let targetID: String
+    let state: EditorState
+    @Binding var dragging: String?
+
+    func dropEntered(info: DropInfo) {
+        guard let id = dragging, id != targetID,
+              let to = state.frames.firstIndex(where: { $0.id == targetID }) else { return }
+        withAnimation(.easeOut(duration: 0.15)) { state.moveFrame(id: id, to: to) }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
+
+    func performDrop(info: DropInfo) -> Bool {
+        dragging = nil
+        return true
     }
 }
 

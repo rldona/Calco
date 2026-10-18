@@ -4,7 +4,7 @@
 
 - [x] Metal canvas PoC: Pencil input, pressure, one brush, acceptable latency (~9 ms on iPad Pro 11)
 - [x] Layers per frame with opacity/visibility
-- [x] Frame strip: add / duplicate / delete / reorder / hold (reorder by arrows; drag later)
+- [x] Frame strip: add / duplicate / delete / reorder / hold
 - [x] Onion skin (configurable before/after)
 - [x] Clips (idle, run…) with pivot
 - [x] Loop playback
@@ -12,6 +12,18 @@
 - [x] Export sprite sheet PNG + Aseprite JSON
 - [x] Export GIF (current clip)
 - [x] `calco-unity` importer: JSON → Sprites + AnimationClips + AnimatorController (`calco-unity/`, verified with Unity 6000.6 in batch mode)
+
+## v0.2 — "usable"
+
+The v0.1 UI grew one control per feature. This pass makes it a tool you can work in.
+
+- [x] Frame strip: drag to reorder (long-press a thumbnail; arrows stay for single steps)
+- [ ] Layers panel (add / delete / rename / reorder / opacity) instead of ad-hoc controls
+- [ ] Tool panel: brush size, colour, eraser
+- [ ] Gestures: two-finger tap undo, three-finger redo, pinch zoom / pan / rotate
+- [ ] Undo / redo stack
+- [ ] Keyboard shortcuts for hardware keyboards
+- [ ] Consistent iconography and layout pass (portrait and landscape)
 
 ## Later
 

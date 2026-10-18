@@ -353,6 +353,19 @@ final class EditorState: ObservableObject {
         isDirty = true
     }
 
+    /// Moves frame `id` so it ends up at `index`. The selection stays on the frame that was selected.
+    func moveFrame(id: String, to index: Int) {
+        guard let from = frames.firstIndex(where: { $0.id == id }) else { return }
+        let to = min(max(index, 0), frames.count - 1)
+        guard from != to else { return }
+        let selectedID = currentFrame?.id
+        clip.frames.insert(clip.frames.remove(at: from), at: to)
+        if let selectedID, let i = frames.firstIndex(where: { $0.id == selectedID }) {
+            frameIndex = i
+        }
+        isDirty = true
+    }
+
     func setHold(_ hold: Int) {
         guard currentFrame != nil else { return }
         clip.frames[frameIndex].hold = max(1, hold)
