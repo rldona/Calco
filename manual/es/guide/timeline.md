@@ -4,6 +4,10 @@ La línea de tiempo es la parte inferior del editor: los clips y la reproducció
 
 ![La línea de tiempo](/crops/es/timeline.jpg)
 
+## Hacerla más alta
+
+Arrastra hacia arriba el **agarre** de la parte superior de la línea de tiempo (la barrita del centro) para hacer sitio a más capas: las filas crecen hasta una altura cómoda y el lienzo se hace más pequeño. Calco recuerda la altura. Toca **dos veces** el agarre para volver a la altura automática, la que cabe con las capas que tienes.
+
 ## Fila superior
 
 - **▶** reproduce el clip (Espacio). El contador muestra fotograma / total.

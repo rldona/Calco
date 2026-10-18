@@ -2,7 +2,7 @@
 
 All notable changes to Calco. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
-A release is made by pushing a tag `vX.Y.Z`: the release workflow builds the app, uploads it to TestFlight and publishes a GitHub release whose notes are that version's section below. Add your changes under **Unreleased** as you go, then rename it to the new version before tagging.
+A release is made by pushing a tag `vX.Y.Z`: the release workflow tests and builds the app (unsigned) and publishes a GitHub release whose notes are that version's section below. Add your changes under **Unreleased** as you go, then rename it to the new version before tagging.
 
 ## [Unreleased]
 
@@ -10,6 +10,10 @@ A release is made by pushing a tag `vX.Y.Z`: the release workflow builds the app
 
 - **Resizable timeline**: drag the grip above it to make the layer grid taller (rows grow up to 36 pt); the height is remembered, and a double tap returns to the automatic height.
 - **Import an image as a layer** (New layer → Image from Photos / Files): it goes under every layer, fitted to the canvas and held through the whole clip, at 40 %, locked and marked as a **guide**, which is shown in the editor but never exported and isn't an outline for the fill. Any layer can be made a guide, or a guide part of the sprite, from its menu.
+
+### Changed
+
+- Releases are built **unsigned**, with no Apple Developer Program: the GitHub release has `Calco-X.Y.Z-unsigned.ipa` and the Unity package. TestFlight is gone.
 
 ## [0.7.0] - 2026-10-18
 

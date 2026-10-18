@@ -23,7 +23,7 @@ targets:
         CFBundleDevelopmentRegion: en
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        # Only standard HTTPS/OS encryption: no export compliance questions on every TestFlight build.
+        # Only standard HTTPS/OS encryption.
         ITSAppUsesNonExemptEncryption: false
         CFBundleLocalizations: [en, es]
         UILaunchScreen: {}

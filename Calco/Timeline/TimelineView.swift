@@ -540,7 +540,7 @@ private struct LayerLabel: View {
         if let index = state.layers.firstIndex(where: { $0.id == layerID }) {
             let layer = state.layers[index]
             let selected = index == state.layerIndex
-            HStack(spacing: 6) {
+            HStack(spacing: 5) {
                 Button { state.toggleLayerVisibility(index) } label: {
                     Image(systemName: layer.visible ? "eye" : "eye.slash").frame(width: 20)
                 }
@@ -556,6 +556,7 @@ private struct LayerLabel: View {
                     .font(.caption.weight(selected ? .semibold : .regular))
                     .foregroundStyle(selected ? Theme.accentText : (layer.visible ? Theme.text : Theme.textFaint))
                     .lineLimit(1)
+                    .minimumScaleFactor(0.85)      // "Reference" fits next to its badge, 40 % and lock
                 Spacer(minLength: 2)
                 if layer.opacity < 1 {
                     Button { editingOpacity = true } label: {

@@ -12,7 +12,7 @@ A la izquierda de cada fila:
 - **Nombre**: tócalo para dibujar en esa capa. Se resalta en naranja.
 - **Candado**: protege la capa del lápiz, la goma, el relleno y el lazo.
 
-Mantén pulsado el nombre para **Renombrar…**, **Opacidad…**, **Enmascarar con la capa de abajo**, **Subir**, **Bajar** y **Eliminar capa…**.
+Mantén pulsado el nombre para **Renombrar…**, **Opacidad…**, **Enmascarar con la capa de abajo**, **Solo guía (no se exporta)**, **Subir**, **Bajar** y **Eliminar capa…**.
 
 ## El panel de capas
 
@@ -22,13 +22,28 @@ Mantén pulsado el nombre para **Renombrar…**, **Opacidad…**, **Enmascarar c
 
 ## Nueva capa
 
-**Nueva capa** en la barra inferior ofrece tres tipos:
+**Nueva capa** en la barra inferior ofrece tres tipos de capa y dos formas de traer una imagen:
 
 ![Menú de nueva capa](/crops/es/new-layer-menu.jpg)
 
 - **Capa vacía**: una capa en blanco encima de la actual.
 - **Mismo ritmo que Line, vacía**: una capa *debajo* de la actual con los mismos dibujos y pausas, todos vacíos. Perfecta para colorear: un dibujo vacío esperando bajo cada dibujo de línea.
 - **Duplicar Line**: una copia con todos sus dibujos.
+- **Imagen desde Archivos…** / **Imagen desde Fotos…**: una [imagen de referencia](#imagenes-de-referencia) para dibujar encima.
+
+## Imágenes de referencia
+
+Importa un boceto, una hoja de modelo o un fotograma de vídeo de referencia y calca encima. **Nueva capa → Imagen desde Fotos…** (o **Imagen desde Archivos…**) la añade como una capa llamada **Referencia**:
+
+![Una imagen de referencia bajo Pip](/crops/es/guide-canvas.jpg)
+
+- Va **debajo de todas las capas**, ajustada al lienzo sin deformarse, y se ve **durante todo el clip**.
+- Está al **40 % de opacidad** y **bloqueada**, así que el lápiz, la goma y el relleno nunca la tocan: sigues dibujando en la capa en la que estabas.
+- Es una **guía** (el icono de foto junto al nombre): la ves en el editor, pero **nunca se exporta** y el relleno no la usa como contorno.
+
+![La capa de referencia en la línea de tiempo](/crops/es/timeline-tall.jpg)
+
+Para cambiarla, toca **40%** para su opacidad o el **candado** para desbloquearla. Mantén pulsado el nombre y elige **Exportar esta capa** para que forme parte del sprite, o **Solo guía (no se exporta)** para convertir cualquier capa en guía, por ejemplo una capa de líneas de construcción.
 
 ## Enmascarar con la capa de abajo
 

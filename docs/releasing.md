@@ -5,9 +5,11 @@ Two GitHub Actions workflows build Calco:
 | Workflow | When | What |
 |---|---|---|
 | `ci.yml` | Every push to `main` and every pull request | Generates the project with xcodegen, builds and runs the tests on an iPad simulator. |
-| `release.yml` | A tag `vX.Y.Z` is pushed | Tests, archives the app signed for App Store Connect, uploads it to **TestFlight** and publishes a **GitHub release**. |
+| `release.yml` | A tag `vX.Y.Z` is pushed | Tests, builds the app for iPad **without signing it** and publishes a **GitHub release**. |
 
 The manual has its own workflow, `manual.yml`, that publishes <https://rldona.github.io/Calco/>.
+
+Neither needs secrets or the paid Apple Developer Program.
 
 ## Making a release
 
@@ -16,67 +18,28 @@ The manual has its own workflow, `manual.yml`, that publishes <https://rldona.gi
 3. Commit, then tag and push:
 
    ```bash
-   git tag v0.7.0
-   git push origin v0.7.0
+   git tag v0.8.0
+   git push origin v0.8.0
    ```
 
 The release gets:
 
 - **Notes**: the `CHANGELOG.md` section for that version. The workflow stops before building if there's none.
-- `Calco-X.Y.Z.ipa`: the app signed for App Store Connect, the same build that goes to TestFlight.
-- `Calco-X.Y.Z-dSYMs.zip`: debug symbols for crash reports.
+- `Calco-X.Y.Z-unsigned.ipa`: the app, built in Release, not signed.
 - `calco-unity-X.Y.Z.zip`: the Unity importer package.
 
-The build number is the workflow's run number, so every upload to TestFlight is unique. A tag with a suffix (`v1.0.0-beta.1`) makes a prerelease.
+The build number is the workflow's run number. A tag with a suffix (`v1.0.0-beta.1`) makes a prerelease.
 
-## One-time setup
+## Installing on an iPad
 
-### 1. The app in App Store Connect
+iPadOS only runs signed apps, and without the Developer Program there's no TestFlight or App Store. Two ways with a free Apple ID:
 
-In [App Store Connect](https://appstoreconnect.apple.com) → **Apps** → **+** → **New App**: platform iOS, bundle ID `dev.plazoleta.calco`, any name and SKU. TestFlight uploads need this record.
+- **From Xcode over USB** (what we do): build from the source as the [README](../README.md#building) says. It's always the latest code.
+- **The release's `.ipa`**: a sideloading tool signs it with your Apple ID and installs it.
 
-### 2. An App Store Connect API key
-
-**Users and Access** → **Integrations** → **App Store Connect API** → **+**. Give it the **Admin** role, so Xcode can create the provisioning profile. Download the `.p8` file (only possible once) and note the **Key ID** and the **Issuer ID** shown at the top of the page.
-
-### 3. An Apple Distribution certificate
-
-In Xcode → **Settings** → **Accounts** → your team → **Manage Certificates** → **+** → **Apple Distribution**. Then in **Keychain Access**, find *Apple Distribution: …*, right-click → **Export**, save it as `.p12` with a password.
-
-### 4. The repository secrets
-
-In GitHub → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**:
-
-| Secret | Value |
-|---|---|
-| `DISTRIBUTION_CERTIFICATE_P12` | The `.p12` in base64: `base64 -i dist.p12 \| pbcopy` |
-| `DISTRIBUTION_CERTIFICATE_PASSWORD` | The `.p12` password |
-| `ASC_KEY_ID` | The API key's Key ID |
-| `ASC_ISSUER_ID` | The Issuer ID |
-| `ASC_PRIVATE_KEY` | The whole content of the `.p8` file, including the `BEGIN` / `END` lines |
-
-Or from a terminal with the GitHub CLI:
-
-```bash
-base64 -i dist.p12 | gh secret set DISTRIBUTION_CERTIFICATE_P12
-gh secret set DISTRIBUTION_CERTIFICATE_PASSWORD
-gh secret set ASC_KEY_ID
-gh secret set ASC_ISSUER_ID
-gh secret set ASC_PRIVATE_KEY < AuthKey_XXXXXXXXXX.p8
-```
-
-If any is missing, the release workflow says which ones and stops before building.
-
-### 5. Install it on your iPad with TestFlight
-
-1. In App Store Connect → the app → **TestFlight** → **Internal Testing** → **+**, create a group (for example *Team*) and add yourself.
-2. Install **TestFlight** from the App Store on the iPad and sign in with the same Apple ID.
-3. After a release, the build takes a few minutes to process; then it appears in TestFlight with **Install**. Later builds show up there as updates.
-
-The app declares no non-exempt encryption (`ITSAppUsesNonExemptEncryption` in `project.yml`), so builds don't wait on the export compliance question.
+Either way a free account's signature lasts **7 days**: after that the app doesn't open until it's installed again. Projects stay on the iPad.
 
 ## Helper scripts
 
 - `scripts/ci/changelog-section.sh X.Y.Z` prints a version's changelog section (try it before tagging).
 - `scripts/ci/pick-simulator.sh` picks an iPad simulator for the tests.
-- `scripts/ci/ExportOptions.plist`: App Store Connect export with automatic signing.

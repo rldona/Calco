@@ -4,6 +4,10 @@ The timeline is the bottom part of the editor: the clips and playback on top, a 
 
 ![The timeline](/crops/en/timeline.jpg)
 
+## Make it taller
+
+Drag the **grip** at the top of the timeline (the short bar in the middle) upwards to make room for more layers: the rows grow up to a comfortable height and the canvas gets smaller. Calco remembers the height. **Double-tap** the grip to go back to the automatic height, which fits the layers you have.
+
 ## Top row
 
 - **▶** plays the clip (Space). The counter shows frame / total.

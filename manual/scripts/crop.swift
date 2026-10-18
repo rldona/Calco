@@ -28,7 +28,10 @@ let crops: [String: [(name: String, box: CGRect?)]] = [
     "lasso-selection": [("lasso-selection", CGRect(x: 640, y: 172, width: 815, height: 815))],
     "lasso-options": [("lasso-options", CGRect(x: 105, y: 252, width: 468, height: 385))],
     "layers-panel": [("layers-panel", CGRect(x: 55, y: 658, width: 352, height: 605))],
-    "new-layer-menu": [("new-layer-menu", CGRect(x: 28, y: 1052, width: 375, height: 255))],
+    "guide-layer": [
+        ("guide-canvas", CGRect(x: 690, y: 160, width: 718, height: 720)),
+        ("timeline-tall", CGRect(x: 10, y: 922, width: 1980, height: 415)),
+    ],
     "frame-menu": [("frame-menu", CGRect(x: 1583, y: 778, width: 405, height: 470))],
     "cell-menu": [("cell-menu", CGRect(x: 503, y: 850, width: 378, height: 280))],
     "pivot": [("pivot", CGRect(x: 620, y: 170, width: 860, height: 860))],
@@ -42,12 +45,14 @@ let crops: [String: [(name: String, box: CGRect?)]] = [
     "preferences": [("preferences", CGRect(x: 520, y: 145, width: 960, height: 422))],
 ]
 
-// Popovers that sit elsewhere in each language, because the bar is wider in Spanish.
+// Popovers and menus that sit elsewhere in each language, because the Spanish text is longer.
 let perLanguage: [String: [String: (name: String, box: CGRect)]] = [
     "en": ["repeat-popover": ("repeat-popover", CGRect(x: 1190, y: 912, width: 502, height: 345)),
-           "split-menu": ("split-menu", CGRect(x: 1030, y: 1090, width: 377, height: 218))],
+           "split-menu": ("split-menu", CGRect(x: 1030, y: 1090, width: 377, height: 218)),
+           "new-layer-menu": ("new-layer-menu", CGRect(x: 26, y: 898, width: 380, height: 410))],
     "es": ["repeat-popover": ("repeat-popover", CGRect(x: 1090, y: 888, width: 502, height: 368)),
-           "split-menu": ("split-menu", CGRect(x: 930, y: 1090, width: 377, height: 218))],
+           "split-menu": ("split-menu", CGRect(x: 930, y: 1090, width: 377, height: 218)),
+           "new-layer-menu": ("new-layer-menu", CGRect(x: 26, y: 824, width: 386, height: 484))],
 ]
 
 func load(_ path: String) -> CGImage? {
