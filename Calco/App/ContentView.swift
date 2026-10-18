@@ -10,6 +10,11 @@ struct ContentView: View {
             CanvasView(state: state, latencyMs: $latencyMs)
                 .ignoresSafeArea()
 
+            if state.showPivot {
+                PivotOverlay(state: state)
+                    .ignoresSafeArea()
+            }
+
             VStack {
                 ToolbarView(state: state, latencyMs: latencyMs)
                 Spacer()
@@ -145,6 +150,48 @@ struct FileMenu: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(state.lastError ?? "")
+        }
+    }
+}
+
+/// Draggable pivot marker drawn in canvas space. Only the handle takes touches; the rest passes to the canvas.
+struct PivotOverlay: View {
+    @ObservedObject var state: EditorState
+    @GestureState private var dragging = false
+
+    var body: some View {
+        GeometryReader { geo in
+            let rect = CanvasRenderer.fitRect(canvas: state.renderer.canvasSize, in: geo.size)
+            let pivot = state.clip.pivot
+            let point = CGPoint(x: rect.minX + rect.width * pivot.x,
+                                y: rect.maxY - rect.height * pivot.y)   // origin bottom-left
+
+            ZStack {
+                // Guides across the canvas
+                Path { p in
+                    p.move(to: CGPoint(x: rect.minX, y: point.y)); p.addLine(to: CGPoint(x: rect.maxX, y: point.y))
+                    p.move(to: CGPoint(x: point.x, y: rect.minY)); p.addLine(to: CGPoint(x: point.x, y: rect.maxY))
+                }
+                .stroke(Color.accentColor.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                .allowsHitTesting(false)
+
+                Circle()
+                    .fill(Color.accentColor.opacity(dragging ? 0.9 : 0.7))
+                    .overlay(Circle().strokeBorder(.white, lineWidth: 2))
+                    .frame(width: 22, height: 22)
+                    .shadow(radius: 3)
+                    .contentShape(Circle().scale(2.5))
+                    .position(point)
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .updating($dragging) { _, s, _ in s = true }
+                            .onChanged { g in
+                                state.setPivot(Pivot(
+                                    x: (g.location.x - rect.minX) / rect.width,
+                                    y: (rect.maxY - g.location.y) / rect.height))
+                            }
+                    )
+            }
         }
     }
 }

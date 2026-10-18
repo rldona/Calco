@@ -6,7 +6,7 @@
 - [x] Layers per frame with opacity/visibility
 - [x] Frame strip: add / duplicate / delete / reorder / hold (reorder by arrows; drag later)
 - [x] Onion skin (configurable before/after)
-- [ ] Clips (idle, run…) with pivot
+- [x] Clips (idle, run…) with pivot
 - [x] Loop playback
 - [x] `.calco` save/load (see `format.md`)
 - [ ] Export sprite sheet PNG + Aseprite JSON

@@ -4,7 +4,7 @@ Three layers, dependencies point downward only.
 
 ```
 App/        SwiftUI views + EditorState (selection, onion settings, playback, document)
-Timeline/   Frame strip UI
+Timeline/   Frame strip UI + ClipBar (clip picker, loop, fps override, pivot toggle)
 Canvas/     CanvasUIView (Pencil input)  ->  FrameStore (textures)  ->  CanvasRenderer (Metal)
 Model/      Project: Codable mirror of docs/format.md. ProjectDocument: package I/O. No UI, no Metal.
 ```
@@ -51,3 +51,15 @@ size replaces the renderer and the store.
 `EditorState.isDirty` flips on every edit; the app saves on its own only when going to the background,
 and only for a project that already has a file. New projects are written to `Documents/<name>.calco`,
 which Files shows under *On My iPad › Calco*; opened projects are written back where they came from.
+
+## Clips and pivot
+
+A clip is a folder on disk, so its `id` is a slug of the name (`Run Fast!` → `run-fast`), unique
+within the project and never renamed afterwards; only `name` changes. Frame ids come from one
+project-wide counter, so a frame id is unique across clips and the thumbnail cache can be keyed by
+frame alone. A new clip copies the current clip's layer list and starts with one blank frame.
+
+The pivot is stored normalized with origin bottom-left (Unity convention) and edited through
+`PivotOverlay`, a SwiftUI layer above the Metal canvas that maps the handle through the same
+`CanvasRenderer.fitRect` the renderer uses, so it stays glued to the canvas in any orientation.
+Only the handle takes touches; everything else falls through to the Pencil.

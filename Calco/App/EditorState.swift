@@ -22,6 +22,8 @@ final class EditorState: ObservableObject {
     @Published var tool: CanvasRenderer.Tool = .brush
     @Published var onion = OnionSkin()
     @Published var isPlaying = false
+    /// Show the draggable pivot handle over the canvas.
+    @Published var showPivot = false
     @Published private(set) var thumbnails: [String: CGImage] = [:]
 
     /// Where the project lives on disk. Nil until the first save.
@@ -181,6 +183,86 @@ final class EditorState: ObservableObject {
         for f in frames { refreshThumbnail(for: f.id) }
     }
 
+    // MARK: - Clips
+
+    /// Folder-safe id derived from a name ("Run Fast!" → "run-fast"), made unique within the project.
+    static func clipID(for name: String, existing: [String]) -> String {
+        let base = name.lowercased()
+            .map { $0.isLetter || $0.isNumber ? String($0) : "-" }
+            .joined()
+            .split(separator: "-", omittingEmptySubsequences: true)
+            .joined(separator: "-")
+        let root = base.isEmpty ? "clip" : base
+        var id = root
+        var n = 2
+        while existing.contains(id) { id = "\(root)-\(n)"; n += 1 }
+        return id
+    }
+
+    /// New clip with the current clip's layer setup and one blank frame; becomes the current clip.
+    func addClip(name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        stop()
+        var c = Clip(id: Self.clipID(for: trimmed, existing: project.clips.map(\.id)), name: trimmed)
+        c.layers = clip.layers
+        c.fps = clip.fps
+        project.clips.append(c)
+        selectClip(project.clips.count - 1)
+        addFrame()
+    }
+
+    /// Keeps the id (it's the folder name on disk); only the display name changes.
+    func renameClip(_ name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != clip.name else { return }
+        clip.name = trimmed
+        isDirty = true
+    }
+
+    func deleteClip() {
+        guard project.clips.count > 1 else { return }
+        stop()
+        let doomed = clip
+        for f in doomed.frames {
+            store.remove(clip: doomed.id, frame: f.id, layers: doomed.layers.map(\.id))
+            thumbnails.removeValue(forKey: f.id)
+        }
+        project.clips.remove(at: clipIndex)
+        selectClip(min(clipIndex, project.clips.count - 1))
+        isDirty = true
+    }
+
+    func selectClip(_ index: Int) {
+        guard project.clips.indices.contains(index) else { return }
+        stop()
+        clipIndex = index
+        frameIndex = 0
+        layerIndex = min(layerIndex, max(0, layers.count - 1))
+        for f in frames where thumbnails[f.id] == nil { refreshThumbnail(for: f.id) }
+    }
+
+    /// Normalized, origin bottom-left. Clamped to the canvas.
+    func setPivot(_ p: Pivot) {
+        let clamped = Pivot(x: min(max(p.x, 0), 1), y: min(max(p.y, 0), 1))
+        guard clamped != clip.pivot else { return }
+        clip.pivot = clamped
+        isDirty = true
+    }
+
+    func toggleLoop() {
+        clip.loop.toggle()
+        isDirty = true
+    }
+
+    /// Per-clip fps override; nil falls back to the project fps.
+    func setClipFPS(_ fps: Int?) {
+        let v = fps.map { min(max($0, 1), 60) }
+        guard v != clip.fps else { return }
+        clip.fps = v
+        isDirty = true
+    }
+
     // MARK: - Frames
 
     private func newFrameID() -> String {
@@ -252,6 +334,7 @@ final class EditorState: ObservableObject {
 
     private func play() {
         guard frames.count > 1 else { return }
+        if !clip.loop && frameIndex == frames.count - 1 { frameIndex = 0 }
         isPlaying = true
         scheduleNextTick()
     }
@@ -268,7 +351,15 @@ final class EditorState: ObservableObject {
         playTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: nanos)
             guard let self, self.isPlaying, !Task.isCancelled else { return }
-            self.frameIndex = (self.frameIndex + 1) % self.frames.count
+            let next = self.frameIndex + 1
+            if next < self.frames.count {
+                self.frameIndex = next
+            } else if self.clip.loop {
+                self.frameIndex = 0
+            } else {
+                self.stop()
+                return
+            }
             self.scheduleNextTick()
         }
     }

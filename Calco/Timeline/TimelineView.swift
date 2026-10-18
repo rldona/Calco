@@ -7,6 +7,8 @@ struct TimelineView: View {
 
     var body: some View {
         VStack(spacing: 8) {
+            ClipBar(state: state)
+
             HStack(spacing: 14) {
                 Button {
                     state.togglePlayback()
@@ -34,14 +36,13 @@ struct TimelineView: View {
                     Text("Hold")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Stepper(value: Binding(
+                    Text("\(state.currentFrame?.hold ?? 1)")
+                        .font(.system(.caption, design: .monospaced))
+                        .frame(minWidth: 20)
+                    Stepper("Hold", value: Binding(
                         get: { state.currentFrame?.hold ?? 1 },
                         set: { state.setHold($0) }),
-                            in: 1...24) {
-                        Text("\(state.currentFrame?.hold ?? 1)")
-                            .font(.system(.caption, design: .monospaced))
-                            .frame(minWidth: 20)
-                    }
+                            in: 1...24)
                     .labelsHidden()
                 }
 
@@ -81,6 +82,104 @@ struct TimelineView: View {
         }
         .padding(12)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+/// Clip picker plus per-clip settings: rename/delete, loop, fps override, pivot handle.
+struct ClipBar: View {
+    @ObservedObject var state: EditorState
+    @State private var addingClip = false
+    @State private var renamingClip = false
+    @State private var confirmingDelete = false
+    @State private var clipName = ""
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Menu {
+                ForEach(Array(state.project.clips.enumerated()), id: \.element.id) { index, clip in
+                    Button {
+                        state.selectClip(index)
+                    } label: {
+                        if index == state.clipIndex {
+                            Label(clip.name, systemImage: "checkmark")
+                        } else {
+                            Text(clip.name)
+                        }
+                    }
+                }
+                Divider()
+                Button { clipName = ""; addingClip = true } label: { Label("New clip…", systemImage: "plus") }
+                Button { clipName = state.clip.name; renamingClip = true } label: { Label("Rename…", systemImage: "pencil") }
+                Button(role: .destructive) { confirmingDelete = true } label: { Label("Delete clip", systemImage: "trash") }
+                    .disabled(state.project.clips.count <= 1)
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "film.stack")
+                    Text(state.clip.name).font(.callout.weight(.semibold))
+                    Image(systemName: "chevron.up.chevron.down").font(.caption2)
+                }
+            }
+
+            Text("\(state.clip.frames.count) frames")
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.secondary)
+
+            Divider().frame(height: 18)
+
+            Toggle(isOn: Binding(get: { state.clip.loop }, set: { _ in state.toggleLoop() })) {
+                Image(systemName: "repeat")
+            }
+            .toggleStyle(.button)
+            .help("Loop")
+
+            HStack(spacing: 4) {
+                Text("fps").font(.caption).foregroundStyle(.secondary)
+                Text("\(state.clipFPS)")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(state.clip.fps == nil ? .secondary : .primary)
+                    .frame(minWidth: 20)
+                Stepper("fps", value: Binding(get: { state.clipFPS }, set: { state.setClipFPS($0) }), in: 1...60)
+                    .labelsHidden()
+                if state.clip.fps != nil {
+                    Button { state.setClipFPS(nil) } label: { Image(systemName: "arrow.uturn.backward") }
+                        .font(.caption)
+                        .help("Use project fps")
+                }
+            }
+
+            Divider().frame(height: 18)
+
+            Toggle(isOn: $state.showPivot) {
+                Image(systemName: "scope")
+            }
+            .toggleStyle(.button)
+            .help("Pivot")
+            Text(String(format: "%.2f · %.2f", state.clip.pivot.x, state.clip.pivot.y))
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.secondary)
+
+            Spacer()
+        }
+        .buttonStyle(.borderless)
+        .font(.body)
+        .alert("New clip", isPresented: $addingClip) {
+            TextField("Name (idle, run, jump…)", text: $clipName)
+            Button("Add") { state.addClip(name: clipName) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Starts with one blank frame and the same layers as \(state.clip.name).")
+        }
+        .alert("Rename clip", isPresented: $renamingClip) {
+            TextField("Name", text: $clipName)
+            Button("Rename") { state.renameClip(clipName) }
+            Button("Cancel", role: .cancel) {}
+        }
+        .alert("Delete \(state.clip.name)?", isPresented: $confirmingDelete) {
+            Button("Delete", role: .destructive) { state.deleteClip() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("All \(state.clip.frames.count) frames of this clip will be removed.")
+        }
     }
 }
 
