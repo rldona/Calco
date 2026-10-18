@@ -34,12 +34,13 @@ The build number is the workflow's run number. A tag with a suffix (`v1.0.0-beta
 
 iPadOS only runs signed apps, and without the Developer Program there's no TestFlight or App Store. Two ways with a free Apple ID:
 
-- **From Xcode over USB** (what we do): build from the source as the [README](../README.md#building) says. It's always the latest code.
+- **Over USB** (what we do): `scripts/install-ipad.sh` builds the checked-out code and installs it on the plugged-in iPad; after tagging a release, run it to have that version on the iPad. Or build from Xcode as the [README](../README.md#building) says.
 - **The release's `.ipa`**: a sideloading tool signs it with your Apple ID and installs it.
 
 Either way a free account's signature lasts **7 days**: after that the app doesn't open until it's installed again. Projects stay on the iPad.
 
 ## Helper scripts
 
+- `scripts/install-ipad.sh [UDID]` builds and installs the app on a connected iPad.
 - `scripts/ci/changelog-section.sh X.Y.Z` prints a version's changelog section (try it before tagging).
 - `scripts/ci/pick-simulator.sh` picks an iPad simulator for the tests.
