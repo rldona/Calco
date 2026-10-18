@@ -29,9 +29,30 @@ struct ToolbarView: View {
     @ObservedObject var state: EditorState
     let latencyMs: Double
 
+    /// Scrolls sideways when the controls don't fit (portrait); the layout pass in v0.2 replaces this.
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            controls
+            ScrollView(.horizontal, showsIndicators: false) { controls }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var controls: some View {
         HStack(spacing: 14) {
             FileMenu(state: state)
+
+            Divider().frame(height: 18)
+
+            Button { state.undo() } label: { Image(systemName: "arrow.uturn.backward") }
+                .keyboardShortcut("z")
+                .disabled(!state.canUndo)
+                .help("Undo")
+            Button { state.redo() } label: { Image(systemName: "arrow.uturn.forward") }
+                .keyboardShortcut("z", modifiers: [.command, .shift])
+                .disabled(!state.canRedo)
+                .help("Redo")
 
             Divider().frame(height: 18)
 
@@ -55,6 +76,8 @@ struct ToolbarView: View {
                         Button { state.layerIndex = index } label: {
                             Text(layer.name)
                                 .font(.caption.weight(index == state.layerIndex ? .semibold : .regular))
+                                .lineLimit(1)
+                                .fixedSize()
                         }
                         Button { state.toggleLayerVisibility(index) } label: {
                             Image(systemName: layer.visible ? "eye" : "eye.slash")
@@ -88,8 +111,6 @@ struct ToolbarView: View {
                 .foregroundStyle(.tertiary)
         }
         .buttonStyle(.borderless)
-        .padding(.horizontal, 14).padding(.vertical, 8)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
     }
 }
 
@@ -268,6 +289,7 @@ struct PivotOverlay: View {
                                     x: (g.location.x - rect.minX) / rect.width,
                                     y: (rect.maxY - g.location.y) / rect.height))
                             }
+                            .onEnded { _ in state.endCoalescing() }
                     )
             }
         }
