@@ -39,8 +39,9 @@ struct ToolRail: View {
 
             ColorSwatch(state: state, editing: $editingColor)
 
+            // Gives up height first when the timeline is stretched, so the canvas can shrink.
             VerticalSizeSlider(state: state)
-                .frame(height: 120)
+                .frame(minHeight: 44, maxHeight: 120)
                 .padding(.top, 6)
             Button { editingSize = true } label: {
                 Text("\(Int(state.toolSize))")
@@ -52,7 +53,7 @@ struct ToolRail: View {
             .accessibilityLabel("Size \(Int(state.toolSize))")
             .popover(isPresented: $editingSize, arrowEdge: .leading) { SizePopover(state: state) }
 
-            Spacer(minLength: 12)
+            Spacer(minLength: 4)
 
             RailButton(icon: "arrow.uturn.backward", label: "Undo") { state.undo() }
                 .opacity(state.canUndo ? 1 : 0.35)

@@ -71,6 +71,7 @@ Hero.calco/
 | `clips[].pivot` | Normalized `0..1`, origin bottom-left (Unity convention). `{0.5, 0}` = bottom center. |
 | `clips[].layers` | Ordered bottom to top. Layer `id` is the PNG basename inside each frame folder. |
 | `clips[].layers[].maskBelow` | Optional, default `false`. The layer only shows where the nearest unmasked layer below it has paint (a clipping mask); exports flatten it that way. |
+| `clips[].layers[].guide` | Optional, default `false`. A guide to draw over, such as an imported reference image: shown in the editor, left out of every export and of the fill's outline. |
 | `clips[].frames[].id` | Frame folder name. Order in the array is playback order. |
 | `clips[].frames[].hold` | How many ticks at the clip's fps this frame stays on screen. Default `1`. |
 | `clips[].frames[].labels` | Optional (format 2). Names for this frame's own drawings, by layer id, e.g. `{"line": "contact"}`. |

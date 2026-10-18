@@ -1,4 +1,7 @@
 import SwiftUI
+import PhotosUI
+import UniformTypeIdentifiers
+import ImageIO
 
 /// Bottom panel, an exposure sheet: one row per layer (top layer first), one column per frame,
 /// columns as wide as their hold. A drawing spans the frames that hold it, so a background held
@@ -7,19 +10,68 @@ struct TimelineView: View {
     @ObservedObject var state: EditorState
     @State private var labeling = false
     @State private var labelText = ""
+    @State private var pickingPhoto = false
+    @State private var photo: PhotosPickerItem?
+    @State private var importingFile = false
 
     /// Width of one tick (one `hold` unit).
     private let tick: CGFloat = 40
-    private let rowHeight: CGFloat = 26
     private let labelWidth: CGFloat = 168
+
+    /// Height of the layer grid set with the grip, remembered; 0 = automatic (up to 6 rows).
+    @AppStorage("timeline.gridHeight") private var gridHeight: Double = 0
+    @State private var dragStartHeight: CGFloat?
+
+    private static let minRow: CGFloat = 26, maxRow: CGFloat = 36, rowGap: CGFloat = 3, rulerHeight: CGFloat = 16
+    /// Tall enough for 7 big rows or 10 small ones, and leaves the canvas room on an 11" iPad in landscape.
+    private static let maxGridHeight: CGFloat = 290
+
+    /// Rows grow (up to `maxRow`) to fill a grid stretched taller than the layers need.
+    private var rowHeight: CGFloat {
+        guard gridHeight > 0, !state.layers.isEmpty else { return Self.minRow }
+        let fit = (CGFloat(gridHeight) - Self.rulerHeight) / CGFloat(state.layers.count) - Self.rowGap
+        return min(max(fit, Self.minRow), Self.maxRow)
+    }
+
+    private var automaticGridHeight: CGFloat {
+        Self.rulerHeight + CGFloat(min(state.layers.count, 6)) * (Self.minRow + Self.rowGap)
+    }
+
+    private var gridMaxHeight: CGFloat { gridHeight > 0 ? min(CGFloat(gridHeight), Self.maxGridHeight) : automaticGridHeight }
+
+    /// Drag up to make the grid taller (the canvas gives up the space), down to make it shorter.
+    /// It never grows past what the layers can fill at the largest row height. Double tap: automatic.
+    private var grip: some View {
+        Capsule()
+            .fill(gridHeight > 0 ? Theme.accent : Theme.textFaint)
+            .frame(width: 46, height: 5)
+            .frame(maxWidth: .infinity)
+            .frame(height: 16)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 1)
+                .onChanged { g in
+                    let start = dragStartHeight ?? gridMaxHeight
+                    if dragStartHeight == nil { dragStartHeight = start }
+                    let most = Self.rulerHeight + CGFloat(max(state.layers.count, 1)) * (Self.maxRow + Self.rowGap)
+                    let least = Self.rulerHeight + 2 * (Self.minRow + Self.rowGap)
+                    gridHeight = Double(min(max(start - g.translation.height, least), max(most, least), Self.maxGridHeight))
+                }
+                .onEnded { _ in dragStartHeight = nil })
+            .onTapGesture(count: 2) { withAnimation(.easeOut(duration: 0.2)) { gridHeight = 0 } }
+            .accessibilityLabel("Timeline height")
+            .accessibilityHint("Drag up or down to resize. Double tap for the automatic height.")
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
+            grip
+                .padding(.top, -6)
+                .padding(.bottom, -4)
             header
             ScrollView(.vertical, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 6) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Color.clear.frame(height: 16)
+                        Color.clear.frame(height: Self.rulerHeight)
                         ForEach(rows) { layer in LayerLabel(state: state, layerID: layer.id, height: rowHeight) }
                     }
                     .frame(width: labelWidth)
@@ -41,7 +93,7 @@ struct TimelineView: View {
                     }
                 }
             }
-            .frame(maxHeight: 16 + CGFloat(min(state.layers.count, 6)) * (rowHeight + 3))
+            .frame(maxHeight: gridMaxHeight)
             .fixedSize(horizontal: false, vertical: true)
             footer
         }
@@ -56,6 +108,20 @@ struct TimelineView: View {
     }
 
     private static let sheet = "sheet"
+
+    /// Decodes picked image data (any format ImageIO reads, with its orientation applied) and adds
+    /// it as a guide layer.
+    private func importImage(_ data: Data?, name: String?) {
+        let options = [kCGImageSourceCreateThumbnailFromImageAlways: true,
+                       kCGImageSourceCreateThumbnailWithTransform: true,
+                       kCGImageSourceThumbnailMaxPixelSize: 4096] as CFDictionary
+        guard let data, let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options) else {
+            state.lastError = String(localized: "Couldn't read that image.", bundle: AppLanguage.bundle)
+            return
+        }
+        state.importImageLayer(image, name: name)
+    }
 
     /// The frame under x (in the sheet's coordinates), clamped to the clip.
     private func frameIndex(atX x: CGFloat) -> Int {
@@ -339,8 +405,26 @@ struct TimelineView: View {
                     }
                     Button { state.duplicateCurrentLayer() } label: { Label("Duplicate \(name)", systemImage: "square.on.square") }
                 }
+                Divider()
+                Button { pickingPhoto = true } label: { Label("Image from Photos…", systemImage: "photo.badge.plus") }
+                Button { importingFile = true } label: { Label("Image from Files…", systemImage: "doc.badge.plus") }
             } label: {
                 Label("New layer", systemImage: "plus").labelStyle(.titleAndIcon).font(.caption)
+            }
+            .photosPicker(isPresented: $pickingPhoto, selection: $photo, matching: .images)
+            .onChange(of: photo) { _, item in
+                guard let item else { return }
+                photo = nil
+                Task {
+                    let data = try? await item.loadTransferable(type: Data.self)
+                    await MainActor.run { importImage(data, name: nil) }
+                }
+            }
+            .fileImporter(isPresented: $importingFile, allowedContentTypes: [.image]) { result in
+                guard case .success(let url) = result else { return }
+                let scoped = url.startAccessingSecurityScopedResource()
+                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                importImage(try? Data(contentsOf: url), name: url.deletingPathExtension().lastPathComponent)
             }
             LayersButton(state: state)
 
@@ -464,6 +548,10 @@ private struct LayerLabel: View {
                     Image(systemName: "arrow.turn.left.down").font(.system(size: 9, weight: .semibold))
                         .accessibilityLabel("Masked to the layer below")
                 }
+                if layer.guide {
+                    Image(systemName: "photo").font(.system(size: 10, weight: .semibold))
+                        .accessibilityLabel("Guide layer, not exported")
+                }
                 Text(layer.name)
                     .font(.caption.weight(selected ? .semibold : .regular))
                     .foregroundStyle(selected ? Theme.accentText : (layer.visible ? Theme.text : Theme.textFaint))
@@ -496,6 +584,10 @@ private struct LayerLabel: View {
                           systemImage: "arrow.turn.left.down")
                 }
                 .disabled(index == 0 && !layer.maskBelow)
+                Button { state.toggleLayerGuide(index) } label: {
+                    Label(layer.guide ? "Export this layer" : "Guide only (not exported)",
+                          systemImage: layer.guide ? "square.and.arrow.up" : "eye.slash.circle")
+                }
                 Button { state.moveLayer(from: index, to: index + 1) } label: { Label("Move up", systemImage: "arrow.up") }
                     .disabled(index == state.layers.count - 1)
                 Button { state.moveLayer(from: index, to: index - 1) } label: { Label("Move down", systemImage: "arrow.down") }

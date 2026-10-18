@@ -35,7 +35,8 @@ enum ExportChecks {
             }
 
             // Hidden layers with drawings don't export.
-            for layer in clip.layers where !layer.visible && hiddenDrawing(clip, layer) {
+            // Guides are never exported, so a hidden one is nothing to warn about.
+            for layer in clip.layers where !layer.visible && !layer.guide && hiddenDrawing(clip, layer) {
                 issues.append(Issue(kind: .hiddenLayer, clip: clip.id,
                                     message: String(localized: "\(clip.name): \(layer.name) is hidden and won't be exported", bundle: AppLanguage.bundle)))
             }

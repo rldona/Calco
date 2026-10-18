@@ -449,8 +449,9 @@ final class EditorState: ObservableObject {
     // MARK: - Export
 
     /// Flattened, canvas-sized image of one frame (visible layers only). Nil when nothing was drawn.
+    /// A frame as it exports: visible layers flattened, guides left out.
     func flattenedImage(clip: Clip, frameID: String) -> CGImage? {
-        let layers = frameLayers(of: clip, frameID, opacity: 1, tint: nil)
+        let layers = frameLayers(of: clip, frameID, opacity: 1, tint: nil, guides: false)
         guard !layers.isEmpty else { return nil }
         return renderer.flatten(layers)
     }
@@ -1113,6 +1114,53 @@ final class EditorState: ObservableObject {
         isDirty = true
     }
 
+    /// An image to draw over, as a new layer under all the others: fitted to the canvas without
+    /// distortion, one drawing held through the whole clip, at 40 %, locked and marked as a guide
+    /// (never exported). Every one of those can be changed afterwards. One undo step.
+    func importImageLayer(_ image: CGImage, name: String? = nil) {
+        guard !frames.isEmpty else { return }
+        let w = renderer.canvasSize.x, h = renderer.canvasSize.y
+        let layerName = uniqueLayerName(name.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "Reference", bundle: AppLanguage.bundle))
+        let layer = Layer(id: Self.clipID(for: layerName, existing: layers.map(\.id)), name: layerName,
+                          opacity: 0.4, locked: true, guide: true)
+        let key = LayerKey(clip: clip.id, frame: frames[0].id, layer: layer.id)
+        recordUndo(textures: [key])
+        clip.layers.insert(layer, at: 0)
+        for i in clip.frames.indices.dropFirst() { clip.frames[i].held.append(layer.id) }
+        layerIndex += 1                                     // the layer you were drawing on stays current
+        if let target = store.texture(clip: key.clip, frame: key.frame, layer: key.layer) {
+            renderer.upload(bytes: Self.fitted(image, width: w, height: h, hard: project.pixelArt), into: target)
+        }
+        isDirty = true
+        refreshClipThumbnails()
+    }
+
+    /// `image` scaled to fit a `width` x `height` canvas and centred, as premultiplied RGBA with row 0
+    /// at the top, like layer textures. `hard` keeps pixels sharp (pixel art).
+    static func fitted(_ image: CGImage, width: Int, height: Int, hard: Bool = false) -> [UInt8] {
+        var out = [UInt8](repeating: 0, count: width * height * 4)
+        let s = min(Double(width) / Double(image.width), Double(height) / Double(image.height))
+        let w = Double(image.width) * s, h = Double(image.height) * s
+        out.withUnsafeMutableBytes { ptr in
+            guard let ctx = CGContext(data: ptr.baseAddress, width: width, height: height, bitsPerComponent: 8,
+                                      bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+            ctx.interpolationQuality = hard ? .none : .high
+            // CoreGraphics draws bottom-up, which in memory lands the image's top row at the top.
+            ctx.draw(image, in: CGRect(x: (Double(width) - w) / 2, y: (Double(height) - h) / 2, width: w, height: h))
+        }
+        return out
+    }
+
+    /// Guide (shown, not exported) or part of the sprite. Undoable.
+    func toggleLayerGuide(_ index: Int) {
+        guard layers.indices.contains(index) else { return }
+        recordUndo()
+        clip.layers[index].guide.toggle()
+        isDirty = true
+    }
+
     /// A copy of the current layer, drawings, holds and labels included, just above it.
     func duplicateCurrentLayer() {
         guard let src = currentLayer else { return }
@@ -1288,14 +1336,17 @@ final class EditorState: ObservableObject {
         return t
     }
 
-    private func frameLayers(_ frameID: String, opacity: Float, tint: SIMD3<Float>?) -> [CanvasRenderer.CompositeLayer] {
-        frameLayers(of: clip, frameID, opacity: opacity, tint: tint)
+    private func frameLayers(_ frameID: String, opacity: Float, tint: SIMD3<Float>?,
+                             guides: Bool = true) -> [CanvasRenderer.CompositeLayer] {
+        frameLayers(of: clip, frameID, opacity: opacity, tint: tint, guides: guides)
     }
 
     /// Every visible layer as it shows at frame `frameID` of `clip`, holds resolved.
-    private func frameLayers(of clip: Clip, _ frameID: String, opacity: Float, tint: SIMD3<Float>?) -> [CanvasRenderer.CompositeLayer] {
+    /// `guides: false` leaves guide layers out, as exports and the fill's outline do.
+    private func frameLayers(of clip: Clip, _ frameID: String, opacity: Float, tint: SIMD3<Float>?,
+                             guides: Bool = true) -> [CanvasRenderer.CompositeLayer] {
         let index = clip.frames.firstIndex { $0.id == frameID }
-        let shown = Self.masked(clip.layers) { layer in
+        let shown = Self.masked(guides ? clip.layers : clip.layers.filter { !$0.guide }) { layer in
             let source = index.flatMap { clip.sourceFrameID(layer: layer.id, at: $0) } ?? frameID
             return store.existingTexture(clip: clip.id, frame: source, layer: layer.id)
         }
@@ -1388,7 +1439,7 @@ final class EditorState: ObservableObject {
         let w = renderer.canvasSize.x, h = renderer.canvasSize.y
         let seed = (x: Int(point.x.rounded(.down)), y: Int(point.y.rounded(.down)))
         guard (0..<w).contains(seed.x), (0..<h).contains(seed.y),
-              let seen = renderer.flattenBytes(frameLayers(f.id, opacity: 1, tint: nil)) else { return }
+              let seen = renderer.flattenBytes(frameLayers(f.id, opacity: 1, tint: nil, guides: false)) else { return }
         let region = FloodFill.region(in: seen, width: w, height: h, seed: seed, tolerance: Self.fillTolerance,
                                       closingGaps: fillGaps.radius(forCanvasSide: max(w, h)))
         guard !region.isEmpty else { return }

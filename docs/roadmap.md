@@ -125,7 +125,7 @@ What RoughAnimator users reach for first, ordered by what matters for game sprit
 
 Helps without drawing for you: guides on their own layer, never final art.
 
-- [ ] Reference images to trace over (`references/` in the format already)
+- [x] Reference images to trace over: imported as a guide layer (shown, never exported; `layers[].guide`)
 - [ ] Recolour a colour across a clip; apply a palette
 - [ ] Mirror or ping-pong a clip
 - [ ] Inbetween suggestions as a translucent guide

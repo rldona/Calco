@@ -77,14 +77,17 @@ struct Layer: Codable, Equatable, Identifiable {
     /// Only shows where the layer below has paint (a clipping mask), for shading over a colour pass.
     /// Several masked layers in a row share the same base. Optional in the file, written when true.
     var maskBelow = false
+    /// A guide to draw over (an imported reference image): shown in the editor, never exported, and
+    /// not an outline for the fill. Optional in the file, written when true.
+    var guide = false
 
     init(id: String, name: String, opacity: Double = 1.0, visible: Bool = true, locked: Bool = false,
-         maskBelow: Bool = false) {
+         maskBelow: Bool = false, guide: Bool = false) {
         self.id = id; self.name = name; self.opacity = opacity; self.visible = visible
-        self.locked = locked; self.maskBelow = maskBelow
+        self.locked = locked; self.maskBelow = maskBelow; self.guide = guide
     }
 
-    private enum CodingKeys: String, CodingKey { case id, name, opacity, visible, locked, maskBelow }
+    private enum CodingKeys: String, CodingKey { case id, name, opacity, visible, locked, maskBelow, guide }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -94,6 +97,7 @@ struct Layer: Codable, Equatable, Identifiable {
         visible = try c.decodeIfPresent(Bool.self, forKey: .visible) ?? true
         locked = try c.decodeIfPresent(Bool.self, forKey: .locked) ?? false
         maskBelow = try c.decodeIfPresent(Bool.self, forKey: .maskBelow) ?? false
+        guide = try c.decodeIfPresent(Bool.self, forKey: .guide) ?? false
     }
 
     func encode(to encoder: Encoder) throws {
@@ -104,6 +108,7 @@ struct Layer: Codable, Equatable, Identifiable {
         try c.encode(visible, forKey: .visible)
         try c.encode(locked, forKey: .locked)
         if maskBelow { try c.encode(maskBelow, forKey: .maskBelow) }
+        if guide { try c.encode(guide, forKey: .guide) }
     }
 }
 

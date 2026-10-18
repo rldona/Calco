@@ -6,6 +6,11 @@ A release is made by pushing a tag `vX.Y.Z`: the release workflow builds the app
 
 ## [Unreleased]
 
+### Added
+
+- **Resizable timeline**: drag the grip above it to make the layer grid taller (rows grow up to 36 pt); the height is remembered, and a double tap returns to the automatic height.
+- **Import an image as a layer** (New layer → Image from Photos / Files): it goes under every layer, fitted to the canvas and held through the whole clip, at 40 %, locked and marked as a **guide**, which is shown in the editor but never exported and isn't an outline for the fill. Any layer can be made a guide, or a guide part of the sprite, from its menu.
+
 ## [0.7.0] - 2026-10-18
 
 The "animator" release: what RoughAnimator users reach for first, plus the game pipeline and a second language.
