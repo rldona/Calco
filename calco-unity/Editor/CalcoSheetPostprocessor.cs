@@ -90,14 +90,12 @@ namespace Calco
             reimport.ExceptWith(textures);
             if (textures.Count == 0 && reimport.Count == 0) return;
 
-            // Creating assets or triggering imports from inside a postprocessor is fragile; do it on the next tick.
-            EditorApplication.delayCall += () =>
-            {
-                foreach (var png in reimport)
-                    AssetDatabase.ImportAsset(png, ImportAssetOptions.ForceUpdate);
-                foreach (var texture in textures)
-                    CalcoAnimationBuilder.Build(texture);
-            };
+            // OnPostprocessAllAssets is the one postprocessor callback where creating assets is supported.
+            // (EditorApplication.delayCall never fires in -batchmode -quit, so it can't be relied on here.)
+            foreach (var png in reimport)
+                AssetDatabase.ImportAsset(png, ImportAssetOptions.ForceUpdate);
+            foreach (var texture in textures)
+                CalcoAnimationBuilder.Build(texture);
         }
 
         // MARK: Menu

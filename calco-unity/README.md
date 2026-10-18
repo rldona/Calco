@@ -47,3 +47,20 @@ it's preserved across reimports.
 ## Force a rebuild
 
 Right-click the PNG or JSON → **Calco → Reimport sprite sheet**.
+
+## Development
+
+There are no Unity tests yet; the package is checked by importing a sheet into a throwaway project from the
+command line. Create a project with `Packages/manifest.json` pointing at this folder
+(`"dev.plazoleta.calco-unity": "file:/path/to/Calco/calco-unity"`), drop a `Hero.png` + `Hero.json` into
+`Assets/`, then:
+
+```sh
+/Applications/Unity/Hub/Editor/<version>/Unity.app/Contents/MacOS/Unity \
+  -batchmode -nographics -quit -projectPath <project> -logFile import.log
+```
+
+`Hero.png.meta` should list one sprite per frame with rect and pivot, and `Hero_<tag>.anim` +
+`Hero.controller` should appear next to the PNG. Everything runs synchronously inside
+`OnPostprocessAllAssets`; `EditorApplication.delayCall` is avoided on purpose because it never fires in
+`-batchmode -quit`.
