@@ -1,7 +1,19 @@
 import SwiftUI
 
-/// The clip's layer stack, top layer first like every drawing app. Lives on the right of the
-/// canvas (hidden in Zen mode). Tap a row to paint on it; drag the handle to reorder.
+/// Opens the full layers panel (drag to reorder, opacity sliders) from the exposure sheet.
+struct LayersButton: View {
+    @ObservedObject var state: EditorState
+    @State private var showing = false
+
+    var body: some View {
+        Button { showing = true } label: {
+            Label("Layers", systemImage: "square.3.layers.3d").labelStyle(.titleAndIcon).font(.caption)
+        }
+        .popover(isPresented: $showing) { LayersPanel(state: state).frame(height: 360) }
+    }
+}
+
+/// The clip's layer stack, top layer first like every drawing app. Tap a row to paint on it; drag the handle to reorder.
 struct LayersPanel: View {
     @ObservedObject var state: EditorState
     @State private var naming: Naming?

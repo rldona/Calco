@@ -46,11 +46,13 @@ enum ProjectDocument {
             .appendingPathComponent("\(key.layer).png")
     }
 
-    /// Every (clip, frame, layer) the manifest refers to, whether or not a PNG exists for it.
+    /// Every (clip, frame, layer) with a drawing of its own, whether or not a PNG exists for it.
+    /// Held cells show an earlier frame's drawing and have no file.
     static func layerKeys(of project: Project) -> [LayerKey] {
         project.clips.flatMap { clip in
-            clip.frames.flatMap { frame in
-                clip.layers.map { LayerKey(clip: clip.id, frame: frame.id, layer: $0.id) }
+            clip.frames.indices.flatMap { i in
+                clip.layers.filter { !clip.isHeld(layer: $0.id, at: i) }
+                    .map { LayerKey(clip: clip.id, frame: clip.frames[i].id, layer: $0.id) }
             }
         }
     }

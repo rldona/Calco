@@ -1,33 +1,33 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
-/// Bottom panel: transport and frame actions on top, then one track per clip.
-/// The active clip shows its frames as thumbnails; the others as exposure bars on the same time
-/// scale, so the rhythm of idle / run / jump can be compared at a glance. Tap a track to edit it.
-/// Reorder frames by long-pressing a thumbnail and dragging it.
+/// Bottom panel, an exposure sheet: one row per layer (top layer first), one column per frame,
+/// columns as wide as their hold. A drawing spans the frames that hold it, so a background held
+/// for the whole clip is a single long cell. Tap a cell to go to that frame and layer.
 struct TimelineView: View {
     @ObservedObject var state: EditorState
-    @State private var draggingFrameID: String?
 
-    /// Width of one tick (one `hold` unit) on every track.
-    private let tick: CGFloat = 44
-    private let thumbHeight: CGFloat = 40
-    private let barHeight: CGFloat = 14
-    private let labelWidth: CGFloat = 56
+    /// Width of one tick (one `hold` unit).
+    private let tick: CGFloat = 40
+    private let rowHeight: CGFloat = 26
+    private let labelWidth: CGFloat = 168
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             header
             ScrollView(.vertical, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 8) {
-                    labels
+                HStack(alignment: .top, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Color.clear.frame(height: 16)
+                        ForEach(rows) { layer in LayerLabel(state: state, layerID: layer.id, height: rowHeight) }
+                    }
+                    .frame(width: labelWidth)
                     ScrollViewReader { proxy in
                         ScrollView(.horizontal, showsIndicators: false) {
-                            VStack(alignment: .leading, spacing: 6) {
-                                ForEach(Array(state.project.clips.enumerated()), id: \.element.id) { i, clip in
-                                    if i == state.clipIndex { activeTrack } else { barTrack(clip, index: i) }
-                                }
+                            VStack(alignment: .leading, spacing: 3) {
+                                ruler
+                                ForEach(rows) { layer in row(layer) }
                             }
+                            .overlay(alignment: .topLeading) { playhead }
                             .padding(.trailing, 8)
                         }
                         .onChange(of: state.frameIndex) { _, _ in
@@ -38,30 +38,40 @@ struct TimelineView: View {
                     }
                 }
             }
-            .frame(maxHeight: 150)
+            .frame(maxHeight: 16 + CGFloat(min(state.layers.count, 6)) * (rowHeight + 3))
             .fixedSize(horizontal: false, vertical: true)
+            footer
         }
         .calcoPanel(padding: 10)
     }
 
-    // MARK: Header
+    /// Top layer first, like the canvas stacks them.
+    private var rows: [Layer] { state.layers.reversed() }
+
+    private func width(_ frame: Frame) -> CGFloat { tick * CGFloat(frame.hold) }
+
+    private func x(ofFrame index: Int) -> CGFloat {
+        state.frames.prefix(index).reduce(0) { $0 + width($1) }
+    }
+
+    // MARK: Header: transport, clips, onion skin
 
     private var header: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             Button { state.togglePlayback() } label: {
                 Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 17))
+                    .font(.system(size: 16))
                     .foregroundStyle(Theme.accent)
-                    .frame(width: 28, height: 28)
+                    .frame(width: 26, height: 26)
             }
             .accessibilityLabel(state.isPlaying ? "Pause" : "Play")
 
             Text("\(state.frameIndex + 1) / \(state.frames.count)")
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(Theme.textDim)
-                .frame(minWidth: 44, alignment: .leading)
+                .frame(minWidth: 40, alignment: .leading)
 
-            ClipMenu(state: state)
+            ClipTabs(state: state)
 
             Toggle(isOn: Binding(get: { state.clip.loop }, set: { _ in state.toggleLoop() })) {
                 Image(systemName: "repeat")
@@ -83,121 +93,258 @@ struct TimelineView: View {
             Toggle(isOn: $state.showPivot) { Image(systemName: "scope") }
                 .toggleStyle(.button)
                 .help("Pivot")
-            if state.showPivot {
-                Text(String(format: "%.2f · %.2f", state.clip.pivot.x, state.clip.pivot.y))
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(Theme.textDim)
-            }
 
             Spacer(minLength: 8)
+
+            onionControls
+        }
+        .buttonStyle(.borderless)
+        .foregroundStyle(Theme.textDim)
+        .font(.body)
+    }
+
+    /// Quick onion skin: on/off and how many frames each way, without opening the popover.
+    private var onionControls: some View {
+        HStack(spacing: 6) {
+            Toggle(isOn: $state.onion.enabled) { Image(systemName: "circle.lefthalf.filled.righthalf.striped.horizontal") }
+                .toggleStyle(.button)
+                .help("Onion skin")
+            Group {
+                Circle().fill(Color(rgba: SIMD4(OnionSkin.beforeTint, 1))).frame(width: 8, height: 8)
+                CompactStepper(title: "", value: $state.onion.before, range: 0...5)
+                CompactStepper(title: "", value: $state.onion.after, range: 0...5)
+                Circle().fill(Color(rgba: SIMD4(OnionSkin.afterTint, 1))).frame(width: 8, height: 8)
+            }
+            .opacity(state.onion.enabled ? 1 : 0.35)
+        }
+    }
+
+    // MARK: Grid
+
+    /// Frame numbers, the in / out range, and long-press to set them.
+    private var ruler: some View {
+        let range = state.effectivePlayRange
+        return HStack(spacing: 0) {
+            ForEach(Array(state.frames.enumerated()), id: \.element.id) { i, frame in
+                Text("\(i + 1)")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(i == state.frameIndex ? Theme.accentText : Theme.textFaint)
+                    .padding(.leading, 3)
+                    .frame(width: width(frame), height: 16, alignment: .leading)
+                    .background(state.playRange != nil && range.contains(i) ? Theme.accent.opacity(0.12) : .clear)
+                    .overlay(alignment: .leading) { Rectangle().fill(Theme.hairline).frame(width: 1, height: 6) }
+                    .contentShape(Rectangle())
+                    .onTapGesture { state.frameIndex = i }
+                    .contextMenu {
+                        Button { state.frameIndex = i; state.setPlayRange(start: true) } label: {
+                            Label("Play from here", systemImage: "arrow.right.to.line")
+                        }
+                        Button { state.frameIndex = i; state.setPlayRange(start: false) } label: {
+                            Label("Play up to here", systemImage: "arrow.left.to.line")
+                        }
+                        if state.playRange != nil {
+                            Button { state.playRange = nil } label: { Label("Play whole clip", systemImage: "arrow.left.and.right") }
+                        }
+                    }
+                    .id(frame.id)
+            }
+        }
+    }
+
+    private var playhead: some View {
+        let x = x(ofFrame: state.frameIndex)
+        let w = state.currentFrame.map(width) ?? tick
+        return Rectangle()
+            .fill(Theme.accent.opacity(0.10))
+            .frame(width: w, height: 16 + CGFloat(state.layers.count) * (rowHeight + 3))
+            .overlay(alignment: .leading) { Rectangle().fill(Theme.accent).frame(width: 2) }
+            .offset(x: x)
+            .allowsHitTesting(false)
+    }
+
+    /// One layer's exposures: each drawing a cell spanning its own frame and the frames holding it.
+    private func row(_ layer: Layer) -> some View {
+        let clip = state.clip
+        let isCurrentLayer = layer.id == state.currentLayer?.id
+        let currentRun = clip.sourceIndex(layer: layer.id, at: state.frameIndex)
+        return HStack(spacing: 0) {
+            ForEach(Array(clip.runs(of: layer.id).enumerated()), id: \.offset) { n, run in
+                let span = clip.frames[run.start..<(run.start + run.count)]
+                let w = span.reduce(0) { $0 + width($1) }
+                let selected = isCurrentLayer && run.start == currentRun
+                let drawn = state.store.existingTexture(clip: clip.id, frame: clip.frames[run.start].id, layer: layer.id) != nil
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(selected ? Theme.accentWash : (drawn ? Theme.raised : Color.clear))
+                    RoundedRectangle(cornerRadius: 4)
+                        .strokeBorder(selected ? Theme.accent : Theme.hairline,
+                                      style: StrokeStyle(lineWidth: selected ? 1.5 : 0.75, dash: drawn ? [] : [3, 3]))
+                    HStack(spacing: 4) {
+                        Text("\(n + 1)").font(.system(size: 10, weight: .medium, design: .rounded))
+                        if run.count > 1 {
+                            Image(systemName: "arrow.right").font(.system(size: 8, weight: .semibold))
+                        }
+                    }
+                    .foregroundStyle(selected ? Theme.accentText : Theme.textFaint)
+                    .padding(.leading, 5)
+                }
+                .frame(width: max(4, w - 2), height: rowHeight)
+                .padding(.trailing, 2)
+                .opacity(layer.visible ? 1 : 0.45)
+                .overlay {
+                    // A tap lands on the frame under the finger, not just the drawing's first frame.
+                    HStack(spacing: 0) {
+                        ForEach(Array(span.enumerated()), id: \.element.id) { k, frame in
+                            Color.clear.contentShape(Rectangle())
+                                .frame(width: width(frame))
+                                .onTapGesture {
+                                    state.frameIndex = run.start + k
+                                    if let i = state.layers.firstIndex(where: { $0.id == layer.id }) { state.layerIndex = i }
+                                }
+                        }
+                    }
+                }
+                .accessibilityElement()
+                .accessibilityLabel("\(layer.name), drawing \(n + 1)\(run.count > 1 ? ", held \(run.count) frames" : "")")
+                .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+            }
+        }
+    }
+
+    // MARK: Footer: layer and cell actions
+
+    private var footer: some View {
+        HStack(spacing: 14) {
+            Button { state.addLayerWithDefaultName() } label: {
+                Label("New layer", systemImage: "plus").labelStyle(.titleAndIcon).font(.caption)
+            }
+            LayersButton(state: state)
+
+            Spacer(minLength: 8)
+
+            // The current cell: hold the previous drawing, or give it its own.
+            if state.currentCellIsHeld {
+                Button { state.releaseCurrentCell(copying: false) } label: {
+                    Label("New drawing", systemImage: "square.dashed").labelStyle(.titleAndIcon).font(.caption)
+                }
+                Button { state.releaseCurrentCell(copying: true) } label: {
+                    Label("Copy drawing", systemImage: "square.on.square").labelStyle(.titleAndIcon).font(.caption)
+                }
+            } else {
+                Button { state.holdCurrentCell() } label: {
+                    Label("Hold previous", systemImage: "arrow.right.to.line").labelStyle(.titleAndIcon).font(.caption)
+                }
+                .disabled(state.frameIndex == 0)
+            }
+
+            Divider().overlay(Theme.hairline).frame(height: 16)
 
             CompactStepper(title: "Hold", value: Binding(
                 get: { state.currentFrame?.hold ?? 1 },
                 set: { state.setHold($0) }), range: 1...24)
-
-            Button { state.moveFrame(by: -1) } label: { Label("Move earlier", systemImage: "arrowshape.left") }
+            Button { state.moveFrame(by: -1) } label: { Label("Move frame earlier", systemImage: "arrowshape.left") }
                 .disabled(state.frameIndex == 0)
-            Button { state.moveFrame(by: 1) } label: { Label("Move later", systemImage: "arrowshape.right") }
+            Button { state.moveFrame(by: 1) } label: { Label("Move frame later", systemImage: "arrowshape.right") }
                 .disabled(state.frameIndex >= state.frames.count - 1)
-
-            Button { state.duplicateFrame() } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
-            Button(role: .destructive) { state.deleteFrame() } label: { Label("Delete", systemImage: "trash") }
+            Button { state.duplicateFrame() } label: { Label("Duplicate frame", systemImage: "plus.square.on.square") }
+            Button(role: .destructive) { state.deleteFrame() } label: { Label("Delete frame", systemImage: "trash") }
                 .disabled(state.frames.count <= 1)
             Button { state.addFrame() } label: {
                 Image(systemName: "plus")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Theme.onAccent)
-                    .frame(width: 32, height: 28)
-                    .background(Theme.accent, in: RoundedRectangle(cornerRadius: 8))
+                    .frame(width: 30, height: 26)
+                    .background(Theme.accent, in: RoundedRectangle(cornerRadius: 7))
             }
             .accessibilityLabel("Add frame")
         }
         .labelStyle(.iconOnly)
         .buttonStyle(.borderless)
         .foregroundStyle(Theme.textDim)
-        .font(.body)
     }
+}
 
-    // MARK: Tracks
+/// A layer's label in the sheet: eye, name, opacity when not 100%, lock. Tap to draw on it;
+/// long-press for rename, opacity, order and delete.
+private struct LayerLabel: View {
+    @ObservedObject var state: EditorState
+    let layerID: String
+    let height: CGFloat
+    @State private var renaming = false
+    @State private var editingOpacity = false
+    @State private var confirmingDelete = false
+    @State private var name = ""
 
-    private var labels: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(Array(state.project.clips.enumerated()), id: \.element.id) { i, clip in
-                let active = i == state.clipIndex
-                Text(clip.name)
-                    .font(.caption.weight(active ? .semibold : .regular))
-                    .foregroundStyle(active ? Theme.accentText : Theme.textDim)
+    var body: some View {
+        if let index = state.layers.firstIndex(where: { $0.id == layerID }) {
+            let layer = state.layers[index]
+            let selected = index == state.layerIndex
+            HStack(spacing: 6) {
+                Button { state.toggleLayerVisibility(index) } label: {
+                    Image(systemName: layer.visible ? "eye" : "eye.slash").frame(width: 20)
+                }
+                Text(layer.name)
+                    .font(.caption.weight(selected ? .semibold : .regular))
+                    .foregroundStyle(selected ? Theme.accentText : (layer.visible ? Theme.text : Theme.textFaint))
                     .lineLimit(1)
-                    .frame(width: labelWidth, height: active ? thumbHeight : barHeight, alignment: .leading)
-                    .contentShape(Rectangle())
-                    .onTapGesture { state.selectClip(i) }
-                    .accessibilityAddTraits(.isButton)
-                    .accessibilityAddTraits(active ? .isSelected : [])
-            }
-        }
-    }
-
-    private var activeTrack: some View {
-        HStack(spacing: 2) {
-            ForEach(Array(state.frames.enumerated()), id: \.element.id) { index, frame in
-                FrameCell(image: state.thumbnails[frame.id],
-                          index: index,
-                          hold: frame.hold,
-                          width: tick * CGFloat(frame.hold) - 2,
-                          height: thumbHeight,
-                          aspect: CGFloat(state.project.canvas.width) / CGFloat(state.project.canvas.height),
-                          selected: index == state.frameIndex)
-                    .id(frame.id)
-                    .onTapGesture { state.frameIndex = index }
-                    .onDrag {
-                        draggingFrameID = frame.id
-                        return NSItemProvider(object: frame.id as NSString)
+                Spacer(minLength: 2)
+                if layer.opacity < 1 {
+                    Button { editingOpacity = true } label: {
+                        Text("\(Int((layer.opacity * 100).rounded()))%").font(.system(size: 10, design: .monospaced))
                     }
-                    .onDrop(of: [.text], delegate: FrameDropDelegate(
-                        targetID: frame.id, state: state, dragging: $draggingFrameID))
+                }
+                Button { state.toggleLayerLock(index) } label: {
+                    Image(systemName: layer.locked ? "lock.fill" : "lock.open")
+                        .foregroundStyle(layer.locked ? Theme.text : Theme.textFaint)
+                        .frame(width: 18)
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(Theme.textDim)
+            .buttonStyle(.borderless)
+            .padding(.horizontal, 6)
+            .frame(height: height)
+            .background(selected ? Theme.accentWash : .clear, in: RoundedRectangle(cornerRadius: 6))
+            .contentShape(Rectangle())
+            .onTapGesture { state.layerIndex = index }
+            .contextMenu {
+                Button { name = layer.name; renaming = true } label: { Label("Rename…", systemImage: "pencil") }
+                Button { editingOpacity = true } label: { Label("Opacity…", systemImage: "circle.lefthalf.filled") }
+                Button { state.moveLayer(from: index, to: index + 1) } label: { Label("Move up", systemImage: "arrow.up") }
+                    .disabled(index == state.layers.count - 1)
+                Button { state.moveLayer(from: index, to: index - 1) } label: { Label("Move down", systemImage: "arrow.down") }
+                    .disabled(index == 0)
+                Divider()
+                Button(role: .destructive) { confirmingDelete = true } label: { Label("Delete layer…", systemImage: "trash") }
+                    .disabled(state.layers.count <= 1)
+            }
+            .popover(isPresented: $editingOpacity) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("\(layer.name) opacity").font(.headline)
+                    Slider(value: Binding(get: { state.layers[index].opacity }, set: { state.setLayerOpacity(index, $0) }),
+                           in: 0...1) { editing in if !editing { state.layerOpacityEditingEnded() } }
+                    Text("\(Int((state.layers[index].opacity * 100).rounded()))%")
+                        .font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
+                }
+                .padding(20).frame(width: 260)
+            }
+            .alert("Rename layer", isPresented: $renaming) {
+                TextField("Name", text: $name)
+                Button("Rename") { state.renameLayer(index, to: name) }
+                Button("Cancel", role: .cancel) {}
+            }
+            .alert("Delete \(layer.name)?", isPresented: $confirmingDelete) {
+                Button("Delete", role: .destructive) { state.deleteLayer(index) }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Its drawings in all \(state.frames.count) frames of \(state.clip.name) go with it. You can undo this.")
             }
         }
     }
-
-    private func barTrack(_ clip: Clip, index: Int) -> some View {
-        HStack(spacing: 2) {
-            ForEach(clip.frames) { frame in
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(Theme.raised)
-                    .frame(width: tick * CGFloat(frame.hold) - 2, height: barHeight)
-            }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture { state.selectClip(index) }
-        .accessibilityElement()
-        .accessibilityLabel("\(clip.name), \(clip.frames.count) frames")
-        .accessibilityAddTraits(.isButton)
-    }
 }
 
-/// Live reorder: the dragged frame takes the slot of whichever thumbnail it is over.
-private struct FrameDropDelegate: DropDelegate {
-    let targetID: String
-    let state: EditorState
-    @Binding var dragging: String?
-
-    func dropEntered(info: DropInfo) {
-        guard let id = dragging, id != targetID,
-              let to = state.frames.firstIndex(where: { $0.id == targetID }) else { return }
-        withAnimation(.easeOut(duration: 0.15)) { state.moveFrame(id: id, to: to) }
-    }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
-
-    func performDrop(info: DropInfo) -> Bool {
-        dragging = nil
-        state.endCoalescing()
-        return true
-    }
-}
-
-/// Clip picker plus new / rename / delete.
-struct ClipMenu: View {
+/// The clips as tabs; the last tab's menu adds, renames and deletes.
+private struct ClipTabs: View {
     @ObservedObject var state: EditorState
     @State private var addingClip = false
     @State private var renamingClip = false
@@ -205,24 +352,29 @@ struct ClipMenu: View {
     @State private var clipName = ""
 
     var body: some View {
-        Menu {
-            ForEach(Array(state.project.clips.enumerated()), id: \.element.id) { index, clip in
-                Button { state.selectClip(index) } label: {
-                    if index == state.clipIndex { Label(clip.name, systemImage: "checkmark") } else { Text(clip.name) }
+        HStack(spacing: 3) {
+            ForEach(Array(state.project.clips.enumerated()), id: \.element.id) { i, clip in
+                let on = i == state.clipIndex
+                Button { state.selectClip(i) } label: {
+                    Text(clip.name)
+                        .font(.caption.weight(on ? .semibold : .regular))
+                        .lineLimit(1)
+                        .foregroundStyle(on ? Theme.accentText : Theme.textFaint)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(on ? Theme.accentWash : .clear, in: RoundedRectangle(cornerRadius: 6))
                 }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(on ? .isSelected : [])
             }
-            Divider()
-            Button { clipName = ""; addingClip = true } label: { Label("New clip…", systemImage: "plus") }
-            Button { clipName = state.clip.name; renamingClip = true } label: { Label("Rename…", systemImage: "pencil") }
-            Button(role: .destructive) { confirmingDelete = true } label: { Label("Delete clip", systemImage: "trash") }
-                .disabled(state.project.clips.count <= 1)
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: "film.stack")
-                Text(state.clip.name).font(.callout.weight(.semibold)).lineLimit(1)
-                Image(systemName: "chevron.up.chevron.down").font(.caption2)
+            Menu {
+                Button { clipName = ""; addingClip = true } label: { Label("New clip…", systemImage: "plus") }
+                Button { clipName = state.clip.name; renamingClip = true } label: { Label("Rename \(state.clip.name)…", systemImage: "pencil") }
+                Button(role: .destructive) { confirmingDelete = true } label: { Label("Delete \(state.clip.name)", systemImage: "trash") }
+                    .disabled(state.project.clips.count <= 1)
+            } label: {
+                Image(systemName: "ellipsis.circle").foregroundStyle(Theme.textDim)
             }
-            .foregroundStyle(Theme.text)
+            .accessibilityLabel("Clip actions")
         }
         .alert("New clip", isPresented: $addingClip) {
             TextField("Name (idle, run, jump…)", text: $clipName)
@@ -242,55 +394,5 @@ struct ClipMenu: View {
         } message: {
             Text("All \(state.clip.frames.count) frames of this clip will be removed.")
         }
-    }
-}
-
-/// One frame on the active track: the thumbnail, then an exposure bar for the extra ticks it's held.
-struct FrameCell: View {
-    let image: CGImage?
-    let index: Int
-    let hold: Int
-    let width: CGFloat
-    let height: CGFloat
-    let aspect: CGFloat
-    let selected: Bool
-
-    var body: some View {
-        let thumbWidth = min(width, height * aspect)
-        ZStack(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 5)
-                .fill(selected ? Theme.accentWash : Theme.raised)
-            Group {
-                if let image {
-                    Image(decorative: image, scale: 1).resizable().interpolation(.high)
-                } else {
-                    Theme.text
-                }
-            }
-            .frame(width: thumbWidth, height: height)
-            .clipShape(RoundedRectangle(cornerRadius: 5))
-        }
-        .frame(width: width, height: height)
-        .overlay(RoundedRectangle(cornerRadius: 5)
-            .strokeBorder(selected ? Theme.accent : Theme.hairline, lineWidth: selected ? 2 : 0.5))
-        .overlay(alignment: .topLeading) {
-            Text("\(index + 1)")
-                .font(.system(size: 9, weight: .medium, design: .rounded))
-                .padding(.horizontal, 4).padding(.vertical, 1)
-                .background(.black.opacity(0.6), in: Capsule())
-                .foregroundStyle(.white)
-                .padding(3)
-        }
-        .overlay(alignment: .trailing) {
-            if hold > 1 {
-                Text("×\(hold)")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(selected ? Theme.accentText : Theme.textDim)
-                    .padding(.trailing, 6)
-            }
-        }
-        .accessibilityElement()
-        .accessibilityLabel("Frame \(index + 1)\(hold > 1 ? ", held \(hold)" : "")")
-        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 }

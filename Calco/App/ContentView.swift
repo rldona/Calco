@@ -20,10 +20,6 @@ struct ContentView: View {
                         .transition(.move(edge: .leading).combined(with: .opacity))
                 }
                 canvas
-                if !state.isZen {
-                    LayersPanel(state: state)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
-                }
             }
             if !state.isZen {
                 TimelineView(state: state)
@@ -146,6 +142,7 @@ struct OnionSkinButton: View {
                         Slider(value: Binding(get: { Double(state.onion.opacity) },
                                               set: { state.onion.opacity = Float($0) }), in: 0.1...0.8)
                     }
+                    Toggle("Current layer only", isOn: $state.onion.currentLayerOnly).font(.subheadline)
                 }
                 .disabled(!state.onion.enabled)
             }

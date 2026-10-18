@@ -6,6 +6,8 @@ struct OnionSkin: Equatable {
     var before = 2
     var after = 1
     var opacity: Float = 0.35
+    /// Ghost only the layer being drawn on, not the whole frame.
+    var currentLayerOnly = false
     static let beforeTint = SIMD3<Float>(0.85, 0.25, 0.25)
     static let afterTint  = SIMD3<Float>(0.25, 0.55, 0.85)
 }
@@ -128,10 +130,26 @@ final class EditorState: ObservableObject {
     var currentLayer: Layer? { layers.indices.contains(layerIndex) ? layers[layerIndex] : nil }
     var clipFPS: Int { clip.fps ?? project.fps }
 
+    /// The drawing `layer` shows at frame `index`: its own, or the one it holds from earlier.
+    func drawingKey(layer: String, at index: Int) -> LayerKey? {
+        clip.sourceFrameID(layer: layer, at: index).map { LayerKey(clip: clip.id, frame: $0, layer: layer) }
+    }
+
+    /// What painting, fill, clear and the lasso act on: the current layer's drawing at the playhead.
+    /// On a held cell that's the drawing being held, so editing it changes every frame showing it.
+    var currentDrawingKey: LayerKey? {
+        currentLayer.flatMap { drawingKey(layer: $0.id, at: frameIndex) }
+    }
+
+    /// Whether the current layer holds the previous drawing at the playhead.
+    var currentCellIsHeld: Bool {
+        currentLayer.map { clip.isHeld(layer: $0.id, at: frameIndex) } ?? false
+    }
+
     /// Texture the Pencil should paint into right now.
     var paintTarget: MTLTexture? {
-        guard let f = currentFrame, let l = currentLayer, !l.locked else { return nil }
-        return store.texture(clip: clip.id, frame: f.id, layer: l.id)
+        guard let k = currentDrawingKey, currentLayer?.locked == false else { return nil }
+        return store.texture(clip: k.clip, frame: k.frame, layer: k.layer)
     }
 
     // MARK: - Document
@@ -269,6 +287,7 @@ final class EditorState: ObservableObject {
     /// Swaps in a project and its pixels, recreating the renderer if the canvas size changed.
     private func install(_ newProject: Project, images: [LayerKey: CGImage]) throws {
         selection = nil; selectionBefore = nil; selectionPreview = nil; lassoPoints = []
+        playRange = nil
         let size = SIMD2<Int>(newProject.canvas.width, newProject.canvas.height)
         if size != renderer.canvasSize {
             guard let r = CanvasRenderer(device: renderer.device, canvasSize: size, screenFormat: screenFormat) else {
@@ -354,6 +373,7 @@ final class EditorState: ObservableObject {
     func selectClip(_ index: Int) {
         guard project.clips.indices.contains(index) else { return }
         commitSelection()
+        playRange = nil
         stop()
         clipIndex = index
         frameIndex = 0
@@ -440,47 +460,65 @@ final class EditorState: ObservableObject {
         return String(format: "%03d", nextFrameNumber)
     }
 
+    /// New frame after the current one. Only the current layer gets a fresh, blank drawing; every
+    /// other layer holds what it was showing, so a background or a colour pass carries on by itself.
     func addFrame() {
-        recordUndo()
-        insertBlankFrame()
+        let id = newFrameID()
+        recordUndo(textures: allCellKeys() + layerKeys(clip, frame: id))
+        keepingPicture { insertBlankFrame(id: id, holdingOthers: true) }
+        refreshClipThumbnails()
     }
 
-    private func insertBlankFrame() {
-        let f = Frame(id: newFrameID(), hold: 1)
+    private func insertBlankFrame(id: String? = nil, holdingOthers: Bool = false) {
         let at = frames.isEmpty ? 0 : frameIndex + 1
-        clip.frames.insert(f, at: at)
+        let others = at > 0 && holdingOthers ? layers.map(\.id).filter { $0 != currentLayer?.id } : []
+        clip.frames.insert(Frame(id: id ?? newFrameID(), hold: 1, held: others), at: at)
         frameIndex = at
         isDirty = true
     }
 
+    /// Copies the current frame after itself: its own drawings are duplicated, its holds stay holds.
     func duplicateFrame() {
         guard let src = currentFrame else { return }
-        let f = Frame(id: newFrameID(), hold: src.hold)
-        recordUndo(textures: layerKeys(clip, frame: f.id))
-        clip.frames.insert(f, at: frameIndex + 1)
-        store.duplicate(clip: clip.id, from: src.id, to: f.id, layers: layers.map(\.id))
-        frameIndex += 1
+        let f = Frame(id: newFrameID(), hold: src.hold,
+                      held: layers.map(\.id).filter { clip.isHeld(layer: $0, at: frameIndex) })
+        recordUndo(textures: allCellKeys() + layerKeys(clip, frame: f.id))
+        let at = frameIndex + 1
+        keepingPicture {
+            clip.frames.insert(f, at: at)
+            for l in layers where !f.held.contains(l.id) {
+                store.set(store.copy(of: LayerKey(clip: clip.id, frame: src.id, layer: l.id)),
+                          for: LayerKey(clip: clip.id, frame: f.id, layer: l.id))
+            }
+        }
+        frameIndex = at
         isDirty = true
-        refreshThumbnail(for: f.id)
+        refreshClipThumbnails()
     }
 
+    /// Removes the current frame. A drawing it owned that later frames were holding moves to the
+    /// first of them, so nothing else changes on screen.
     func deleteFrame() {
         guard frames.count > 1, let f = currentFrame else { return }
-        recordUndo(textures: layerKeys(clip, frame: f.id))
-        clip.frames.remove(at: frameIndex)
+        recordUndo(textures: allCellKeys())
+        let at = frameIndex
+        keepingPicture { clip.frames.remove(at: at) }
         store.remove(clip: clip.id, frame: f.id, layers: layers.map(\.id))
         thumbnails.removeValue(forKey: f.id)
         frameIndex = min(frameIndex, frames.count - 1)
         isDirty = true
+        refreshClipThumbnails()
     }
 
     func moveFrame(by offset: Int) {
         let to = frameIndex + offset
         guard frames.indices.contains(to) else { return }
-        recordUndo()
-        clip.frames.swapAt(frameIndex, to)
+        recordUndo(textures: allCellKeys())
+        let from = frameIndex
+        keepingPicture { clip.frames.swapAt(from, to) }
         frameIndex = to
         isDirty = true
+        refreshClipThumbnails()
     }
 
     /// Moves frame `id` so it ends up at `index`. The selection stays on the frame that was selected.
@@ -488,13 +526,79 @@ final class EditorState: ObservableObject {
         guard let from = frames.firstIndex(where: { $0.id == id }) else { return }
         let to = min(max(index, 0), frames.count - 1)
         guard from != to else { return }
-        recordUndo(coalescing: "move:\(id)")
+        recordUndo(textures: allCellKeys(), coalescing: "move:\(id)")
         let selectedID = currentFrame?.id
-        clip.frames.insert(clip.frames.remove(at: from), at: to)
+        keepingPicture { clip.frames.insert(clip.frames.remove(at: from), at: to) }
         if let selectedID, let i = frames.firstIndex(where: { $0.id == selectedID }) {
             frameIndex = i
         }
         isDirty = true
+        refreshClipThumbnails()
+    }
+
+    // MARK: - Exposure sheet cells
+
+    /// The current layer shows the previous frame's drawing here instead of its own (a hold).
+    /// Its own drawing at this frame is dropped; undo brings it back.
+    func holdCurrentCell() {
+        guard frameIndex > 0, let l = currentLayer, !l.locked, !currentCellIsHeld, let f = currentFrame else { return }
+        let own = LayerKey(clip: clip.id, frame: f.id, layer: l.id)
+        recordUndo(textures: [own])
+        clip.frames[frameIndex].held.append(l.id)
+        store.set(nil, for: own)
+        isDirty = true
+        refreshClipThumbnails()
+    }
+
+    /// Gives the current layer a drawing of its own here, blank or a copy of the one it was holding.
+    /// Later frames that were holding through here now hold this new drawing.
+    func releaseCurrentCell(copying: Bool) {
+        guard currentCellIsHeld, let l = currentLayer, !l.locked, let f = currentFrame,
+              let source = currentDrawingKey else { return }
+        let own = LayerKey(clip: clip.id, frame: f.id, layer: l.id)
+        recordUndo(textures: [own])
+        clip.frames[frameIndex].held.removeAll { $0 == l.id }
+        store.set(copying ? store.copy(of: source) : nil, for: own)
+        isDirty = true
+        refreshClipThumbnails()
+    }
+
+    /// Every (frame, layer) cell of the current clip, held or not.
+    private func allCellKeys() -> [LayerKey] {
+        frames.flatMap { layerKeys(clip, frame: $0.id) }
+    }
+
+    /// Runs a change to the clip's frame list and keeps every frame that's still there looking the
+    /// same: a cell whose drawing would change (it held from a frame that moved or went away, or it
+    /// ended up first) gets the drawing it was showing as its own copy. The first frame never holds.
+    private func keepingPicture(_ change: () -> Void) {
+        var before: [LayerKey: MTLTexture?] = [:]
+        for i in frames.indices {
+            for l in layers {
+                let cell = LayerKey(clip: clip.id, frame: frames[i].id, layer: l.id)
+                before.updateValue(drawingKey(layer: l.id, at: i).flatMap(store.raw), forKey: cell)
+            }
+        }
+        change()
+        if !clip.frames.isEmpty { clip.frames[0].held = [] }
+        // One copy per old drawing: frames after the first materialised one hold it again.
+        var copies: [ObjectIdentifier: MTLTexture] = [:]
+        for i in frames.indices {
+            for l in layers {
+                let cell = LayerKey(clip: clip.id, frame: frames[i].id, layer: l.id)
+                guard let entry = before[cell] else { continue }
+                let expected: MTLTexture? = entry.map { copies[ObjectIdentifier($0)] ?? $0 }
+                let now = drawingKey(layer: l.id, at: i).flatMap(store.raw)
+                if (now as AnyObject?) === (expected as AnyObject?) { continue }
+                clip.frames[i].held.removeAll { $0 == l.id }
+                if let old = entry, let c = store.copy(old) {
+                    store.set(c, for: cell)
+                    copies[ObjectIdentifier(old)] = c
+                } else {
+                    store.set(nil, for: cell)
+                }
+            }
+        }
     }
 
     func setHold(_ hold: Int) {
@@ -505,11 +609,11 @@ final class EditorState: ObservableObject {
     }
 
     func clearCurrentLayer() {
-        guard let f = currentFrame, let l = currentLayer, !l.locked else { return }
-        recordUndo(textures: [LayerKey(clip: clip.id, frame: f.id, layer: l.id)], copyPixels: true)
-        store.clear(clip: clip.id, frame: f.id, layer: l.id)
+        guard let k = currentDrawingKey, currentLayer?.locked == false else { return }
+        recordUndo(textures: [k], copyPixels: true)
+        store.clear(clip: k.clip, frame: k.frame, layer: k.layer)
         isDirty = true
-        refreshThumbnail(for: f.id)
+        refreshThumbnails(showing: k)
     }
 
     // MARK: - Layers
@@ -537,6 +641,7 @@ final class EditorState: ObservableObject {
         recordUndo(textures: keys)
         for k in keys { store.set(nil, for: k) }
         clip.layers.remove(at: index)
+        for i in clip.frames.indices { clip.frames[i].held.removeAll { $0 == doomed.id } }
         if layerIndex > index || layerIndex >= layers.count { layerIndex = max(0, layerIndex - 1) }
         isDirty = true
         refreshClipThumbnails()
@@ -629,9 +734,27 @@ final class EditorState: ObservableObject {
         isPlaying ? stop() : play()
     }
 
+    /// Frames playback runs over: the whole clip, or the in / out range when one is set.
+    /// View state: not saved, and it never affects export.
+    @Published var playRange: ClosedRange<Int>?
+
+    var effectivePlayRange: ClosedRange<Int> {
+        let all = 0...max(0, frames.count - 1)
+        guard let r = playRange, r.lowerBound <= all.upperBound else { return all }
+        return r.clamped(to: all)
+    }
+
+    /// Sets the in (start) or out (end) point at the current frame, keeping in ≤ out.
+    func setPlayRange(start: Bool) {
+        let r = effectivePlayRange
+        playRange = start ? frameIndex...max(frameIndex, r.upperBound) : min(frameIndex, r.lowerBound)...frameIndex
+        if playRange == 0...max(0, frames.count - 1) { playRange = nil }
+    }
+
     private func play() {
-        guard frames.count > 1 else { return }
-        if !clip.loop && frameIndex == frames.count - 1 { frameIndex = 0 }
+        let range = effectivePlayRange
+        guard range.count > 1 else { return }
+        if !range.contains(frameIndex) || (!clip.loop && frameIndex == range.upperBound) { frameIndex = range.lowerBound }
         isPlaying = true
         scheduleNextTick()
     }
@@ -648,11 +771,12 @@ final class EditorState: ObservableObject {
         playTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: nanos)
             guard let self, self.isPlaying, !Task.isCancelled else { return }
+            let range = self.effectivePlayRange
             let next = self.frameIndex + 1
-            if next < self.frames.count {
+            if next <= range.upperBound {
                 self.frameIndex = next
             } else if self.clip.loop {
-                self.frameIndex = 0
+                self.frameIndex = range.lowerBound
             } else {
                 self.stop()
                 return
@@ -673,22 +797,23 @@ final class EditorState: ObservableObject {
                 let idx = frameIndex - i
                 guard frames.indices.contains(idx) else { continue }
                 let fade = 1 - Float(i - 1) / Float(max(onion.before, 1)) * 0.6
-                out += frameLayers(frames[idx].id, opacity: onion.opacity * fade, tint: OnionSkin.beforeTint)
+                out += onionLayers(at: idx, opacity: onion.opacity * fade, tint: OnionSkin.beforeTint)
             }
             for i in stride(from: onion.after, through: 1, by: -1) {
                 let idx = frameIndex + i
                 guard frames.indices.contains(idx) else { continue }
                 let fade = 1 - Float(i - 1) / Float(max(onion.after, 1)) * 0.6
-                out += frameLayers(frames[idx].id, opacity: onion.opacity * fade, tint: OnionSkin.afterTint)
+                out += onionLayers(at: idx, opacity: onion.opacity * fade, tint: OnionSkin.afterTint)
             }
         }
-        if let f = currentFrame {
+        if currentFrame != nil {
             for layer in clip.layers where layer.visible {
-                if let t = store.existingTexture(clip: clip.id, frame: f.id, layer: layer.id) {
+                let key = drawingKey(layer: layer.id, at: frameIndex)
+                if let key, let t = store.existingTexture(clip: key.clip, frame: key.frame, layer: key.layer) {
                     out.append(.init(texture: t, opacity: Float(layer.opacity), tint: .zero, tintAmount: 0))
                 }
                 // A floating selection shows right above its own layer, where it'll land.
-                if let sel = selection, sel.key.frame == f.id, sel.key.layer == layer.id, let preview = selectionPreview {
+                if let sel = selection, sel.key == key, let preview = selectionPreview {
                     out.append(.init(texture: preview, opacity: Float(layer.opacity), tint: .zero, tintAmount: 0))
                 }
             }
@@ -696,14 +821,33 @@ final class EditorState: ObservableObject {
         return out
     }
 
+    /// A neighbouring frame for onion skin: only layers whose drawing there differs from the one on
+    /// screen now, so a held background doesn't ghost over itself.
+    private func onionLayers(at idx: Int, opacity: Float, tint: SIMD3<Float>) -> [CanvasRenderer.CompositeLayer] {
+        if onion.currentLayerOnly, let l = currentLayer {
+            guard let k = drawingKey(layer: l.id, at: idx), k != drawingKey(layer: l.id, at: frameIndex),
+                  l.visible, let t = store.existingTexture(clip: k.clip, frame: k.frame, layer: k.layer) else { return [] }
+            return [.init(texture: t, opacity: Float(l.opacity) * opacity, tint: tint, tintAmount: 1)]
+        }
+        return clip.layers.compactMap { layer in
+            guard layer.visible, let k = drawingKey(layer: layer.id, at: idx),
+                  k != drawingKey(layer: layer.id, at: frameIndex),
+                  let t = store.existingTexture(clip: k.clip, frame: k.frame, layer: k.layer) else { return nil }
+            return .init(texture: t, opacity: Float(layer.opacity) * opacity, tint: tint, tintAmount: 1)
+        }
+    }
+
     private func frameLayers(_ frameID: String, opacity: Float, tint: SIMD3<Float>?) -> [CanvasRenderer.CompositeLayer] {
         frameLayers(of: clip, frameID, opacity: opacity, tint: tint)
     }
 
+    /// Every visible layer as it shows at frame `frameID` of `clip`, holds resolved.
     private func frameLayers(of clip: Clip, _ frameID: String, opacity: Float, tint: SIMD3<Float>?) -> [CanvasRenderer.CompositeLayer] {
-        clip.layers.compactMap { layer in
+        let index = clip.frames.firstIndex { $0.id == frameID }
+        return clip.layers.compactMap { layer in
+            let source = index.flatMap { clip.sourceFrameID(layer: layer.id, at: $0) } ?? frameID
             guard layer.visible,
-                  let t = store.existingTexture(clip: clip.id, frame: frameID, layer: layer.id) else { return nil }
+                  let t = store.existingTexture(clip: clip.id, frame: source, layer: layer.id) else { return nil }
             return CanvasRenderer.CompositeLayer(
                 texture: t,
                 opacity: Float(layer.opacity) * opacity,
@@ -713,6 +857,14 @@ final class EditorState: ObservableObject {
     }
 
     // MARK: - Thumbnails
+
+    /// Refreshes every frame of the current clip that shows drawing `key` (its own frame and the
+    /// frames holding it).
+    func refreshThumbnails(showing key: LayerKey) {
+        for i in frames.indices where drawingKey(layer: key.layer, at: i) == key {
+            refreshThumbnail(for: frames[i].id)
+        }
+    }
 
     func refreshThumbnail(for frameID: String) {
         let layersToDraw = frameLayers(frameID, opacity: 1, tint: nil)
@@ -727,8 +879,7 @@ final class EditorState: ObservableObject {
     /// Keeps the layer's pixels aside and returns the texture to paint into, or nil if painting isn't allowed.
     /// The stroke becomes an undo step in `strokeEnded`; `cancelStroke` throws it away.
     func beginStroke() -> MTLTexture? {
-        guard let f = currentFrame, let l = currentLayer, !l.locked else { return nil }
-        let key = LayerKey(clip: clip.id, frame: f.id, layer: l.id)
+        guard let key = currentDrawingKey, currentLayer?.locked == false else { return nil }
         var saved: [LayerKey: MTLTexture?] = [:]
         saved.updateValue(store.copy(of: key), forKey: key)
         pendingStroke = snapshot(saved)
@@ -736,21 +887,21 @@ final class EditorState: ObservableObject {
     }
 
     func strokeEnded() {
+        let key = pendingStroke?.textures.keys.first
         if let s = pendingStroke {
             coalesceTag = nil
             push(s)
             pendingStroke = nil
         }
         isDirty = true
-        if let f = currentFrame { refreshThumbnail(for: f.id) }
+        if let key { refreshThumbnails(showing: key) } else if let f = currentFrame { refreshThumbnail(for: f.id) }
     }
 
     /// A gesture took over (two-finger tap, pinch): put the pixels back as if the stroke never happened.
     func cancelStroke() {
         guard let s = pendingStroke else { return }
         pendingStroke = nil
-        for (k, t) in s.textures { store.set(t, for: k) }
-        if let f = currentFrame { refreshThumbnail(for: f.id) }
+        for (k, t) in s.textures { store.set(t, for: k); refreshThumbnails(showing: k) }
     }
 
     // MARK: - Fill and eyedropper
@@ -780,7 +931,7 @@ final class EditorState: ObservableObject {
     /// Bucket fill at a canvas point. The region comes from all visible layers of the frame (so
     /// lines on "Line" bound a fill on "Color"); the paint goes on the current layer. Undoable.
     func fill(at point: SIMD2<Float>) {
-        guard !isPlaying, let f = currentFrame, let l = currentLayer, !l.locked else { return }
+        guard !isPlaying, let f = currentFrame, let key = currentDrawingKey, currentLayer?.locked == false else { return }
         let w = renderer.canvasSize.x, h = renderer.canvasSize.y
         let seed = (x: Int(point.x.rounded(.down)), y: Int(point.y.rounded(.down)))
         guard (0..<w).contains(seed.x), (0..<h).contains(seed.y),
@@ -790,14 +941,13 @@ final class EditorState: ObservableObject {
         guard !region.isEmpty else { return }
         let mask = FloodFill.grow(region, width: w, height: h, by: Self.fillGrow)
 
-        let key = LayerKey(clip: clip.id, frame: f.id, layer: l.id)
         recordUndo(textures: [key], copyPixels: true)
         guard let target = store.texture(clip: key.clip, frame: key.frame, layer: key.layer),
               var pixels = renderer.readbackBytes(target) else { return }
         FloodFill.paint(mask, color: SIMD3(color.x, color.y, color.z), into: &pixels)
         renderer.upload(bytes: pixels, into: target)
         isDirty = true
-        refreshThumbnail(for: f.id)
+        refreshThumbnails(showing: key)
     }
 
     /// Takes the colour of what's on screen at a canvas point (all visible layers), then returns
@@ -821,8 +971,7 @@ final class EditorState: ObservableObject {
     func liftSelection(_ polygon: [CGPoint]) {
         lassoPoints = []
         commitSelection()
-        guard !isPlaying, polygon.count >= 3, let f = currentFrame, let l = currentLayer, !l.locked else { return }
-        let key = LayerKey(clip: clip.id, frame: f.id, layer: l.id)
+        guard !isPlaying, polygon.count >= 3, let key = currentDrawingKey, currentLayer?.locked == false else { return }
         guard let target = store.existingTexture(clip: key.clip, frame: key.frame, layer: key.layer),
               let pixels = renderer.readbackBytes(target) else { return }
         let w = renderer.canvasSize.x, h = renderer.canvasSize.y
@@ -863,7 +1012,7 @@ final class EditorState: ObservableObject {
         push(snapshot(before))
         selectionBefore = nil
         isDirty = true
-        refreshThumbnail(for: sel.key.frame)
+        refreshThumbnails(showing: sel.key)
     }
 
     /// Puts the lifted pixels back untouched, as if the lasso never happened.
@@ -873,7 +1022,7 @@ final class EditorState: ObservableObject {
         lassoPoints = []
         if let before = selectionBefore { store.set(before, for: sel.key) }
         selectionBefore = nil
-        refreshThumbnail(for: sel.key.frame)
+        refreshThumbnails(showing: sel.key)
     }
 
     private func renderSelectionPreview() {

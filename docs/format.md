@@ -2,7 +2,7 @@
 
 A Calco project is a **folder** (an iOS document package) named `<name>.calco`. Everything inside is plain files: one JSON manifest plus PNGs. You can open, diff and version it without Calco.
 
-Status: draft for v0.1. Breaking changes are expected until 1.0; `version` in the manifest will be bumped on every incompatible change.
+Status: draft (format 2 since v0.5). Breaking changes are expected until 1.0; `version` in the manifest will be bumped on every incompatible change.
 
 ## Layout
 
@@ -33,7 +33,7 @@ Hero.calco/
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "name": "Hero",
   "canvas": { "width": 512, "height": 512 },
   "fps": 12,
@@ -51,7 +51,7 @@ Hero.calco/
       "frames": [
         { "id": "000", "hold": 2 },
         { "id": "001", "hold": 2 },
-        { "id": "002", "hold": 3 }
+        { "id": "002", "hold": 3, "held": ["color"] }
       ]
     }
   ],
@@ -72,6 +72,7 @@ Hero.calco/
 | `clips[].layers` | Ordered bottom to top. Layer `id` is the PNG basename inside each frame folder. |
 | `clips[].frames[].id` | Frame folder name. Order in the array is playback order. |
 | `clips[].frames[].hold` | How many ticks at the clip's fps this frame stays on screen. Default `1`. |
+| `clips[].frames[].held` | Optional (format 2). Layer ids that keep showing the previous frame's drawing here, like a hold on an exposure sheet; those layers have no PNG in this frame's folder. Ignored on a clip's first frame. |
 | `references` | Optional guide images drawn under everything, never exported. |
 
 ## Export: sprite sheet

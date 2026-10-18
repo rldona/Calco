@@ -63,7 +63,12 @@ final class FrameStore {
 
     /// A fresh texture with the layer's current pixels; nil if the layer was never drawn on.
     func copy(of k: LayerKey) -> MTLTexture? {
-        guard let src = raw(k), let dst = renderer.makeLayerTexture() else { return nil }
+        raw(k).flatMap(copy)
+    }
+
+    /// A fresh texture with the same pixels.
+    func copy(_ src: MTLTexture) -> MTLTexture? {
+        guard let dst = renderer.makeLayerTexture() else { return nil }
         renderer.copy(src, to: dst)
         return dst
     }

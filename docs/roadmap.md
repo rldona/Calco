@@ -36,6 +36,7 @@ Calco's own look, aimed squarely at being better to work in than RoughAnimator.
 - [x] Zen mode: hides everything but the canvas and a small floating bar (Zen button or ⌃⌘F)
 - [x] Project gallery as the start screen: "Continue" with the last project, cards that play their first clip, rename / duplicate / delete on long press; everything saves into it on its own
 - [x] New project sheet: sprite-size presets (64–1024 or custom), fps explained in game terms (8 / 12 / 24), starting clips (Idle, Run, Jump, Attack, Hurt or your own)
+- [x] App icon
 - [ ] Custom icon set (brush, eraser, onion skin, pivot) instead of SF Symbols
 - [ ] Landscape and Stage Manager sizes checked on a device
 
@@ -59,11 +60,13 @@ Where RoughAnimator is still ahead: every layer has its own timeline. A backgrou
 drawing held for the whole clip while the character changes every 2 frames. Changes `.calco`
 (format version 2, with a migration from 1).
 
-- [ ] Per-layer exposures: each layer is a row of drawings with their own holds, inside each clip
-- [ ] Timeline rows are the layers: name, eye, lock and opacity inline; tap a cell to go there
-- [ ] Hold, insert, duplicate and delete per cell; extend a drawing by dragging its end
-- [ ] Onion skin in the timeline: before / after range, quick prev / next toggles, colours, current layer only
-- [ ] Playback range (in / out) inside a clip
+- [x] Per-layer exposures as held cells: a layer can keep showing the previous drawing (format 2). New frames hold every layer but the one being drawn; add / duplicate / delete / move keep every frame looking the same; painting a held cell edits the held drawing
+- [x] Timeline rows are the layers: name, eye, lock and opacity inline, long-press for rename / order / delete; a held drawing is one long cell; tap a cell to go there; clips as tabs
+- [x] Hold previous / new drawing / copy drawing per cell
+- [ ] Extend a drawing by dragging its end; drag frames to reorder in the sheet
+- [x] Onion skin in the timeline (on/off, before / after), current layer only option; held layers no longer ghost over themselves
+- [ ] Onion skin colours
+- [x] Playback range (in / out): long-press a frame number
 - [ ] Drawing labels
 - [ ] Export and Unity importer flatten per-layer exposures (no change for Unity)
 
