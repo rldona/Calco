@@ -212,6 +212,28 @@ final class CanvasRenderer {
         cmd.commit()
     }
 
+    /// Composites `layers` (bottom to top) onto a transparent, canvas-sized image. Blocking. Used by export.
+    func flatten(_ layers: [CompositeLayer]) -> CGImage? {
+        let d = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: Self.layerFormat, width: canvasSize.x, height: canvasSize.y, mipmapped: false)
+        d.usage = [.renderTarget]
+        d.storageMode = .shared
+        guard let target = device.makeTexture(descriptor: d),
+              let cmd = queue.makeCommandBuffer() else { return nil }
+        let pass = MTLRenderPassDescriptor()
+        pass.colorAttachments[0].texture = target
+        pass.colorAttachments[0].loadAction = .clear
+        pass.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
+        pass.colorAttachments[0].storeAction = .store
+        guard let enc = cmd.makeRenderCommandEncoder(descriptor: pass) else { return nil }
+        encodeComposite(enc, layers: layers, rect: SIMD4<Float>(-1, -1, 2, 2),
+                        checker: nil, composite: thumbCompositePipeline)
+        enc.endEncoding()
+        cmd.commit()
+        cmd.waitUntilCompleted()
+        return Self.image(from: target)
+    }
+
     // MARK: - CPU transfer
 
     /// Full-resolution copy of a layer as a premultiplied RGBA `CGImage`.
@@ -280,13 +302,15 @@ final class CanvasRenderer {
     }
 
     private func encodeComposite(_ enc: MTLRenderCommandEncoder, layers: [CompositeLayer], rect: SIMD4<Float>,
-                                 checker: MTLRenderPipelineState, composite: MTLRenderPipelineState) {
+                                 checker: MTLRenderPipelineState?, composite: MTLRenderPipelineState) {
         var u = CompositeUniforms(rect: rect, tint: .zero, opacity: 1, tintAmount: 0,
                                   canvasSize: SIMD2<Float>(Float(canvasSize.x), Float(canvasSize.y)))
-        enc.setRenderPipelineState(checker)
-        enc.setVertexBytes(&u, length: MemoryLayout<CompositeUniforms>.stride, index: 0)
-        enc.setFragmentBytes(&u, length: MemoryLayout<CompositeUniforms>.stride, index: 0)
-        enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
+        if let checker {
+            enc.setRenderPipelineState(checker)
+            enc.setVertexBytes(&u, length: MemoryLayout<CompositeUniforms>.stride, index: 0)
+            enc.setFragmentBytes(&u, length: MemoryLayout<CompositeUniforms>.stride, index: 0)
+            enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
+        }
 
         enc.setRenderPipelineState(composite)
         for layer in layers {

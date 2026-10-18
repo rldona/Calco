@@ -263,6 +263,33 @@ final class EditorState: ObservableObject {
         isDirty = true
     }
 
+    // MARK: - Export
+
+    /// Flattened, canvas-sized image of one frame (visible layers only). Nil when nothing was drawn.
+    func flattenedImage(clip: Clip, frameID: String) -> CGImage? {
+        let layers = frameLayers(of: clip, frameID, opacity: 1, tint: nil)
+        guard !layers.isEmpty else { return nil }
+        return renderer.flatten(layers)
+    }
+
+    /// Writes `<name>.png` + `<name>.json` (Aseprite array format) into Documents/Exports/<name>/.
+    /// Returns the two files for sharing, or nil after setting `lastError`.
+    func exportSpriteSheet() -> [URL]? {
+        stop()
+        let sheet = SpriteSheet.build(project: project) { clip, frame in
+            flattenedImage(clip: clip, frameID: frame.id)
+        }
+        let folder = Self.documentsDirectory
+            .appendingPathComponent("Exports", isDirectory: true)
+            .appendingPathComponent(project.name, isDirectory: true)
+        do {
+            return try sheet.write(to: folder, baseName: project.name)
+        } catch {
+            lastError = "Couldn't export \(project.name).\n\(error.localizedDescription)"
+            return nil
+        }
+    }
+
     // MARK: - Frames
 
     private func newFrameID() -> String {
@@ -392,7 +419,11 @@ final class EditorState: ObservableObject {
     }
 
     private func frameLayers(_ frameID: String, opacity: Float, tint: SIMD3<Float>?) -> [CanvasRenderer.CompositeLayer] {
-        layers.compactMap { layer in
+        frameLayers(of: clip, frameID, opacity: opacity, tint: tint)
+    }
+
+    private func frameLayers(of clip: Clip, _ frameID: String, opacity: Float, tint: SIMD3<Float>?) -> [CanvasRenderer.CompositeLayer] {
+        clip.layers.compactMap { layer in
             guard layer.visible,
                   let t = store.existingTexture(clip: clip.id, frame: frameID, layer: layer.id) else { return nil }
             return CanvasRenderer.CompositeLayer(

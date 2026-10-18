@@ -90,3 +90,38 @@ final class EditorStateDocumentTests: XCTestCase {
         XCTAssertEqual(state.paintTarget?.height, 128)
     }
 }
+
+@MainActor
+final class EditorStateExportTests: XCTestCase {
+    func testExportFlattensVisibleLayers() throws {
+        guard let device = MTLCreateSystemDefaultDevice(),
+              let state = EditorState(device: device, screenFormat: .bgra8Unorm) else {
+            throw XCTSkip("Metal unavailable in this environment")
+        }
+        // Paint on Line, then hide Color (blank anyway) and check the flattened frame.
+        let target = try XCTUnwrap(state.paintTarget)
+        state.renderer.paint([.init(position: SIMD2<Float>(100, 200), radius: 10, alpha: 1)],
+                             into: target, color: SIMD4<Float>(0, 0, 0, 1), tool: .brush)
+        let flat = try XCTUnwrap(state.flattenedImage(clip: state.clip, frameID: state.frames[0].id))
+        XCTAssertEqual(flat.width, 512)
+
+        var bytes = [UInt8](repeating: 0, count: 512 * 512 * 4)
+        let info = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
+        let ctx = CGContext(data: &bytes, width: 512, height: 512, bitsPerComponent: 8, bytesPerRow: 512 * 4,
+                            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: info)!
+        ctx.draw(flat, in: CGRect(x: 0, y: 0, width: 512, height: 512))
+        XCTAssertGreaterThan(bytes[(200 * 512 + 100) * 4 + 3], 200, "stroke is opaque in the flattened frame")
+        XCTAssertEqual(bytes[(10 * 512 + 10) * 4 + 3], 0, "background stays transparent (no checkerboard)")
+
+        // Hiding the only painted layer removes it from the export.
+        state.toggleLayerVisibility(1)
+        XCTAssertNil(state.flattenedImage(clip: state.clip, frameID: state.frames[0].id))
+        state.toggleLayerVisibility(1)
+
+        let urls = try XCTUnwrap(state.exportSpriteSheet())
+        defer { try? FileManager.default.removeItem(at: urls[0].deletingLastPathComponent()) }
+        XCTAssertNil(state.lastError)
+        XCTAssertEqual(urls.map(\.pathExtension), ["png", "json"])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: urls[1].path))
+    }
+}

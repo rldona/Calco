@@ -7,6 +7,7 @@ App/        SwiftUI views + EditorState (selection, onion settings, playback, do
 Timeline/   Frame strip UI + ClipBar (clip picker, loop, fps override, pivot toggle)
 Canvas/     CanvasUIView (Pencil input)  ->  FrameStore (textures)  ->  CanvasRenderer (Metal)
 Model/      Project: Codable mirror of docs/format.md. ProjectDocument: package I/O. No UI, no Metal.
+Export/     SpriteSheet: grid packing + Aseprite JSON. CoreGraphics only; gets one flattened CGImage per frame.
 ```
 
 ## Pixel storage
@@ -63,3 +64,15 @@ The pivot is stored normalized with origin bottom-left (Unity convention) and ed
 `PivotOverlay`, a SwiftUI layer above the Metal canvas that maps the handle through the same
 `CanvasRenderer.fitRect` the renderer uses, so it stays glued to the canvas in any orientation.
 Only the handle takes touches; everything else falls through to the Pencil.
+
+## Export
+
+`EditorState.exportSpriteSheet` flattens every frame of every clip on the GPU
+(`CanvasRenderer.flatten`: visible layers composited over transparent, no checkerboard, read back) and
+hands the images to `SpriteSheet.build`, which packs them into a near-square grid of canvas-sized cells
+and renders the sheet with CoreGraphics. `SpriteSheet.aseprite` describes it in the Aseprite JSON
+array format: one `frames[]` entry per frame with `duration = hold * 1000 / fps`, one `frameTags[]`
+entry per clip (`name` is the clip id, plus a non-standard `loop` flag for `calco-unity`), and one
+`slices[]` entry per clip carrying the pivot in Aseprite's convention (pixels from the top-left of a
+full-frame bounds). Output goes to `Documents/Exports/<name>/<name>.png|json` and to a share sheet.
+Hidden layers are left out, the same way Aseprite exports.

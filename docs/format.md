@@ -76,6 +76,12 @@ Hero.calco/
 
 ## Export: sprite sheet
 
-`Export → Sprite sheet` produces `<name>.png` + `<name>.json` in the [Aseprite JSON (array) format](https://www.aseprite.org/docs/cli/#data), which Unity, Godot and most engines already understand. Layers are flattened per frame; `frameTags` carry the clips; `meta.slices` carries the pivot as a `pivot` on a full-frame slice.
+`Export → Sprite sheet` produces `<name>.png` + `<name>.json` in the [Aseprite JSON (array) format](https://www.aseprite.org/docs/cli/#data), which Unity, Godot and most engines already understand.
+
+- Frames are packed in a near-square grid of canvas-sized cells, in project order (clip by clip), untrimmed.
+- Visible layers are flattened per frame. `duration` is `hold * 1000 / fps` in ms, using the clip's fps override when set.
+- `meta.frameTags` carries one tag per clip, named by clip **id**, with `direction: "forward"` and a non-standard `loop` boolean.
+- `meta.slices` carries one full-frame slice per clip, named by clip id, keyed at the clip's first frame, with `pivot` in Aseprite's convention: pixels from the top-left. `{0.5, 0}` in `project.json` becomes `{w/2, h}`.
+- Pivot per clip is the only thing that doesn't round-trip through Aseprite itself (Aseprite pivots are per slice key, not per tag); `calco-unity` reads the slice that shares the tag's name.
 
 The Unity importer (`calco-unity`) reads the same JSON and generates `Sprite`s, `AnimationClip`s and an `AnimatorController`.

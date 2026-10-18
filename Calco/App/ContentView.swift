@@ -100,6 +100,8 @@ struct FileMenu: View {
     @State private var showingSaveAs = false
     @State private var confirmingNew = false
     @State private var saveAsName = ""
+    @State private var exported: [URL] = []
+    @State private var showingExport = false
 
     var body: some View {
         Menu {
@@ -117,6 +119,14 @@ struct FileMenu: View {
                 showingSaveAs = true
             } label: { Label("Save As…", systemImage: "square.and.arrow.down.on.square") }
             .keyboardShortcut("s", modifiers: [.command, .shift])
+            Divider()
+            Button {
+                if let urls = state.exportSpriteSheet() {
+                    exported = urls
+                    showingExport = true
+                }
+            } label: { Label("Export sprite sheet…", systemImage: "square.grid.3x3.square") }
+            .keyboardShortcut("e")
         } label: {
             HStack(spacing: 5) {
                 Image(systemName: "folder")
@@ -138,6 +148,9 @@ struct FileMenu: View {
         } message: {
             Text("Saved to On My iPad › Calco as a .calco package.")
         }
+        .sheet(isPresented: $showingExport) {
+            ExportSheet(urls: exported, name: state.project.name)
+        }
         .alert("Discard unsaved changes?", isPresented: $confirmingNew) {
             Button("Discard", role: .destructive) { state.newProject() }
             Button("Cancel", role: .cancel) {}
@@ -151,6 +164,52 @@ struct FileMenu: View {
         } message: {
             Text(state.lastError ?? "")
         }
+    }
+}
+
+/// Shows the exported PNG + JSON and hands them to the share sheet (AirDrop, Files, Unity project…).
+struct ExportSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let urls: [URL]
+    let name: String
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                if let png = urls.first, let image = UIImage(contentsOfFile: png.path) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .interpolation(.none)
+                        .scaledToFit()
+                        .background(Color.white.opacity(0.9))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .frame(maxHeight: 320)
+                    Text("\(Int(image.size.width)) × \(Int(image.size.height)) px")
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(urls, id: \.self) { url in
+                        Label(url.lastPathComponent, systemImage: url.pathExtension == "png" ? "photo" : "doc.text")
+                            .font(.callout)
+                    }
+                }
+                Text("Also saved in On My iPad › Calco › Exports › \(name).")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                ShareLink(items: urls) {
+                    Label("Share PNG + JSON", systemImage: "square.and.arrow.up")
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding(24)
+            .navigationTitle("Sprite sheet")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }
 

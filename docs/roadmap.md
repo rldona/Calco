@@ -9,7 +9,7 @@
 - [x] Clips (idle, run…) with pivot
 - [x] Loop playback
 - [x] `.calco` save/load (see `format.md`)
-- [ ] Export sprite sheet PNG + Aseprite JSON
+- [x] Export sprite sheet PNG + Aseprite JSON
 - [ ] Export GIF
 - [ ] `calco-unity` importer: JSON → Sprites + AnimationClips
 
