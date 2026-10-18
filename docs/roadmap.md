@@ -11,7 +11,7 @@
 - [x] `.calco` save/load (see `format.md`)
 - [x] Export sprite sheet PNG + Aseprite JSON
 - [x] Export GIF (current clip)
-- [ ] `calco-unity` importer: JSON → Sprites + AnimationClips
+- [x] `calco-unity` importer: JSON → Sprites + AnimationClips + AnimatorController (`calco-unity/`, untested in a real Unity project yet)
 
 ## Later
 

@@ -1,0 +1,10 @@
+{
+  "name": "dev.plazoleta.calco-unity",
+  "version": "0.1.0",
+  "displayName": "Calco Importer",
+  "description": "Imports Calco sprite sheets (PNG + Aseprite-style JSON) as Sprites, AnimationClips and an AnimatorController.",
+  "unity": "2021.3",
+  "author": { "name": "Calco", "url": "https://github.com/rldona/Calco" },
+  "keywords": ["calco", "sprite", "animation", "aseprite", "2d"],
+  "license": "MIT"
+}

@@ -31,7 +31,7 @@ One goal: **draw a character with 2–3 clips and see it move in Unity.**
 - Loop playback in the canvas.
 - Export: sprite sheet PNG + JSON (Aseprite-compatible) and GIF.
 - Open, documented `.calco` project format. See [docs/format.md](docs/format.md).
-- Unity importer as a separate package (`calco-unity`), reading the JSON into Sprites + AnimationClips.
+- Unity importer as a separate package ([`calco-unity/`](calco-unity/README.md)), reading the JSON into Sprites + AnimationClips + an AnimatorController.
 
 Explicitly **out** of v0.1: audio, camera, tweening, vectors, custom brushes, text, pixel-art mode, iPhone, iCloud sync.
 
