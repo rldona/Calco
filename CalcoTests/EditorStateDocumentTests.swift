@@ -125,3 +125,29 @@ final class EditorStateExportTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: urls[1].path))
     }
 }
+
+@MainActor
+final class EditorStateGIFExportTests: XCTestCase {
+    func testExportGIFWritesCurrentClip() throws {
+        guard let device = MTLCreateSystemDefaultDevice(),
+              let state = EditorState(device: device, screenFormat: .bgra8Unorm) else {
+            throw XCTSkip("Metal unavailable in this environment")
+        }
+        let target = try XCTUnwrap(state.paintTarget)
+        state.renderer.paint([.init(position: SIMD2<Float>(100, 200), radius: 10, alpha: 1)],
+                             into: target, color: SIMD4<Float>(0, 0, 0, 1), tool: .brush)
+        state.addFrame()
+        state.setHold(3)
+
+        let url = try XCTUnwrap(state.exportGIF())
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        XCTAssertNil(state.lastError)
+        XCTAssertEqual(url.lastPathComponent, "Untitled-idle.gif")
+
+        let source = try XCTUnwrap(CGImageSourceCreateWithURL(url as CFURL, nil))
+        XCTAssertEqual(CGImageSourceGetCount(source), 2)
+        let p = CGImageSourceCopyPropertiesAtIndex(source, 1, nil) as? [CFString: Any]
+        let g = p?[kCGImagePropertyGIFDictionary] as? [CFString: Any]
+        XCTAssertEqual(try XCTUnwrap(g?[kCGImagePropertyGIFUnclampedDelayTime] as? Double), 0.25, accuracy: 0.011, "hold 3 at 12 fps")
+    }
+}

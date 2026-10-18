@@ -290,6 +290,27 @@ final class EditorState: ObservableObject {
         }
     }
 
+    /// Writes the current clip as Documents/Exports/<name>/<name>-<clip>.gif. Nil after setting `lastError`.
+    func exportGIF() -> URL? {
+        stop()
+        let fps = Double(max(clipFPS, 1))
+        let frames = clip.frames.map { f in
+            GIFExport.Frame(image: flattenedImage(clip: clip, frameID: f.id),
+                            durationSeconds: Double(f.hold) / fps)
+        }
+        let url = Self.documentsDirectory
+            .appendingPathComponent("Exports", isDirectory: true)
+            .appendingPathComponent(project.name, isDirectory: true)
+            .appendingPathComponent("\(project.name)-\(clip.id).gif")
+        do {
+            try GIFExport.write(frames, canvas: project.canvas, loop: clip.loop, to: url)
+            return url
+        } catch {
+            lastError = "Couldn't export \(url.lastPathComponent).\n\(error.localizedDescription)"
+            return nil
+        }
+    }
+
     // MARK: - Frames
 
     private func newFrameID() -> String {

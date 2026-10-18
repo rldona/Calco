@@ -101,6 +101,7 @@ struct FileMenu: View {
     @State private var confirmingNew = false
     @State private var saveAsName = ""
     @State private var exported: [URL] = []
+    @State private var exportTitle = ""
     @State private var showingExport = false
 
     var body: some View {
@@ -123,10 +124,19 @@ struct FileMenu: View {
             Button {
                 if let urls = state.exportSpriteSheet() {
                     exported = urls
+                    exportTitle = "Sprite sheet"
                     showingExport = true
                 }
             } label: { Label("Export sprite sheet…", systemImage: "square.grid.3x3.square") }
             .keyboardShortcut("e")
+            Button {
+                if let url = state.exportGIF() {
+                    exported = [url]
+                    exportTitle = "GIF · \(state.clip.name)"
+                    showingExport = true
+                }
+            } label: { Label("Export GIF (\(state.clip.name))…", systemImage: "film") }
+            .keyboardShortcut("g")
         } label: {
             HStack(spacing: 5) {
                 Image(systemName: "folder")
@@ -149,7 +159,7 @@ struct FileMenu: View {
             Text("Saved to On My iPad › Calco as a .calco package.")
         }
         .sheet(isPresented: $showingExport) {
-            ExportSheet(urls: exported, name: state.project.name)
+            ExportSheet(title: exportTitle, urls: exported, name: state.project.name)
         }
         .alert("Discard unsaved changes?", isPresented: $confirmingNew) {
             Button("Discard", role: .destructive) { state.newProject() }
@@ -170,6 +180,7 @@ struct FileMenu: View {
 /// Shows the exported PNG + JSON and hands them to the share sheet (AirDrop, Files, Unity project…).
 struct ExportSheet: View {
     @Environment(\.dismiss) private var dismiss
+    let title: String
     let urls: [URL]
     let name: String
 
@@ -190,7 +201,7 @@ struct ExportSheet: View {
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(urls, id: \.self) { url in
-                        Label(url.lastPathComponent, systemImage: url.pathExtension == "png" ? "photo" : "doc.text")
+                        Label(url.lastPathComponent, systemImage: icon(for: url))
                             .font(.callout)
                     }
                 }
@@ -199,17 +210,25 @@ struct ExportSheet: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                 ShareLink(items: urls) {
-                    Label("Share PNG + JSON", systemImage: "square.and.arrow.up")
+                    Label(urls.count > 1 ? "Share PNG + JSON" : "Share GIF", systemImage: "square.and.arrow.up")
                 }
                 .buttonStyle(.borderedProminent)
             }
             .padding(24)
-            .navigationTitle("Sprite sheet")
+            .navigationTitle(title)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
         }
         .presentationDetents([.medium, .large])
+    }
+
+    private func icon(for url: URL) -> String {
+        switch url.pathExtension {
+        case "png": return "photo"
+        case "gif": return "film"
+        default: return "doc.text"
+        }
     }
 }
 

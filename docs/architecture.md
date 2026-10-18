@@ -7,7 +7,7 @@ App/        SwiftUI views + EditorState (selection, onion settings, playback, do
 Timeline/   Frame strip UI + ClipBar (clip picker, loop, fps override, pivot toggle)
 Canvas/     CanvasUIView (Pencil input)  ->  FrameStore (textures)  ->  CanvasRenderer (Metal)
 Model/      Project: Codable mirror of docs/format.md. ProjectDocument: package I/O. No UI, no Metal.
-Export/     SpriteSheet: grid packing + Aseprite JSON. CoreGraphics only; gets one flattened CGImage per frame.
+Export/     SpriteSheet (grid + Aseprite JSON) and GIFExport (ImageIO). CoreGraphics only; get flattened CGImages.
 ```
 
 ## Pixel storage
@@ -76,3 +76,8 @@ entry per clip (`name` is the clip id, plus a non-standard `loop` flag for `calc
 `slices[]` entry per clip carrying the pivot in Aseprite's convention (pixels from the top-left of a
 full-frame bounds). Output goes to `Documents/Exports/<name>/<name>.png|json` and to a share sheet.
 Hidden layers are left out, the same way Aseprite exports.
+
+`EditorState.exportGIF` writes the *current clip* as `Documents/Exports/<name>/<name>-<clip>.gif`
+through ImageIO: one frame per Calco frame, delay `hold / fps`, NETSCAPE loop count 0 (forever) or 1
+(once) from `clip.loop`, transparency preserved. GIF timing is in 1/100 s and viewers clamp short
+delays, so very fast clips play slower than in the app; that's the format.

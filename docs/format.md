@@ -85,3 +85,9 @@ Hero.calco/
 - Pivot per clip is the only thing that doesn't round-trip through Aseprite itself (Aseprite pivots are per slice key, not per tag); `calco-unity` reads the slice that shares the tag's name.
 
 The Unity importer (`calco-unity`) reads the same JSON and generates `Sprite`s, `AnimationClip`s and an `AnimatorController`.
+
+## Export: GIF
+
+`Export → GIF` writes the current clip as `<name>-<clip>.gif`: one GIF frame per Calco frame, delay `hold / fps`
+rounded to 1/100 s, looping forever when the clip loops and once otherwise, transparent background. It's a
+preview format for sharing, not for engines; use the sprite sheet for those.
