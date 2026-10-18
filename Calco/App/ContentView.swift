@@ -46,17 +46,14 @@ struct ToolbarView: View {
             Divider().frame(height: 18)
 
             Button { state.undo() } label: { Image(systemName: "arrow.uturn.backward") }
-                .keyboardShortcut("z")
                 .disabled(!state.canUndo)
                 .help("Undo")
             Button { state.redo() } label: { Image(systemName: "arrow.uturn.forward") }
-                .keyboardShortcut("z", modifiers: [.command, .shift])
                 .disabled(!state.canRedo)
                 .help("Redo")
 
             if state.canvasTransform != .identity {
                 Button { state.canvasTransform = .identity } label: { Image(systemName: "arrow.down.right.and.arrow.up.left") }
-                    .keyboardShortcut("0")
                     .help("Fit canvas")
             }
 
@@ -107,37 +104,20 @@ struct FileMenu: View {
 
     var body: some View {
         Menu {
-            Button { state.isDirty ? (confirmingNew = true) : state.newProject() } label: {
-                Label("New", systemImage: "doc")
-            }
-            .keyboardShortcut("n")
-            Button { showingOpen = true } label: { Label("Open…", systemImage: "folder") }
-                .keyboardShortcut("o")
+            Button { state.request = .newProject } label: { Label("New", systemImage: "doc") }
+            Button { state.request = .open } label: { Label("Open…", systemImage: "folder") }
             Divider()
             Button { state.save() } label: { Label("Save", systemImage: "square.and.arrow.down") }
-                .keyboardShortcut("s")
-            Button {
-                saveAsName = state.project.name
-                showingSaveAs = true
-            } label: { Label("Save As…", systemImage: "square.and.arrow.down.on.square") }
-            .keyboardShortcut("s", modifiers: [.command, .shift])
+            Button { state.request = .saveAs } label: {
+                Label("Save As…", systemImage: "square.and.arrow.down.on.square")
+            }
             Divider()
-            Button {
-                if let urls = state.exportSpriteSheet() {
-                    exported = urls
-                    exportTitle = "Sprite sheet"
-                    showingExport = true
-                }
-            } label: { Label("Export sprite sheet…", systemImage: "square.grid.3x3.square") }
-            .keyboardShortcut("e")
-            Button {
-                if let url = state.exportGIF() {
-                    exported = [url]
-                    exportTitle = "GIF · \(state.clip.name)"
-                    showingExport = true
-                }
-            } label: { Label("Export GIF (\(state.clip.name))…", systemImage: "film") }
-            .keyboardShortcut("g")
+            Button { state.request = .exportSpriteSheet } label: {
+                Label("Export sprite sheet…", systemImage: "square.grid.3x3.square")
+            }
+            Button { state.request = .exportGIF } label: {
+                Label("Export GIF (\(state.clip.name))…", systemImage: "film")
+            }
         } label: {
             HStack(spacing: 5) {
                 Image(systemName: "folder")
@@ -148,6 +128,11 @@ struct FileMenu: View {
                     Circle().frame(width: 6, height: 6).foregroundStyle(.secondary)
                 }
             }
+        }
+        .onChange(of: state.request) { _, request in
+            guard let request else { return }
+            state.request = nil
+            handle(request)
         }
         .fileImporter(isPresented: $showingOpen, allowedContentTypes: [ProjectDocument.contentType]) { result in
             if case .success(let url) = result { state.open(url) }
@@ -174,6 +159,31 @@ struct FileMenu: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(state.lastError ?? "")
+        }
+    }
+
+    /// Same path for the menu items and the keyboard shortcuts (CalcoCommands).
+    private func handle(_ request: EditorState.Request) {
+        switch request {
+        case .newProject:
+            if state.isDirty { confirmingNew = true } else { state.newProject() }
+        case .open:
+            showingOpen = true
+        case .saveAs:
+            saveAsName = state.project.name
+            showingSaveAs = true
+        case .exportSpriteSheet:
+            if let urls = state.exportSpriteSheet() {
+                exported = urls
+                exportTitle = "Sprite sheet"
+                showingExport = true
+            }
+        case .exportGIF:
+            if let url = state.exportGIF() {
+                exported = [url]
+                exportTitle = "GIF · \(state.clip.name)"
+                showingExport = true
+            }
         }
     }
 }

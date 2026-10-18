@@ -41,6 +41,11 @@ final class EditorState: ObservableObject {
     /// Last file error, shown by the UI and cleared by it.
     @Published var lastError: String?
 
+    /// Actions that need a dialog or sheet owned by a view (the file menu). Menus and keyboard
+    /// shortcuts set it; the view presents what's needed and clears it.
+    enum Request: Equatable { case newProject, open, saveAs, exportSpriteSheet, exportGIF }
+    @Published var request: Request?
+
     private(set) var renderer: CanvasRenderer
     private(set) var store: FrameStore
     private let screenFormat: MTLPixelFormat
@@ -503,6 +508,31 @@ final class EditorState: ObservableObject {
 
     private func refreshClipThumbnails() {
         for f in frames { refreshThumbnail(for: f.id) }
+    }
+
+    // MARK: - Stepping (keyboard)
+
+    func stepFrame(_ offset: Int) {
+        guard !frames.isEmpty else { return }
+        frameIndex = min(max(frameIndex + offset, 0), frames.count - 1)
+    }
+
+    /// `offset` is in stack order: +1 is the layer above.
+    func stepLayer(_ offset: Int) {
+        guard !layers.isEmpty else { return }
+        layerIndex = min(max(layerIndex + offset, 0), layers.count - 1)
+    }
+
+    func stepHold(_ offset: Int) {
+        guard let f = currentFrame else { return }
+        setHold(f.hold + offset)
+    }
+
+    /// "Layer 3", "Layer 4"… for a layer made without a name dialog.
+    func addLayerWithDefaultName() {
+        var n = layers.count + 1
+        while layers.contains(where: { $0.name == "Layer \(n)" }) { n += 1 }
+        addLayer(name: "Layer \(n)")
     }
 
     // MARK: - Playback

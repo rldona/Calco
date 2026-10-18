@@ -50,6 +50,15 @@ struct CanvasTransform: Equatable {
         rotation += angle
     }
 
+    /// Zooms around the middle of the view (keyboard / menu zoom). No view size needed:
+    /// keeping the view centre fixed just scales the offset.
+    mutating func zoom(by factor: CGFloat) {
+        let newScale = min(max(scale * factor, Self.scaleRange.lowerBound), Self.scaleRange.upperBound)
+        let f = newScale / scale
+        offset = CGSize(width: offset.width * f, height: offset.height * f)
+        scale = newScale
+    }
+
     mutating func pan(by delta: CGSize) {
         offset.width += delta.width
         offset.height += delta.height

@@ -22,7 +22,7 @@ The v0.1 UI grew one control per feature. This pass makes it a tool you can work
 - [x] Tool panel: brush / eraser with their own sizes (1–64 px), 16-colour palette + system picker, remembered across launches; B, E, [ and ] on a keyboard
 - [x] Gestures: two-finger tap undo, three-finger redo, pinch zoom / pan / rotate (fingers only; Pencil always draws; ⌘0 or the fit button resets the view)
 - [x] Undo / redo stack (50 steps; strokes, clear, frames, clips, layer visibility, clip settings; ⌘Z / ⇧⌘Z)
-- [ ] Keyboard shortcuts for hardware keyboards
+- [x] Keyboard shortcuts for hardware keyboards: all in app menus (`CalcoCommands`), so holding ⌘ lists them — frames, layers, playback, zoom, onion skin, tools, file
 - [ ] Consistent iconography and layout pass (portrait and landscape)
 
 ## Later

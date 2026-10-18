@@ -3,7 +3,7 @@ import UIKit
 import simd
 
 /// Brush / eraser, size and colour, in the top toolbar.
-/// Hardware keyboard: B brush, E eraser, [ and ] size.
+/// Keyboard shortcuts (B, E, [ and ]) live in CalcoCommands.
 struct ToolControls: View {
     @ObservedObject var state: EditorState
     @State private var editingSize = false
@@ -40,20 +40,6 @@ struct ToolControls: View {
             .help("Colour")
             .popover(isPresented: $editingColor) { ColorPopover(state: state) }
         }
-        .background { shortcuts }
-    }
-
-    /// Invisible buttons that only exist to carry keyboard shortcuts.
-    private var shortcuts: some View {
-        Group {
-            Button("Brush") { state.tool = .brush }.keyboardShortcut("b", modifiers: [])
-            Button("Eraser") { state.tool = .eraser }.keyboardShortcut("e", modifiers: [])
-            Button("Smaller") { state.stepToolSize(-1) }.keyboardShortcut("[", modifiers: [])
-            Button("Bigger") { state.stepToolSize(1) }.keyboardShortcut("]", modifiers: [])
-        }
-        .opacity(0)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
 }
 

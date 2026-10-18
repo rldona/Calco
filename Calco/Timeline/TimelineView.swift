@@ -18,7 +18,6 @@ struct TimelineView: View {
                     Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
                         .frame(width: 28)
                 }
-                .keyboardShortcut(.space, modifiers: [])
 
                 Text("\(state.frameIndex + 1) / \(state.frames.count)")
                     .font(.system(.caption, design: .monospaced))
