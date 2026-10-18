@@ -89,7 +89,7 @@ final class CanvasUIView: UIView {
         let renderer = state.renderer
         let samples = event?.coalescedTouches(for: touch) ?? [touch]
 
-        builder.baseRadius = state.tool == .eraser ? 18 : 6
+        builder.baseRadius = state.toolSize
         var stamps: [CanvasRenderer.Stamp] = []
         for s in samples {
             let canvasPos = renderer.canvasPoint(fromViewPoint: s.preciseLocation(in: self),
@@ -99,7 +99,7 @@ final class CanvasUIView: UIView {
                 : 0.5
             stamps += builder.add(.init(position: canvasPos, force: force))
         }
-        renderer.paint(stamps, into: target, color: SIMD4<Float>(0, 0, 0, 1), tool: state.tool)
+        renderer.paint(stamps, into: target, color: state.color, tool: state.tool)
 
         if let lastSample = samples.last {
             let ms = (CACurrentMediaTime() - lastSample.timestamp) * 1000

@@ -62,13 +62,7 @@ struct ToolbarView: View {
 
             Divider().frame(height: 18)
 
-            // Tools
-            Picker("Tool", selection: $state.tool) {
-                Image(systemName: "pencil.tip").tag(CanvasRenderer.Tool.brush)
-                Image(systemName: "eraser").tag(CanvasRenderer.Tool.eraser)
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 110)
+            ToolControls(state: state)
 
             Button { state.clearCurrentLayer() } label: { Image(systemName: "xmark.circle") }
                 .help("Clear layer")

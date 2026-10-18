@@ -20,6 +20,12 @@ final class EditorState: ObservableObject {
     @Published var frameIndex = 0
     @Published var layerIndex = 0
     @Published var tool: CanvasRenderer.Tool = .brush
+    /// Radii in canvas pixels at full pressure, one per tool.
+    @Published var brushSize: Float = 6
+    @Published var eraserSize: Float = 18
+    /// Brush colour, straight RGBA. Always opaque for now: overlapping stamps would build up any translucency.
+    @Published var color = SIMD4<Float>(0, 0, 0, 1)
+    static let sizeRange: ClosedRange<Float> = 1...64
     @Published var onion = OnionSkin()
     @Published var isPlaying = false
     /// Show the draggable pivot handle over the canvas.
@@ -539,6 +545,28 @@ final class EditorState: ObservableObject {
         pendingStroke = nil
         for (k, t) in s.textures { store.set(t, for: k) }
         if let f = currentFrame { refreshThumbnail(for: f.id) }
+    }
+
+    // MARK: - Tool settings
+
+    /// Size of whichever tool is active.
+    var toolSize: Float {
+        get { tool == .eraser ? eraserSize : brushSize }
+        set {
+            let v = min(max(newValue.rounded(), Self.sizeRange.lowerBound), Self.sizeRange.upperBound)
+            if tool == .eraser { eraserSize = v } else { brushSize = v }
+        }
+    }
+
+    /// `[` / `]`: small steps for fine brushes, bigger ones as the brush grows.
+    func stepToolSize(_ direction: Int) {
+        let step: Float = toolSize < 10 ? 1 : toolSize < 30 ? 2 : 4
+        toolSize += Float(direction) * step
+    }
+
+    func setColor(_ c: SIMD4<Float>) {
+        color = SIMD4<Float>(min(max(c.x, 0), 1), min(max(c.y, 0), 1), min(max(c.z, 0), 1), 1)
+        tool = .brush
     }
 
     // MARK: - Undo / redo
