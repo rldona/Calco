@@ -10,10 +10,15 @@ struct ToolRail: View {
     @State private var editingSize = false
     @State private var editingColor = false
     @State private var editingFill = false
+    @State private var editingBrush = false
 
     var body: some View {
         VStack(spacing: 6) {
-            RailButton(icon: "pencil.tip", label: "Brush", active: state.tool == .brush) { state.tool = .brush }
+            // Like the bucket: tap once to pick the brush, again for its options.
+            RailButton(icon: "pencil.tip", label: "Brush", active: state.tool == .brush) {
+                if state.tool == .brush { editingBrush = true } else { state.tool = .brush }
+            }
+            .popover(isPresented: $editingBrush, arrowEdge: .leading) { BrushOptions(state: state) }
             RailButton(icon: "eraser", label: "Eraser", active: state.tool == .eraser) { state.tool = .eraser }
             // Tap once to pick the bucket, again for its options.
             RailButton(icon: "drop.halffull", label: "Fill", active: state.tool == .fill) {
@@ -106,6 +111,31 @@ private struct VerticalSizeSlider: View {
         .accessibilityAdjustableAction { direction in
             state.stepToolSize(direction == .increment ? 1 : -1)
         }
+    }
+}
+
+/// The brush's options: stabiliser and pressure.
+struct BrushOptions: View {
+    @ObservedObject var state: EditorState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Brush").font(.headline)
+            HStack {
+                Text("Smoothing").font(.subheadline)
+                Spacer()
+                Text(state.smoothing == 0 ? "Off" : "\(Int((state.smoothing * 100).rounded()))%")
+                    .font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
+            }
+            Slider(value: Binding(get: { Double(state.smoothing) }, set: { state.smoothing = Float($0) }), in: 0...1)
+            Text("Steadies the line: it trails the pen a little and irons out wobble. Higher is calmer, with more lag.")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Divider()
+            Toggle("Pencil pressure changes size", isOn: $state.usePressure).font(.subheadline)
+        }
+        .padding(20)
+        .frame(width: 300)
     }
 }
 

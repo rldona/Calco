@@ -47,17 +47,33 @@ What RoughAnimator users reach for most, done the Calco way (from its tutorial c
 - [x] Eyedropper (I): picks the colour from what's on screen, then hands you back the tool you had
 - [x] Close gaps for the fill (Off / Small / Medium / Large, scaled to the canvas; tap the bucket again), remembered
 - [x] Lasso (L): lift, move, scale (corner), rotate (knob), flip, with an anchor you drag by finger without moving the drawing; one undo step; ✓ / Return applies, ✕ / Esc cancels, tapping outside applies
-- [ ] Stroke smoothing (stabiliser) and a pressure on/off switch
+- [x] Stroke smoothing (stabiliser) and a pressure on/off switch (tap the brush again; remembered)
+- [x] Canvas shows real pixels when magnified (no more blurry strokes)
 - [ ] Brush opacity (needs strokes rendered to their own buffer first, so overlaps don't build up)
 - [ ] Resize the canvas after creating the project
 - [ ] Draw behind (paint under what's already on the layer, for colouring under lines)
+
+## v0.5 — "exposure sheet"
+
+Where RoughAnimator is still ahead: every layer has its own timeline. A background can be one
+drawing held for the whole clip while the character changes every 2 frames. Changes `.calco`
+(format version 2, with a migration from 1).
+
+- [ ] Per-layer exposures: each layer is a row of drawings with their own holds, inside each clip
+- [ ] Timeline rows are the layers: name, eye, lock and opacity inline; tap a cell to go there
+- [ ] Hold, insert, duplicate and delete per cell; extend a drawing by dragging its end
+- [ ] Onion skin in the timeline: before / after range, quick prev / next toggles, colours, current layer only
+- [ ] Playback range (in / out) inside a clip
+- [ ] Drawing labels
+- [ ] Export and Unity importer flatten per-layer exposures (no change for Unity)
 
 ## Later
 
 - Pixel-art mode
 - Custom brushes
 - iCloud sync
-- Audio scrubbing
+- Audio track with waveform and scrubbing (lip sync)
+- Textured brushes (grain, flow, spacing)
 - iPhone
 
 ## Never (on purpose)

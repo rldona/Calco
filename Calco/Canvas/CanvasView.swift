@@ -126,6 +126,10 @@ final class CanvasUIView: UIView {
     }
 
     private func endStroke() {
+        if let state, let target = strokeTarget {
+            let tail = builder.finish()
+            if !tail.isEmpty { state.renderer.paint(tail, into: target, color: state.color, tool: state.tool) }
+        }
         activeTouch = nil
         strokeTarget = nil
         state?.strokeEnded()
@@ -137,12 +141,14 @@ final class CanvasUIView: UIView {
         let samples = event?.coalescedTouches(for: touch) ?? [touch]
 
         builder.baseRadius = state.toolSize
+        builder.smoothing = state.tool == .eraser ? 0 : state.smoothing
         var stamps: [CanvasRenderer.Stamp] = []
         for s in samples {
             let canvasPos = renderer.canvasPoint(fromViewPoint: s.preciseLocation(in: self),
                                                  viewSize: bounds.size, transform: state.canvasTransform)
-            let force: Float = s.type == .pencil
-                ? Float(s.force / max(s.maximumPossibleForce, 1))
+            // Without pressure every stroke is the full size, Pencil or finger.
+            let force: Float = !state.usePressure ? 1
+                : s.type == .pencil ? Float(s.force / max(s.maximumPossibleForce, 1))
                 : 0.5
             stamps += builder.add(.init(position: canvasPos, force: force))
         }

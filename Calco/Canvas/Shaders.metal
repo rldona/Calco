@@ -107,7 +107,10 @@ fragment float4 composite_fragment(CompositeVertexOut in [[stage_in]],
                                    constant CompositeUniforms &u [[buffer(0)]],
                                    texture2d<float> layer [[texture(0)]])
 {
-    constexpr sampler s(filter::linear);
+    // Magnified (the usual case on screen) shows the sprite's real pixels, like any sprite
+    // editor: blending them on the way up is what made strokes look blurry. Shrunk (thumbnails,
+    // zoomed out) still blends, which is the better-looking way down.
+    constexpr sampler s(mag_filter::nearest, min_filter::linear);
     float4 c = layer.sample(s, in.uv);          // premultiplied
     float3 tinted = u.tint.rgb * c.a;           // tint keeps coverage
     c.rgb = mix(c.rgb, tinted, u.tintAmount);

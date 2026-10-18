@@ -28,4 +28,35 @@ final class StrokeBuilderTests: XCTestCase {
         let light = b.add(.init(position: [0, 0], force: 0))
         XCTAssertEqual(light[0].radius, 2, accuracy: 0.001)
     }
+
+    func testSmoothingIronsOutWobbleAndFinishCatchesUp() {
+        // A zig-zag along x: y jumps ±10 every sample.
+        func run(_ smoothing: Float) -> (maxY: Float, end: SIMD2<Float>) {
+            var b = StrokeBuilder(baseRadius: 4, spacing: 0.5)
+            b.smoothing = smoothing
+            b.begin()
+            var stamps: [CanvasRenderer.Stamp] = []
+            for i in 0...40 { stamps += b.add(.init(position: [Float(i) * 5, i % 2 == 0 ? 10 : -10], force: 1)) }
+            stamps += b.finish()
+            // Wobble in the middle of the stroke: the start begins at the pen and finish() runs out
+            // to where it lifted (y = +10), so both ends legitimately touch the zig-zag.
+            let middle = stamps.filter { (50...150).contains($0.position.x) }
+            return (middle.map { abs($0.position.y) }.max() ?? 0, stamps.last!.position)
+        }
+        let raw = run(0), smooth = run(0.8)
+        XCTAssertGreaterThan(raw.maxY, 9)
+        XCTAssertLessThan(smooth.maxY, raw.maxY / 2, "the wobble shrinks")
+        // Stamps land every radius × spacing = 2 px, so "where the pen lifted" means within one step.
+        XCTAssertEqual(smooth.end.x, 200, accuracy: 2, "finish draws to where the pen lifted")
+        XCTAssertEqual(raw.end.x, 200, accuracy: 2)
+        XCTAssertLessThan(abs(smooth.end.x - raw.end.x), 2, "smoothing doesn't cut the stroke short")
+    }
+
+    func testNoSmoothingFinishAddsNothing() {
+        var b = StrokeBuilder()
+        b.begin()
+        _ = b.add(.init(position: [0, 0], force: 1))
+        _ = b.add(.init(position: [50, 0], force: 1))
+        XCTAssertTrue(b.finish().isEmpty)
+    }
 }

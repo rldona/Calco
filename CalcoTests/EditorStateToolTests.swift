@@ -71,11 +71,17 @@ final class EditorStateToolTests: XCTestCase {
         first.tool = .eraser
         first.toolSize = 30
         first.setColor(SIMD4<Float>(0.2, 0.4, 0.6, 1))
+        first.smoothing = 0.75
+        first.usePressure = false
+        first.fillGaps = .large
 
         let second = try XCTUnwrap(EditorState(device: device, screenFormat: .bgra8Unorm, defaults: defaults))
         XCTAssertEqual(second.brushSize, 14)
         XCTAssertEqual(second.eraserSize, 30)
         XCTAssertEqual(second.color, SIMD4<Float>(0.2, 0.4, 0.6, 1))
+        XCTAssertEqual(second.smoothing, 0.75)
+        XCTAssertFalse(second.usePressure)
+        XCTAssertEqual(second.fillGaps, .large)
     }
 
     func testGarbageInDefaultsFallsBackToDefaults() throws {

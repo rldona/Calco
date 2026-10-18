@@ -30,6 +30,9 @@ final class EditorState: ObservableObject {
     /// Radii in canvas pixels at full pressure, one per tool. Remembered across launches.
     @Published var brushSize: Float = 6 { didSet { saveToolSettings() } }
     @Published var eraserSize: Float = 18 { didSet { saveToolSettings() } }
+    /// Brush stabiliser 0–1 and whether the Pencil's pressure changes the size. Remembered.
+    @Published var smoothing: Float = 0.3 { didSet { saveToolSettings() } }
+    @Published var usePressure = true { didSet { saveToolSettings() } }
     /// How big a break in a line the fill bucket bridges. Remembered across launches.
     @Published var fillGaps: FillGaps = .small { didSet { saveToolSettings() } }
     /// Brush colour, straight RGBA. Always opaque for now: overlapping stamps would build up any translucency.
@@ -908,6 +911,8 @@ final class EditorState: ObservableObject {
         static let eraserSize = "tool.eraserSize"
         static let color = "tool.color"
         static let fillGaps = "tool.fillGaps"
+        static let smoothing = "tool.smoothing"
+        static let usePressure = "tool.usePressure"
     }
 
     private var loadingToolSettings = false
@@ -925,6 +930,8 @@ final class EditorState: ObservableObject {
             color = SIMD4<Float>(c[0], c[1], c[2], 1)
         }
         if let raw = defaults.object(forKey: ToolKey.fillGaps) as? Int, let g = FillGaps(rawValue: raw) { fillGaps = g }
+        if let v = defaults.object(forKey: ToolKey.smoothing) as? Float, (0...1).contains(v) { smoothing = v }
+        if let v = defaults.object(forKey: ToolKey.usePressure) as? Bool { usePressure = v }
     }
 
     private func saveToolSettings() {
@@ -933,6 +940,8 @@ final class EditorState: ObservableObject {
         defaults.set(eraserSize, forKey: ToolKey.eraserSize)
         defaults.set([color.x, color.y, color.z], forKey: ToolKey.color)
         defaults.set(fillGaps.rawValue, forKey: ToolKey.fillGaps)
+        defaults.set(smoothing, forKey: ToolKey.smoothing)
+        defaults.set(usePressure, forKey: ToolKey.usePressure)
     }
 
     func setColor(_ c: SIMD4<Float>) {

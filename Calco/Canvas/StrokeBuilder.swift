@@ -15,17 +15,39 @@ struct StrokeBuilder {
     var minRadiusFactor: Float = 0.15
     /// Distance between stamps as a fraction of radius. Lower = smoother, more stamps.
     var spacing: Float = 0.25
+    /// Stabiliser, 0 (raw input) to 1 (heavy): the drawn point trails the pen, which irons out
+    /// wobble. `finish()` draws the rest of the way to where the pen lifted.
+    var smoothing: Float = 0
 
     private var last: Sample?
     private var leftover: Float = 0
+    /// Last raw input, so `finish()` can close the gap the stabiliser leaves.
+    private var target: Sample?
 
     mutating func begin() {
         last = nil
         leftover = 0
+        target = nil
     }
 
-    /// Append a sample, returning the stamps to render.
+    /// Append a raw input sample, returning the stamps to render.
     mutating func add(_ sample: Sample) -> [CanvasRenderer.Stamp] {
+        target = sample
+        guard smoothing > 0, let prev = last else { return place(sample) }
+        // How far the drawn point moves toward the pen each sample: all the way at 0, 4% at 1.
+        let follow = 1 - min(max(smoothing, 0), 1) * 0.96
+        return place(Sample(position: prev.position + (sample.position - prev.position) * follow,
+                            force: prev.force + (sample.force - prev.force) * follow))
+    }
+
+    /// End of stroke: catch up with the pen so the line ends where it lifted.
+    mutating func finish() -> [CanvasRenderer.Stamp] {
+        guard smoothing > 0, let target, let last, simd_distance(target.position, last.position) > 0.5
+        else { return [] }
+        return place(target)
+    }
+
+    private mutating func place(_ sample: Sample) -> [CanvasRenderer.Stamp] {
         defer { last = sample }
         guard let prev = last else {
             return [stamp(at: sample.position, force: sample.force)]
