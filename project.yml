@@ -40,6 +40,7 @@ targets:
         DEVELOPMENT_TEAM: 7RFK3DNFPT
         CODE_SIGN_STYLE: Automatic
         INFOPLIST_KEY_CFBundleDisplayName: Calco
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
   CalcoTests:
     type: bundle.unit-test
     platform: iOS

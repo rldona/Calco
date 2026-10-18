@@ -91,6 +91,11 @@ struct GalleryView: View {
 
     private var header: some View {
         HStack(spacing: 16) {
+            Image("Logo")
+                .resizable()
+                .frame(width: 34, height: 34)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .accessibilityHidden(true)
             Text("Calco").font(.title2.weight(.semibold)).foregroundStyle(Theme.text)
             Spacer()
             Button { showingImport = true } label: { Label("Open from Files", systemImage: "folder") }
