@@ -34,6 +34,8 @@ Calco's own look, aimed squarely at being better to work in than RoughAnimator.
 - [x] Canvas gets only the space the panels leave, so chrome never covers the drawing
 - [x] Timeline with one track per clip: the active clip as thumbnails sized by hold, the rest as exposure bars on the same time scale; tap a track to edit it
 - [x] Zen mode: hides everything but the canvas and a small floating bar (Zen button or ⌃⌘F)
+- [x] Project gallery as the start screen: "Continue" with the last project, cards that play their first clip, rename / duplicate / delete on long press; everything saves into it on its own
+- [x] New project sheet: sprite-size presets (64–1024 or custom), fps explained in game terms (8 / 12 / 24), starting clips (Idle, Run, Jump, Attack, Hurt or your own)
 - [ ] Custom icon set (brush, eraser, onion skin, pivot) instead of SF Symbols
 - [ ] Landscape and Stage Manager sizes checked on a device
 

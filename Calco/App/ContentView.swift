@@ -159,7 +159,7 @@ struct FileMenu: View {
     @ObservedObject var state: EditorState
     @State private var showingOpen = false
     @State private var showingSaveAs = false
-    @State private var confirmingNew = false
+    @State private var showingNewProject = false
     @State private var saveAsName = ""
     @State private var exported: [URL] = []
     @State private var exportTitle = ""
@@ -167,8 +167,9 @@ struct FileMenu: View {
 
     var body: some View {
         Menu {
-            Button { state.request = .newProject } label: { Label("New", systemImage: "doc") }
-            Button { state.request = .open } label: { Label("Open…", systemImage: "folder") }
+            Button { state.closeToGallery() } label: { Label("All projects", systemImage: "square.grid.2x2") }
+            Button { state.request = .newProject } label: { Label("New project…", systemImage: "plus") }
+            Button { state.request = .open } label: { Label("Open from Files…", systemImage: "folder") }
             Divider()
             Button { state.save() } label: { Label("Save", systemImage: "square.and.arrow.down") }
             Button { state.request = .saveAs } label: {
@@ -210,11 +211,13 @@ struct FileMenu: View {
         .sheet(isPresented: $showingExport) {
             ExportSheet(title: exportTitle, urls: exported, name: state.project.name)
         }
-        .alert("Discard unsaved changes?", isPresented: $confirmingNew) {
-            Button("Discard", role: .destructive) { state.newProject() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("\(state.project.name) has changes that haven't been saved.")
+        .sheet(isPresented: $showingNewProject) {
+            NewProjectSheet { config in
+                showingNewProject = false
+                // The current project has a file (it's in the gallery), so saving keeps its work.
+                state.saveIfNeeded()
+                state.createProject(config)
+            }
         }
         .alert("File error", isPresented: Binding(
             get: { state.lastError != nil },
@@ -229,7 +232,7 @@ struct FileMenu: View {
     private func handle(_ request: EditorState.Request) {
         switch request {
         case .newProject:
-            if state.isDirty { confirmingNew = true } else { state.newProject() }
+            showingNewProject = true
         case .open:
             showingOpen = true
         case .saveAs:

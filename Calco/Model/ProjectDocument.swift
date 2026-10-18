@@ -73,12 +73,16 @@ enum ProjectDocument {
     static func loadLayerImages(from packageURL: URL, project: Project) -> [LayerKey: CGImage] {
         var out: [LayerKey: CGImage] = [:]
         for key in layerKeys(of: project) {
-            let url = layerURL(in: packageURL, key)
-            guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-                  let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { continue }
+            guard let image = image(at: layerURL(in: packageURL, key)) else { continue }
             out[key] = image
         }
         return out
+    }
+
+    /// One layer PNG, or nil if it's missing (a blank layer).
+    static func image(at url: URL) -> CGImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        return CGImageSourceCreateImageAtIndex(source, 0, nil)
     }
 
     // MARK: - Save

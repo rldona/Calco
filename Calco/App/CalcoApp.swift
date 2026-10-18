@@ -8,9 +8,11 @@ struct CalcoApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView(state: state)
-                // Tapping a .calco package in Files.
-                .onOpenURL { url in state.open(url) }
+            Group {
+                if state.isInGallery { GalleryView(state: state) } else { ContentView(state: state) }
+            }
+            // Tapping a .calco package in Files.
+            .onOpenURL { url in state.open(url) }
         }
         .commands { CalcoCommands(state: state) }
         .onChange(of: scenePhase) { _, phase in

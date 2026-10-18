@@ -118,7 +118,8 @@ fragment float4 checker_fragment(CompositeVertexOut in [[stage_in]],
                                  constant CompositeUniforms &u [[buffer(0)]])
 {
     float2 px = in.uv * u.canvasSize;
-    float cell = 16.0;
+    // 32 cells across the long side, so a 64 px sprite and a 1024 px one look alike on screen.
+    float cell = max(u.canvasSize.x, u.canvasSize.y) / 32.0;
     float2 q = floor(px / cell);
     float odd = fmod(q.x + q.y, 2.0);
     float g = mix(0.78, 0.88, odd);

@@ -8,16 +8,18 @@ struct CalcoCommands: Commands {
     var body: some Commands {
         // File
         CommandGroup(replacing: .newItem) {
-            Button("New") { state.request = .newProject }.keyboardShortcut("n")
-            Button("Open…") { state.request = .open }.keyboardShortcut("o")
+            Button("New Project…") { state.request = .newProject }.keyboardShortcut("n")
+            Button("Open from Files…") { state.request = .open }.keyboardShortcut("o")
+            Button("All Projects") { state.closeToGallery() }.keyboardShortcut("o", modifiers: [.command, .shift])
+                .disabled(state.isInGallery)
         }
         CommandGroup(replacing: .saveItem) {
-            Button("Save") { state.save() }.keyboardShortcut("s")
-            Button("Save As…") { state.request = .saveAs }.keyboardShortcut("s", modifiers: [.command, .shift])
+            Button("Save") { state.save() }.keyboardShortcut("s").disabled(state.isInGallery)
+            Button("Save As…") { state.request = .saveAs }.keyboardShortcut("s", modifiers: [.command, .shift]).disabled(state.isInGallery)
         }
         CommandGroup(replacing: .importExport) {
-            Button("Export Sprite Sheet…") { state.request = .exportSpriteSheet }.keyboardShortcut("e")
-            Button("Export GIF…") { state.request = .exportGIF }.keyboardShortcut("g")
+            Button("Export Sprite Sheet…") { state.request = .exportSpriteSheet }.keyboardShortcut("e").disabled(state.isInGallery)
+            Button("Export GIF…") { state.request = .exportGIF }.keyboardShortcut("g").disabled(state.isInGallery)
         }
 
         // Edit

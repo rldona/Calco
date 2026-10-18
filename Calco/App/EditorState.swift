@@ -30,6 +30,8 @@ final class EditorState: ObservableObject {
     @Published var isPlaying = false
     /// Show the draggable pivot handle over the canvas.
     @Published var showPivot = false
+    /// The project gallery is showing instead of the editor. The app starts there.
+    @Published var isInGallery = true
     /// Zen mode: only the canvas and a small floating bar. View state only.
     @Published var isZen = false
     /// Zoom / pan / rotation of the canvas on screen. View state only: not saved, not undoable.
@@ -80,14 +82,14 @@ final class EditorState: ObservableObject {
         loadToolSettings()
     }
 
-    static func defaultProject(name: String = "Untitled") -> Project {
+    nonisolated static func defaultProject(name: String = "Untitled") -> Project {
         Project(name: name,
                 canvas: CanvasSize(width: 512, height: 512),
                 fps: 12,
                 clips: [defaultClip()])
     }
 
-    static func defaultClip() -> Clip {
+    nonisolated static func defaultClip() -> Clip {
         Clip(id: "idle", name: "Idle",
              layers: [Layer(id: "color", name: "Color"),
                       Layer(id: "line", name: "Line")],
@@ -114,7 +116,7 @@ final class EditorState: ObservableObject {
 
     // MARK: - Document
 
-    static var documentsDirectory: URL {
+    nonisolated static var documentsDirectory: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
 
@@ -122,6 +124,65 @@ final class EditorState: ObservableObject {
         documentsDirectory
             .appendingPathComponent(name)
             .appendingPathExtension(ProjectDocument.fileExtension)
+    }
+
+    /// What the "New project" sheet asks for. Sprite-sized presets rather than video "camera" sizes.
+    struct NewProjectConfig: Equatable {
+        var name = "Untitled character"
+        var width = 256
+        var height = 256
+        var fps = 12
+        var clips = ["Idle", "Run"]
+
+        static let sizes = [64, 128, 256, 512, 1024]
+        static let fpsChoices = [8, 12, 24]
+        static let suggestedClips = ["Idle", "Run", "Jump", "Attack", "Hurt"]
+        static let sideRange = 16...2048
+    }
+
+    /// Builds the project, saves it straight into `directory` (so it's in the gallery from the
+    /// start) and opens it in the editor. Each clip gets one blank frame and the usual two layers.
+    func createProject(_ config: NewProjectConfig, in directory: URL = EditorState.documentsDirectory) {
+        stop()
+        let library = ProjectLibrary(directory: directory)
+        let name = library.uniqueName(config.name)
+        let side = NewProjectConfig.sideRange
+        var clips: [Clip] = []
+        for (i, clipName) in config.clips.map({ ProjectLibrary.cleanName($0) }).filter({ !$0.isEmpty }).enumerated() {
+            var c = Self.defaultClip()
+            c.id = Self.clipID(for: clipName, existing: clips.map(\.id))
+            c.name = clipName
+            c.frames = [Frame(id: String(format: "%03d", i), hold: 1)]
+            clips.append(c)
+        }
+        if clips.isEmpty { clips = [Self.defaultClip()] }
+        let project = Project(name: name,
+                              canvas: CanvasSize(width: min(max(config.width, side.lowerBound), side.upperBound),
+                                                 height: min(max(config.height, side.lowerBound), side.upperBound)),
+                              fps: min(max(config.fps, 1), 60),
+                              clips: clips)
+        do {
+            try install(project, images: [:])
+        } catch {
+            lastError = "Couldn't create \(name).\n\(error.localizedDescription)"
+            return
+        }
+        save(to: library.url(for: name))
+        isInGallery = false
+    }
+
+    /// Back to the gallery. Saves first: a project with a file is saved in place, one without
+    /// (drawn on before there was a gallery) gets a file in Documents if it has changes.
+    func closeToGallery() {
+        stop()
+        if documentURL != nil {
+            saveIfNeeded()
+        } else if isDirty {
+            let library = ProjectLibrary(directory: Self.documentsDirectory)
+            save(to: library.url(for: library.uniqueName(project.name)))
+        }
+        isZen = false
+        isInGallery = true
     }
 
     /// Blank project; forgets the current file. The UI confirms unsaved changes first.
@@ -143,6 +204,7 @@ final class EditorState: ObservableObject {
             try install(loaded, images: images)
             documentURL = url
             isDirty = false
+            isInGallery = false
         } catch {
             lastError = "Couldn't open \(url.lastPathComponent).\n\(error.localizedDescription)"
         }
