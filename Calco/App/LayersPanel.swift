@@ -74,6 +74,9 @@ struct LayersPanel: View {
                     name = state.currentLayer?.name ?? ""
                     naming = .rename(state.layerIndex)
                 } label: { Label("Rename", systemImage: "pencil") }
+                Button { state.clearCurrentLayer() } label: { Label("Clear layer", systemImage: "eraser.line.dashed") }
+                    .disabled(state.currentLayer?.locked ?? true)
+                    .help("Clear this frame's drawing on the layer")
                 Spacer()
                 Button(role: .destructive) { confirmingDelete = true } label: { Label("Delete", systemImage: "trash") }
                     .disabled(state.layers.count <= 1)

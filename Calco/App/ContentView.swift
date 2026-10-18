@@ -25,15 +25,16 @@ struct ContentView: View {
     }
 }
 
+/// Top bar in three groups: document (left), drawing (centre), view (right).
+/// Fits an 11" iPad in portrait; scrolls sideways only on narrower windows (Split View, Stage Manager).
 struct ToolbarView: View {
     @ObservedObject var state: EditorState
     let latencyMs: Double
 
-    /// Scrolls sideways when the controls don't fit (portrait); the layout pass in v0.2 replaces this.
     var body: some View {
         ViewThatFits(in: .horizontal) {
             controls
-            ScrollView(.horizontal, showsIndicators: false) { controls }
+            ScrollView(.horizontal, showsIndicators: false) { controls.fixedSize() }
         }
         .padding(.horizontal, 14).padding(.vertical, 8)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
@@ -41,53 +42,77 @@ struct ToolbarView: View {
 
     private var controls: some View {
         HStack(spacing: 14) {
-            FileMenu(state: state)
-
-            Divider().frame(height: 18)
-
-            Button { state.undo() } label: { Image(systemName: "arrow.uturn.backward") }
-                .disabled(!state.canUndo)
-                .help("Undo")
-            Button { state.redo() } label: { Image(systemName: "arrow.uturn.forward") }
-                .disabled(!state.canRedo)
-                .help("Redo")
-
-            if state.canvasTransform != .identity {
-                Button { state.canvasTransform = .identity } label: { Image(systemName: "arrow.down.right.and.arrow.up.left") }
-                    .help("Fit canvas")
+            HStack(spacing: 14) {
+                FileMenu(state: state)
+                Divider().frame(height: 18)
+                Button { state.undo() } label: { Image(systemName: "arrow.uturn.backward") }
+                    .disabled(!state.canUndo)
+                    .help("Undo")
+                Button { state.redo() } label: { Image(systemName: "arrow.uturn.forward") }
+                    .disabled(!state.canRedo)
+                    .help("Redo")
             }
 
-            Divider().frame(height: 18)
-
+            Spacer(minLength: 14)
             ToolControls(state: state)
+            Spacer(minLength: 14)
 
-            Button { state.clearCurrentLayer() } label: { Image(systemName: "xmark.circle") }
-                .help("Clear layer")
-
-            Divider().frame(height: 18)
-
-            LayersButton(state: state)
-
-            Divider().frame(height: 18)
-
-            // Onion skin
-            Toggle(isOn: $state.onion.enabled) {
-                Image(systemName: "square.3.layers.3d.down.left")
+            HStack(spacing: 14) {
+                if state.canvasTransform != .identity {
+                    Button { state.canvasTransform = .identity } label: {
+                        Image(systemName: "arrow.down.right.and.arrow.up.left")
+                    }
+                    .help("Fit canvas")
+                }
+                OnionSkinButton(state: state)
+                LayersButton(state: state)
+                #if DEBUG
+                Text(String(format: "%.1f ms", latencyMs))
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 44, alignment: .trailing)
+                #endif
             }
-            .toggleStyle(.button)
-            Stepper("", value: $state.onion.before, in: 0...5).labelsHidden()
-            Text("\(state.onion.before)·\(state.onion.after)")
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(.secondary)
-            Stepper("", value: $state.onion.after, in: 0...5).labelsHidden()
-
-            Spacer()
-
-            Text(String(format: "%.1f ms", latencyMs))
-                .font(.system(.caption2, design: .monospaced))
-                .foregroundStyle(.tertiary)
         }
         .buttonStyle(.borderless)
+    }
+}
+
+/// Onion skin on/off, with how many frames before / after and how strong, in a popover.
+struct OnionSkinButton: View {
+    @ObservedObject var state: EditorState
+    @State private var showing = false
+
+    var body: some View {
+        Button { showing = true } label: {
+            Image(systemName: state.onion.enabled ? "circle.lefthalf.filled.righthalf.striped.horizontal"
+                                                  : "circle.dashed")
+                .foregroundStyle(state.onion.enabled ? Color.accentColor : .secondary)
+        }
+        .help("Onion skin")
+        .popover(isPresented: $showing) {
+            VStack(alignment: .leading, spacing: 14) {
+                Toggle("Onion skin", isOn: $state.onion.enabled).font(.headline)
+                Group {
+                    HStack {
+                        Circle().fill(Color(rgba: SIMD4(OnionSkin.beforeTint, 1))).frame(width: 10, height: 10)
+                        CompactStepper(title: "Frames before", value: $state.onion.before, range: 0...5)
+                    }
+                    HStack {
+                        Circle().fill(Color(rgba: SIMD4(OnionSkin.afterTint, 1))).frame(width: 10, height: 10)
+                        CompactStepper(title: "Frames after", value: $state.onion.after, range: 0...5)
+                    }
+                    HStack {
+                        Text("Strength").font(.caption).foregroundStyle(.secondary)
+                        Slider(value: Binding(get: { Double(state.onion.opacity) },
+                                              set: { state.onion.opacity = Float($0) }), in: 0.1...0.8)
+                    }
+                }
+                .disabled(!state.onion.enabled)
+            }
+            .padding(20)
+            .frame(width: 300)
+        }
     }
 }
 

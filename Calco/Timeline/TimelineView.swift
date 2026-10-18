@@ -26,26 +26,16 @@ struct TimelineView: View {
 
                 Divider().frame(height: 18)
 
-                Button { state.moveFrame(by: -1) } label: { Image(systemName: "arrow.left") }
-                    .disabled(state.frameIndex == 0)
-                Button { state.moveFrame(by: 1) } label: { Image(systemName: "arrow.right") }
-                    .disabled(state.frameIndex >= state.frames.count - 1)
+                CompactStepper(title: "Hold", value: Binding(
+                    get: { state.currentFrame?.hold ?? 1 },
+                    set: { state.setHold($0) }), range: 1...24)
 
                 Divider().frame(height: 18)
 
-                HStack(spacing: 4) {
-                    Text("Hold")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text("\(state.currentFrame?.hold ?? 1)")
-                        .font(.system(.caption, design: .monospaced))
-                        .frame(minWidth: 20)
-                    Stepper("Hold", value: Binding(
-                        get: { state.currentFrame?.hold ?? 1 },
-                        set: { state.setHold($0) }),
-                            in: 1...24)
-                    .labelsHidden()
-                }
+                Button { state.moveFrame(by: -1) } label: { Label("Move earlier", systemImage: "arrowshape.left") }
+                    .disabled(state.frameIndex == 0)
+                Button { state.moveFrame(by: 1) } label: { Label("Move later", systemImage: "arrowshape.right") }
+                    .disabled(state.frameIndex >= state.frames.count - 1)
 
                 Spacer()
 
@@ -148,7 +138,7 @@ struct ClipBar: View {
                 }
             }
 
-            Text("\(state.clip.frames.count) frames")
+            Text(state.clip.frames.count == 1 ? "1 frame" : "\(state.clip.frames.count) frames")
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(.secondary)
 
@@ -161,13 +151,9 @@ struct ClipBar: View {
             .help("Loop")
 
             HStack(spacing: 4) {
-                Text("fps").font(.caption).foregroundStyle(.secondary)
-                Text("\(state.clipFPS)")
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(state.clip.fps == nil ? .secondary : .primary)
-                    .frame(minWidth: 20)
-                Stepper("fps", value: Binding(get: { state.clipFPS }, set: { state.setClipFPS($0) }), in: 1...60)
-                    .labelsHidden()
+                CompactStepper(title: "fps",
+                               value: Binding(get: { state.clipFPS }, set: { state.setClipFPS($0) }),
+                               range: 1...60, inherited: state.clip.fps == nil)
                 if state.clip.fps != nil {
                     Button { state.setClipFPS(nil) } label: { Image(systemName: "arrow.uturn.backward") }
                         .font(.caption)
@@ -182,9 +168,11 @@ struct ClipBar: View {
             }
             .toggleStyle(.button)
             .help("Pivot")
-            Text(String(format: "%.2f · %.2f", state.clip.pivot.x, state.clip.pivot.y))
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(.secondary)
+            if state.showPivot {
+                Text(String(format: "%.2f · %.2f", state.clip.pivot.x, state.clip.pivot.y))
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
 
             Spacer()
         }
