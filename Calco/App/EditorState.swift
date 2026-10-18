@@ -24,6 +24,8 @@ final class EditorState: ObservableObject {
     @Published var isPlaying = false
     /// Show the draggable pivot handle over the canvas.
     @Published var showPivot = false
+    /// Zoom / pan / rotation of the canvas on screen. View state only: not saved, not undoable.
+    @Published var canvasTransform = CanvasTransform.identity
     @Published private(set) var thumbnails: [String: CGImage] = [:]
 
     /// Where the project lives on disk. Nil until the first save.
@@ -43,6 +45,8 @@ final class EditorState: ObservableObject {
     @Published private var undoStack: [Snapshot] = []
     @Published private var redoStack: [Snapshot] = []
     private var coalesceTag: String?
+    /// Pixels from before the stroke in progress; enters the history only when the stroke ends.
+    private var pendingStroke: Snapshot?
     static let historyLimit = 50
 
     init?(device: MTLDevice, screenFormat: MTLPixelFormat) {
@@ -189,6 +193,8 @@ final class EditorState: ObservableObject {
         undoStack = []
         redoStack = []
         coalesceTag = nil
+        pendingStroke = nil
+        canvasTransform = .identity
     }
 
     // MARK: - Clips
@@ -506,15 +512,32 @@ final class EditorState: ObservableObject {
         }
     }
 
-    /// Records the layer's pixels for undo and returns the texture to paint into, or nil if painting isn't allowed.
+    /// Keeps the layer's pixels aside and returns the texture to paint into, or nil if painting isn't allowed.
+    /// The stroke becomes an undo step in `strokeEnded`; `cancelStroke` throws it away.
     func beginStroke() -> MTLTexture? {
         guard let f = currentFrame, let l = currentLayer, !l.locked else { return nil }
-        recordUndo(textures: [LayerKey(clip: clip.id, frame: f.id, layer: l.id)], copyPixels: true)
+        let key = LayerKey(clip: clip.id, frame: f.id, layer: l.id)
+        var saved: [LayerKey: MTLTexture?] = [:]
+        saved.updateValue(store.copy(of: key), forKey: key)
+        pendingStroke = snapshot(saved)
         return paintTarget
     }
 
     func strokeEnded() {
+        if let s = pendingStroke {
+            coalesceTag = nil
+            push(s)
+            pendingStroke = nil
+        }
         isDirty = true
+        if let f = currentFrame { refreshThumbnail(for: f.id) }
+    }
+
+    /// A gesture took over (two-finger tap, pinch): put the pixels back as if the stroke never happened.
+    func cancelStroke() {
+        guard let s = pendingStroke else { return }
+        pendingStroke = nil
+        for (k, t) in s.textures { store.set(t, for: k) }
         if let f = currentFrame { refreshThumbnail(for: f.id) }
     }
 
@@ -550,7 +573,11 @@ final class EditorState: ObservableObject {
         coalesceTag = tag
         var saved: [LayerKey: MTLTexture?] = [:]
         for k in keys { saved.updateValue(copyPixels ? store.copy(of: k) : store.raw(k), forKey: k) }
-        undoStack.append(snapshot(saved))
+        push(snapshot(saved))
+    }
+
+    private func push(_ s: Snapshot) {
+        undoStack.append(s)
         if undoStack.count > Self.historyLimit { undoStack.removeFirst() }
         redoStack.removeAll()
     }
@@ -561,12 +588,14 @@ final class EditorState: ObservableObject {
     }
 
     func undo() {
+        cancelStroke()
         guard let s = undoStack.popLast() else { return }
         redoStack.append(snapshot(currentTextures(s)))
         apply(s)
     }
 
     func redo() {
+        cancelStroke()
         guard let s = redoStack.popLast() else { return }
         undoStack.append(snapshot(currentTextures(s)))
         apply(s)

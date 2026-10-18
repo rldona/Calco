@@ -60,6 +60,37 @@ final class EditorStateHistoryTests: XCTestCase {
         XCTAssertFalse(state.canRedo)
     }
 
+    func testCancelledStrokeLeavesNoTraceAndKeepsRedo() throws {
+        let state = try makeState()
+        try stroke(state, x: 100, y: 200)
+        state.undo()
+        XCTAssertTrue(state.canRedo)
+
+        // A finger starts painting, then turns out to be a three-finger tap.
+        let target = try XCTUnwrap(state.beginStroke())
+        state.renderer.paint([.init(position: SIMD2<Float>(300, 300), radius: 10, alpha: 1)],
+                             into: target, color: SIMD4<Float>(0, 0, 0, 1), tool: .brush)
+        state.cancelStroke()
+        XCTAssertEqual(alpha(lineImage(state), x: 300, y: 300), 0)
+        XCTAssertTrue(state.canRedo, "a cancelled stroke doesn't clear redo")
+        XCTAssertFalse(state.canUndo)
+
+        state.redo()
+        XCTAssertGreaterThan(alpha(lineImage(state), x: 100, y: 200), 200)
+    }
+
+    func testUndoMidStrokeDropsTheStroke() throws {
+        let state = try makeState()
+        try stroke(state, x: 100, y: 200)
+        let target = try XCTUnwrap(state.beginStroke())
+        state.renderer.paint([.init(position: SIMD2<Float>(300, 300), radius: 10, alpha: 1)],
+                             into: target, color: SIMD4<Float>(0, 0, 0, 1), tool: .brush)
+        state.undo()   // two-finger tap while the first finger was already painting
+        XCTAssertNil(lineImage(state), "both the half stroke and the previous one are gone")
+        state.strokeEnded()
+        XCTAssertFalse(state.canUndo, "the cancelled stroke never enters the history")
+    }
+
     func testClearLayerIsUndoable() throws {
         let state = try makeState()
         try stroke(state, x: 100, y: 200)

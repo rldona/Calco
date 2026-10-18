@@ -68,11 +68,15 @@ fragment float4 eraser_fragment(StampVertexOut in [[stage_in]])
 }
 
 // ---------------------------------------------------------------------------
-// Composite: draw a layer texture (or checkerboard) into a rect on screen.
+// Composite: draw a layer texture (or checkerboard) into a quad on screen.
+// The quad is origin + u * axisX + v * axisY in NDC, so it can be zoomed, panned and rotated.
 // ---------------------------------------------------------------------------
 
 struct CompositeUniforms {
-    float4 rect;        // x, y, w, h in NDC
+    float2 origin;      // NDC of the canvas's bottom-left corner
+    float2 axisX;       // NDC from bottom-left to bottom-right
+    float2 axisY;       // NDC from bottom-left to top-left
+    float2 pad;
     float4 tint;        // rgb used when tintAmount > 0
     float  opacity;
     float  tintAmount;  // 0 = original colors, 1 = fully tinted (onion skin)
@@ -92,7 +96,7 @@ vertex CompositeVertexOut composite_vertex(uint vid [[vertex_id]],
         float2(1, 0), float2(1, 1), float2(0, 1)
     };
     float2 c = corners[vid];
-    float2 ndc = u.rect.xy + c * u.rect.zw;
+    float2 ndc = u.origin + c.x * u.axisX + c.y * u.axisY;
     CompositeVertexOut o;
     o.position = float4(ndc, 0, 1);
     o.uv = float2(c.x, 1.0 - c.y);

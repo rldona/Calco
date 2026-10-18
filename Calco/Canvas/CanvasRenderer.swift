@@ -28,7 +28,10 @@ final class CanvasRenderer {
     }
 
     private struct CompositeUniforms {
-        var rect: SIMD4<Float>
+        var origin: SIMD2<Float>
+        var axisX: SIMD2<Float>
+        var axisY: SIMD2<Float>
+        var pad = SIMD2<Float>()
         var tint: SIMD4<Float>
         var opacity: Float
         var tintAmount: Float
@@ -162,9 +165,30 @@ final class CanvasRenderer {
     // MARK: - Compositing
 
     /// Composite `layers` (bottom to top) over a checkerboard into the drawable.
-    func present(_ layers: [CompositeLayer], to drawable: CAMetalDrawable, viewSize: CGSize) {
+    /// Where the canvas lands in normalized device coordinates.
+    struct Quad {
+        var origin: SIMD2<Float>
+        var axisX: SIMD2<Float>
+        var axisY: SIMD2<Float>
+        static let fullScreen = Quad(origin: [-1, -1], axisX: [2, 0], axisY: [0, 2])
+    }
+
+    func quad(_ transform: CanvasTransform, viewSize: CGSize, unitsPerPoint: CGFloat) -> Quad {
+        let t = transform.canvasToView(canvas: canvasSize, viewSize: viewSize, unitsPerPoint: unitsPerPoint)
+        func ndc(_ x: Int, _ y: Int) -> SIMD2<Float> {
+            let p = CGPoint(x: x, y: y).applying(t)
+            return SIMD2<Float>(Float(p.x / viewSize.width) * 2 - 1, 1 - Float(p.y / viewSize.height) * 2)
+        }
+        let bottomLeft = ndc(0, canvasSize.y)
+        return Quad(origin: bottomLeft,
+                    axisX: ndc(canvasSize.x, canvasSize.y) - bottomLeft,
+                    axisY: ndc(0, 0) - bottomLeft)
+    }
+
+    func present(_ layers: [CompositeLayer], to drawable: CAMetalDrawable, viewSize: CGSize,
+                 transform: CanvasTransform, unitsPerPoint: CGFloat) {
         guard let cmd = queue.makeCommandBuffer() else { return }
-        let rect = Self.fitRectNDC(canvas: canvasSize, in: viewSize)
+        let rect = quad(transform, viewSize: viewSize, unitsPerPoint: unitsPerPoint)
         let pass = MTLRenderPassDescriptor()
         pass.colorAttachments[0].texture = drawable.texture
         pass.colorAttachments[0].loadAction = .clear
@@ -196,7 +220,7 @@ final class CanvasRenderer {
         pass.colorAttachments[0].clearColor = MTLClearColor(red: 1, green: 1, blue: 1, alpha: 1)
         pass.colorAttachments[0].storeAction = .store
         guard let enc = cmd.makeRenderCommandEncoder(descriptor: pass) else { completion(nil); return }
-        encodeComposite(enc, layers: layers, rect: SIMD4<Float>(-1, -1, 2, 2),
+        encodeComposite(enc, layers: layers, rect: .fullScreen,
                         checker: thumbCheckerPipeline, composite: thumbCompositePipeline)
         enc.endEncoding()
 
@@ -220,7 +244,7 @@ final class CanvasRenderer {
         pass.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
         pass.colorAttachments[0].storeAction = .store
         guard let enc = cmd.makeRenderCommandEncoder(descriptor: pass) else { return nil }
-        encodeComposite(enc, layers: layers, rect: SIMD4<Float>(-1, -1, 2, 2),
+        encodeComposite(enc, layers: layers, rect: .fullScreen,
                         checker: nil, composite: thumbCompositePipeline)
         enc.endEncoding()
         cmd.commit()
@@ -295,9 +319,9 @@ final class CanvasRenderer {
                        shouldInterpolate: true, intent: .defaultIntent)
     }
 
-    private func encodeComposite(_ enc: MTLRenderCommandEncoder, layers: [CompositeLayer], rect: SIMD4<Float>,
+    private func encodeComposite(_ enc: MTLRenderCommandEncoder, layers: [CompositeLayer], rect: Quad,
                                  checker: MTLRenderPipelineState?, composite: MTLRenderPipelineState) {
-        var u = CompositeUniforms(rect: rect, tint: .zero, opacity: 1, tintAmount: 0,
+        var u = CompositeUniforms(origin: rect.origin, axisX: rect.axisX, axisY: rect.axisY, tint: .zero, opacity: 1, tintAmount: 0,
                                   canvasSize: SIMD2<Float>(Float(canvasSize.x), Float(canvasSize.y)))
         if let checker {
             enc.setRenderPipelineState(checker)
@@ -320,15 +344,6 @@ final class CanvasRenderer {
 
     // MARK: - Geometry
 
-    static func fitRectNDC(canvas: SIMD2<Int>, in view: CGSize) -> SIMD4<Float> {
-        let r = fitRect(canvas: canvas, in: view)
-        let x = Float(r.minX / view.width) * 2 - 1
-        let y = Float(1 - r.maxY / view.height) * 2 - 1
-        let w = Float(r.width / view.width) * 2
-        let h = Float(r.height / view.height) * 2
-        return SIMD4<Float>(x, y, w, h)
-    }
-
     static func fitRect(canvas: SIMD2<Int>, in view: CGSize, margin: CGFloat = 0.9) -> CGRect {
         let cw = CGFloat(canvas.x), ch = CGFloat(canvas.y)
         let scale = min(view.width / cw, view.height / ch) * margin
@@ -336,10 +351,9 @@ final class CanvasRenderer {
         return CGRect(x: (view.width - w) / 2, y: (view.height - h) / 2, width: w, height: h)
     }
 
-    func canvasPoint(fromViewPixel p: CGPoint, viewSize: CGSize) -> SIMD2<Float> {
-        let r = Self.fitRect(canvas: canvasSize, in: viewSize)
-        let x = (p.x - r.minX) / r.width * CGFloat(canvasSize.x)
-        let y = (p.y - r.minY) / r.height * CGFloat(canvasSize.y)
-        return SIMD2<Float>(Float(x), Float(y))
+    /// View point → canvas pixel under it, for the current zoom/pan/rotation.
+    func canvasPoint(fromViewPoint p: CGPoint, viewSize: CGSize, transform: CanvasTransform) -> SIMD2<Float> {
+        let c = p.applying(transform.viewToCanvas(canvas: canvasSize, viewSize: viewSize))
+        return SIMD2<Float>(Float(c.x), Float(c.y))
     }
 }

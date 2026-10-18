@@ -54,6 +54,12 @@ struct ToolbarView: View {
                 .disabled(!state.canRedo)
                 .help("Redo")
 
+            if state.canvasTransform != .identity {
+                Button { state.canvasTransform = .identity } label: { Image(systemName: "arrow.down.right.and.arrow.up.left") }
+                    .keyboardShortcut("0")
+                    .help("Fit canvas")
+            }
+
             Divider().frame(height: 18)
 
             // Tools
@@ -260,16 +266,22 @@ struct PivotOverlay: View {
 
     var body: some View {
         GeometryReader { geo in
-            let rect = CanvasRenderer.fitRect(canvas: state.renderer.canvasSize, in: geo.size)
+            let canvas = state.renderer.canvasSize
+            let w = CGFloat(canvas.x), h = CGFloat(canvas.y)
+            let toView = state.canvasTransform.canvasToView(canvas: canvas, viewSize: geo.size)
             let pivot = state.clip.pivot
-            let point = CGPoint(x: rect.minX + rect.width * pivot.x,
-                                y: rect.maxY - rect.height * pivot.y)   // origin bottom-left
+            // Pivot origin is bottom-left; canvas pixels are top-left.
+            let point = CGPoint(x: w * pivot.x, y: h * (1 - pivot.y)).applying(toView)
+            let guideX = (CGPoint(x: 0, y: h * (1 - pivot.y)).applying(toView),
+                          CGPoint(x: w, y: h * (1 - pivot.y)).applying(toView))
+            let guideY = (CGPoint(x: w * pivot.x, y: 0).applying(toView),
+                          CGPoint(x: w * pivot.x, y: h).applying(toView))
 
             ZStack {
                 // Guides across the canvas
                 Path { p in
-                    p.move(to: CGPoint(x: rect.minX, y: point.y)); p.addLine(to: CGPoint(x: rect.maxX, y: point.y))
-                    p.move(to: CGPoint(x: point.x, y: rect.minY)); p.addLine(to: CGPoint(x: point.x, y: rect.maxY))
+                    p.move(to: guideX.0); p.addLine(to: guideX.1)
+                    p.move(to: guideY.0); p.addLine(to: guideY.1)
                 }
                 .stroke(Color.accentColor.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
                 .allowsHitTesting(false)
@@ -285,9 +297,8 @@ struct PivotOverlay: View {
                         DragGesture(minimumDistance: 0)
                             .updating($dragging) { _, s, _ in s = true }
                             .onChanged { g in
-                                state.setPivot(Pivot(
-                                    x: (g.location.x - rect.minX) / rect.width,
-                                    y: (rect.maxY - g.location.y) / rect.height))
+                                let c = g.location.applying(toView.inverted())
+                                state.setPivot(Pivot(x: c.x / w, y: 1 - c.y / h))
                             }
                             .onEnded { _ in state.endCoalescing() }
                     )

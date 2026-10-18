@@ -3,8 +3,12 @@ import MetalKit
 import SwiftUI
 
 /// UIKit view that owns the MTKView and handles Apple Pencil input.
-/// Paints into whatever `EditorState.paintTarget` says, and composites
+/// Paints into whatever `EditorState.beginStroke()` hands out, and composites
 /// `EditorState.visibleLayers()` every display refresh.
+///
+/// Finger gestures (Pencil never triggers them): two-finger tap undo, three-finger tap redo,
+/// pinch / two-finger drag / twist to zoom, pan and rotate. A finger stroke that turns into
+/// one of these is cancelled and leaves no trace.
 final class CanvasUIView: UIView {
 
     private let mtkView = MTKView()
@@ -19,8 +23,9 @@ final class CanvasUIView: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        isMultipleTouchEnabled = false
+        isMultipleTouchEnabled = true
         backgroundColor = .clear
+        installGestures()
 
         guard let device = MTLCreateSystemDefaultDevice() else { return }
         mtkView.device = device
@@ -67,7 +72,10 @@ final class CanvasUIView: UIView {
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        endStroke()
+        guard activeTouch != nil else { return }
+        activeTouch = nil
+        strokeTarget = nil
+        state?.cancelStroke()
     }
 
     private func endStroke() {
@@ -80,15 +88,12 @@ final class CanvasUIView: UIView {
         guard let state, let target = strokeTarget else { return }
         let renderer = state.renderer
         let samples = event?.coalescedTouches(for: touch) ?? [touch]
-        let scale = window?.screen.scale ?? UIScreen.main.scale
-        let viewSize = CGSize(width: bounds.width * scale, height: bounds.height * scale)
 
         builder.baseRadius = state.tool == .eraser ? 18 : 6
         var stamps: [CanvasRenderer.Stamp] = []
         for s in samples {
-            let p = s.preciseLocation(in: self)
-            let px = CGPoint(x: p.x * scale, y: p.y * scale)
-            let canvasPos = renderer.canvasPoint(fromViewPixel: px, viewSize: viewSize)
+            let canvasPos = renderer.canvasPoint(fromViewPoint: s.preciseLocation(in: self),
+                                                 viewSize: bounds.size, transform: state.canvasTransform)
             let force: Float = s.type == .pencil
                 ? Float(s.force / max(s.maximumPossibleForce, 1))
                 : 0.5
@@ -110,8 +115,62 @@ extension CanvasUIView: MTKViewDelegate {
         // MTKView calls this on the main thread.
         MainActor.assumeIsolated {
             guard let state, let drawable = view.currentDrawable else { return }
-            state.renderer.present(state.visibleLayers(), to: drawable, viewSize: view.drawableSize)
+            state.renderer.present(state.visibleLayers(), to: drawable, viewSize: view.drawableSize,
+                                   transform: state.canvasTransform, unitsPerPoint: view.contentScaleFactor)
         }
+    }
+}
+
+// MARK: - Gestures
+
+extension CanvasUIView: UIGestureRecognizerDelegate {
+    private func installGestures() {
+        let fingers = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+
+        let undoTap = UITapGestureRecognizer(target: self, action: #selector(undoTapped))
+        undoTap.numberOfTouchesRequired = 2
+        let redoTap = UITapGestureRecognizer(target: self, action: #selector(redoTapped))
+        redoTap.numberOfTouchesRequired = 3
+
+        let pinch = UIPinchGestureRecognizer(target: self, action: #selector(pinched))
+        let rotate = UIRotationGestureRecognizer(target: self, action: #selector(rotated))
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(panned))
+        pan.minimumNumberOfTouches = 2
+        pan.maximumNumberOfTouches = 2
+
+        for g in [undoTap, redoTap, pinch, rotate, pan] as [UIGestureRecognizer] {
+            g.allowedTouchTypes = fingers
+            g.delegate = self
+            addGestureRecognizer(g)
+        }
+    }
+
+    func gestureRecognizer(_ g: UIGestureRecognizer,
+                           shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+        // Pinch, twist and drag happen together; taps stay exclusive.
+        !(g is UITapGestureRecognizer) && !(other is UITapGestureRecognizer)
+    }
+
+    @objc private func undoTapped() { state?.undo() }
+    @objc private func redoTapped() { state?.redo() }
+
+    @objc private func pinched(_ g: UIPinchGestureRecognizer) {
+        guard let state, g.state == .changed else { return }
+        state.canvasTransform.zoom(by: g.scale, around: g.location(in: self), viewSize: bounds.size)
+        g.scale = 1
+    }
+
+    @objc private func rotated(_ g: UIRotationGestureRecognizer) {
+        guard let state, g.state == .changed else { return }
+        state.canvasTransform.rotate(by: g.rotation, around: g.location(in: self), viewSize: bounds.size)
+        g.rotation = 0
+    }
+
+    @objc private func panned(_ g: UIPanGestureRecognizer) {
+        guard let state, g.state == .changed else { return }
+        let t = g.translation(in: self)
+        state.canvasTransform.pan(by: CGSize(width: t.x, height: t.y))
+        g.setTranslation(.zero, in: self)
     }
 }
 
