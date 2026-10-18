@@ -8,6 +8,8 @@ Think *Procreate's Animation Assist* simplicity with the structure of a real ani
 
 > Status: **pre-alpha**. Nothing to download yet. Follow the repo to watch it grow.
 
+📖 **User manual**, in English and Spanish: <https://rldona.github.io/Calco/> (source in [`manual/`](manual/)).
+
 ## Why
 
 Today there is no hand-drawn (non pixel-art) sprite animation tool on iPad that speaks the language of game engines:

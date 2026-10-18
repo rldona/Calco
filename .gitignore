@@ -12,3 +12,10 @@ build/
 # macOS
 .DS_Store
 *.xcodeproj
+
+# Manual (VitePress)
+manual/node_modules/
+manual/.vitepress/dist/
+manual/.vitepress/cache/
+# Raw simulator screenshots; scripts/crop.swift turns them into manual/public
+manual/raw/

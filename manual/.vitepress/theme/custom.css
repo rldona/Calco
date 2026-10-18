@@ -1,0 +1,31 @@
+/* Calco's amber accent, and screenshots that sit on the page like the app's dark panels. */
+:root {
+  --vp-c-brand-1: #c97a0c;
+  --vp-c-brand-2: #df8c14;
+  --vp-c-brand-3: #ef9f27;
+  --vp-c-brand-soft: rgba(239, 159, 39, 0.16);
+}
+.dark {
+  --vp-c-brand-1: #f5b048;
+  --vp-c-brand-2: #ef9f27;
+  --vp-c-brand-3: #df8c14;
+}
+.vp-doc img {
+  border-radius: 12px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
+  margin: 16px 0;
+}
+.vp-doc img.rail {
+  float: right;
+  width: 64px;
+  margin: 0 0 16px 24px;
+}
+.vp-doc .clear { clear: both; }
+.vp-doc .crop-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+}
+.vp-doc .crop-row img { max-width: min(100%, 420px); margin: 0; }
+.VPHero .image-src { max-width: 220px; border-radius: 44px; }
