@@ -2,7 +2,7 @@
 
 ## v0.1 — "it moves in Unity"
 
-- [ ] Metal canvas PoC: Pencil input, pressure, one brush, acceptable latency
+- [x] Metal canvas PoC: Pencil input, pressure, one brush, acceptable latency (~9 ms on iPad Pro 11)
 - [ ] Layers per frame with opacity/visibility
 - [ ] Frame strip: add / duplicate / delete / reorder / hold
 - [ ] Onion skin (configurable before/after)
