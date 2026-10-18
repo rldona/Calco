@@ -38,6 +38,8 @@ struct CalcoCommands: Commands {
             Button("Zoom In") { state.canvasTransform.zoom(by: 1.25) }.keyboardShortcut("=")
             Button("Zoom Out") { state.canvasTransform.zoom(by: 0.8) }.keyboardShortcut("-")
             Button("Fit Canvas") { state.canvasTransform = .identity }.keyboardShortcut("0")
+            Button(state.isZen ? "Leave Zen Mode" : "Zen Mode") { state.isZen.toggle() }
+                .keyboardShortcut("f", modifiers: [.command, .control])
             Divider()
             Button(state.onion.enabled ? "Hide Onion Skin" : "Show Onion Skin") { state.onion.enabled.toggle() }
                 .keyboardShortcut("o", modifiers: [])

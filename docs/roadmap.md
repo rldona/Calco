@@ -25,6 +25,18 @@ The v0.1 UI grew one control per feature. This pass makes it a tool you can work
 - [x] Keyboard shortcuts for hardware keyboards: all in app menus (`CalcoCommands`), so holding ⌘ lists them — frames, layers, playback, zoom, onion skin, tools, file
 - [x] Layout pass: top bar in three groups (document · drawing · view) that fits an 11" iPad in portrait, compact steppers, onion skin in a popover, clear layer moved to the layers panel. Landscape not yet looked at on a device
 
+## v0.3 — "Estudio"
+
+Calco's own look, aimed squarely at being better to work in than RoughAnimator.
+
+- [x] Dark Estudio theme (`Theme.swift`): neutral chrome, one amber accent for whatever is active
+- [x] Tool rail on the left (brush, eraser, colour, vertical size slider, undo / redo); layers as a fixed panel on the right
+- [x] Canvas gets only the space the panels leave, so chrome never covers the drawing
+- [x] Timeline with one track per clip: the active clip as thumbnails sized by hold, the rest as exposure bars on the same time scale; tap a track to edit it
+- [x] Zen mode: hides everything but the canvas and a small floating bar (Zen button or ⌃⌘F)
+- [ ] Custom icon set (brush, eraser, onion skin, pivot) instead of SF Symbols
+- [ ] Landscape and Stage Manager sizes checked on a device
+
 ## Later
 
 - Pixel-art mode

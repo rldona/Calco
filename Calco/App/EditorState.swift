@@ -30,6 +30,8 @@ final class EditorState: ObservableObject {
     @Published var isPlaying = false
     /// Show the draggable pivot handle over the canvas.
     @Published var showPivot = false
+    /// Zen mode: only the canvas and a small floating bar. View state only.
+    @Published var isZen = false
     /// Zoom / pan / rotation of the canvas on screen. View state only: not saved, not undoable.
     @Published var canvasTransform = CanvasTransform.identity
     @Published private(set) var thumbnails: [String: CGImage] = [:]

@@ -1,80 +1,118 @@
 import SwiftUI
 import Metal
 
+/// Estudio layout: tool rail on the left, layers on the right, clip tracks at the bottom, and the
+/// canvas in whatever space is left (so panels never cover the drawing). Zen mode hides all of it
+/// except a small floating bar.
 struct ContentView: View {
     @ObservedObject var state: EditorState
     @State private var latencyMs: Double = 0
 
     var body: some View {
-        ZStack {
-            CanvasView(state: state, latencyMs: $latencyMs)
-                .ignoresSafeArea()
-
-            if state.showPivot {
-                PivotOverlay(state: state)
-                    .ignoresSafeArea()
+        VStack(spacing: Theme.gap) {
+            if !state.isZen {
+                TopBar(state: state, latencyMs: latencyMs)
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
-
-            VStack {
-                ToolbarView(state: state, latencyMs: latencyMs)
-                Spacer()
+            HStack(spacing: Theme.gap) {
+                if !state.isZen {
+                    ToolRail(state: state)
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                }
+                canvas
+                if !state.isZen {
+                    LayersPanel(state: state)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
+            }
+            if !state.isZen {
                 TimelineView(state: state)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            .padding(12)
         }
+        .padding(Theme.gap)
+        .background(Theme.background.ignoresSafeArea())
+        .animation(.easeInOut(duration: 0.22), value: state.isZen)
+        .tint(Theme.accent)
+        .preferredColorScheme(.dark)
+    }
+
+    private var canvas: some View {
+        CanvasView(state: state, latencyMs: $latencyMs)
+            .clipShape(RoundedRectangle(cornerRadius: state.isZen ? 0 : Theme.corner))
+            .overlay {
+                if state.showPivot { PivotOverlay(state: state) }
+            }
+            .overlay(alignment: .top) {
+                if state.isZen { ZenBar(state: state).padding(.top, 6) }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if state.isZen {
+                    Text("\(state.clip.name) · \(state.frameIndex + 1) / \(state.frames.count)")
+                        .font(.caption)
+                        .foregroundStyle(Theme.textFaint)
+                        .padding(10)
+                }
+            }
     }
 }
 
-/// Top bar in three groups: document (left), drawing (centre), view (right).
-/// Fits an 11" iPad in portrait; scrolls sideways only on narrower windows (Split View, Stage Manager).
-struct ToolbarView: View {
+/// Document on the left; view toggles (fit, onion skin, Zen) on the right.
+struct TopBar: View {
     @ObservedObject var state: EditorState
     let latencyMs: Double
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            controls
-            ScrollView(.horizontal, showsIndicators: false) { controls.fixedSize() }
-        }
-        .padding(.horizontal, 14).padding(.vertical, 8)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-    }
-
-    private var controls: some View {
-        HStack(spacing: 14) {
-            HStack(spacing: 14) {
-                FileMenu(state: state)
-                Divider().frame(height: 18)
-                Button { state.undo() } label: { Image(systemName: "arrow.uturn.backward") }
-                    .disabled(!state.canUndo)
-                    .help("Undo")
-                Button { state.redo() } label: { Image(systemName: "arrow.uturn.forward") }
-                    .disabled(!state.canRedo)
-                    .help("Redo")
-            }
-
-            Spacer(minLength: 14)
-            ToolControls(state: state)
-            Spacer(minLength: 14)
-
-            HStack(spacing: 14) {
-                if state.canvasTransform != .identity {
-                    Button { state.canvasTransform = .identity } label: {
-                        Image(systemName: "arrow.down.right.and.arrow.up.left")
-                    }
-                    .help("Fit canvas")
+        HStack(spacing: 16) {
+            FileMenu(state: state)
+            Spacer()
+            if state.canvasTransform != .identity {
+                Button { state.canvasTransform = .identity } label: {
+                    Image(systemName: "arrow.down.right.and.arrow.up.left")
                 }
-                OnionSkinButton(state: state)
-                LayersButton(state: state)
-                #if DEBUG
-                Text(String(format: "%.1f ms", latencyMs))
-                    .font(.system(.caption2, design: .monospaced))
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 44, alignment: .trailing)
-                #endif
+                .help("Fit canvas")
             }
+            OnionSkinButton(state: state)
+            Button { state.isZen = true } label: {
+                Label("Zen", systemImage: "circle.dashed.inset.filled")
+                    .font(.caption.weight(.medium))
+                    .padding(.horizontal, 10).padding(.vertical, 4)
+                    .overlay(Capsule().strokeBorder(Theme.textFaint, lineWidth: 1))
+            }
+            .help("Zen mode: hide everything but the canvas")
+            #if DEBUG
+            Text(String(format: "%.1f ms", latencyMs))
+                .font(.system(.caption2, design: .monospaced))
+                .foregroundStyle(Theme.textFaint)
+                .frame(width: 44, alignment: .trailing)
+            #endif
         }
         .buttonStyle(.borderless)
+        .foregroundStyle(Theme.textDim)
+        .padding(.horizontal, 6)
+        .frame(height: 30)
+    }
+}
+
+/// Zen mode's only chrome: undo, brush, eraser, colour, and the way back.
+struct ZenBar: View {
+    @ObservedObject var state: EditorState
+    @State private var editingColor = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            RailButton(icon: "arrow.uturn.backward", label: "Undo", size: 34) { state.undo() }
+                .opacity(state.canUndo ? 1 : 0.35)
+            RailButton(icon: "pencil.tip", label: "Brush", active: state.tool == .brush, size: 34) { state.tool = .brush }
+            RailButton(icon: "eraser", label: "Eraser", active: state.tool == .eraser, size: 34) { state.tool = .eraser }
+            ColorSwatch(state: state, editing: $editingColor, diameter: 20)
+            Divider().overlay(Theme.hairline).frame(height: 20).padding(.horizontal, 2)
+            RailButton(icon: "arrow.down.right.and.arrow.up.left.circle", label: "Leave Zen mode", size: 34) {
+                state.isZen = false
+            }
+        }
+        .padding(.horizontal, 6).padding(.vertical, 3)
+        .background(Theme.panel, in: Capsule())
     }
 }
 
@@ -87,7 +125,7 @@ struct OnionSkinButton: View {
         Button { showing = true } label: {
             Image(systemName: state.onion.enabled ? "circle.lefthalf.filled.righthalf.striped.horizontal"
                                                   : "circle.dashed")
-                .foregroundStyle(state.onion.enabled ? Color.accentColor : .secondary)
+                .foregroundStyle(state.onion.enabled ? Theme.accent : Theme.textDim)
         }
         .help("Onion skin")
         .popover(isPresented: $showing) {
@@ -292,11 +330,11 @@ struct PivotOverlay: View {
                     p.move(to: guideX.0); p.addLine(to: guideX.1)
                     p.move(to: guideY.0); p.addLine(to: guideY.1)
                 }
-                .stroke(Color.accentColor.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                .stroke(Theme.accent.opacity(0.7), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
                 .allowsHitTesting(false)
 
                 Circle()
-                    .fill(Color.accentColor.opacity(dragging ? 0.9 : 0.7))
+                    .fill(Theme.accent.opacity(dragging ? 0.95 : 0.8))
                     .overlay(Circle().strokeBorder(.white, lineWidth: 2))
                     .frame(width: 22, height: 22)
                     .shadow(radius: 3)

@@ -2,63 +2,104 @@ import SwiftUI
 import UIKit
 import simd
 
-/// Brush / eraser, size and colour, in the top toolbar.
+/// Left rail: brush / eraser, colour, size, undo / redo. The size is a vertical slider you can
+/// drag with a finger; tapping the number opens the precise popover.
 /// Keyboard shortcuts (B, E, [ and ]) live in CalcoCommands.
-struct ToolControls: View {
+struct ToolRail: View {
     @ObservedObject var state: EditorState
     @State private var editingSize = false
     @State private var editingColor = false
 
     var body: some View {
-        HStack(spacing: 10) {
-            Picker("Tool", selection: $state.tool) {
-                Image(systemName: "pencil.tip").tag(CanvasRenderer.Tool.brush)
-                Image(systemName: "eraser").tag(CanvasRenderer.Tool.eraser)
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 110)
+        VStack(spacing: 6) {
+            RailButton(icon: "pencil.tip", label: "Brush", active: state.tool == .brush) { state.tool = .brush }
+            RailButton(icon: "eraser", label: "Eraser", active: state.tool == .eraser) { state.tool = .eraser }
 
+            Divider().overlay(Theme.hairline).padding(.horizontal, 8).padding(.vertical, 4)
+
+            ColorSwatch(state: state, editing: $editingColor)
+
+            VerticalSizeSlider(state: state)
+                .frame(height: 120)
+                .padding(.top, 6)
             Button { editingSize = true } label: {
-                HStack(spacing: 5) {
-                    SizeDot(size: state.toolSize, maxDiameter: 18)
-                    Text("\(Int(state.toolSize))")
-                        .font(.system(.caption, design: .monospaced))
-                        .frame(minWidth: 18, alignment: .leading)
-                }
+                Text("\(Int(state.toolSize))")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(Theme.textDim)
+                    .frame(width: 36, height: 22)
             }
-            .help("Size")
-            .popover(isPresented: $editingSize) { SizePopover(state: state) }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Size \(Int(state.toolSize))")
+            .popover(isPresented: $editingSize, arrowEdge: .leading) { SizePopover(state: state) }
 
-            Button { editingColor = true } label: {
+            Spacer(minLength: 12)
+
+            RailButton(icon: "arrow.uturn.backward", label: "Undo") { state.undo() }
+                .opacity(state.canUndo ? 1 : 0.35)
+            RailButton(icon: "arrow.uturn.forward", label: "Redo") { state.redo() }
+                .opacity(state.canRedo ? 1 : 0.35)
+        }
+        .frame(width: 40)
+        .calcoPanel(padding: 5)
+    }
+}
+
+/// The brush colour; dims while erasing. Tapping opens the palette.
+struct ColorSwatch: View {
+    @ObservedObject var state: EditorState
+    @Binding var editing: Bool
+    var diameter: CGFloat = 24
+
+    var body: some View {
+        Button { editing = true } label: {
+            Circle()
+                .fill(Color(rgba: state.color))
+                .frame(width: diameter, height: diameter)
+                .overlay(Circle().strokeBorder(Theme.text.opacity(0.85), lineWidth: 2))
+                .opacity(state.tool == .eraser ? 0.4 : 1)
+                .frame(width: 36, height: 36)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Colour")
+        .help("Colour")
+        .popover(isPresented: $editing) { ColorPopover(state: state) }
+    }
+}
+
+/// Drag up for bigger, down for smaller. Square-root mapping so small sizes get most of the travel.
+private struct VerticalSizeSlider: View {
+    @ObservedObject var state: EditorState
+
+    var body: some View {
+        GeometryReader { geo in
+            let range = EditorState.sizeRange
+            let t = CGFloat(sqrt((state.toolSize - range.lowerBound) / (range.upperBound - range.lowerBound)))
+            ZStack(alignment: .bottom) {
+                Capsule().fill(Theme.hairline).frame(width: 4)
+                Capsule().fill(Theme.accent).frame(width: 4, height: max(4, geo.size.height * t))
                 Circle()
-                    .fill(Color(rgba: state.color))
-                    .frame(width: 22, height: 22)
-                    .overlay(Circle().strokeBorder(.white.opacity(0.8), lineWidth: 2))
-                    .shadow(radius: 1)
-                    .opacity(state.tool == .eraser ? 0.4 : 1)
+                    .fill(Theme.text)
+                    .frame(width: 14, height: 14)
+                    .offset(y: -(geo.size.height - 14) * t)
             }
-            .help("Colour")
-            .popover(isPresented: $editingColor) { ColorPopover(state: state) }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0).onChanged { g in
+                let f = Float(min(max(1 - g.location.y / geo.size.height, 0), 1))
+                state.toolSize = range.lowerBound + f * f * (range.upperBound - range.lowerBound)
+            })
+        }
+        .accessibilityElement()
+        .accessibilityLabel(state.tool == .eraser ? "Eraser size" : "Brush size")
+        .accessibilityValue("\(Int(state.toolSize))")
+        .accessibilityAdjustableAction { direction in
+            state.stepToolSize(direction == .increment ? 1 : -1)
         }
     }
 }
 
-/// A dot whose diameter follows the tool size (capped so it fits the toolbar).
-private struct SizeDot: View {
-    let size: Float
-    let maxDiameter: CGFloat
-
-    var body: some View {
-        let range = EditorState.sizeRange
-        let t = CGFloat((size - range.lowerBound) / (range.upperBound - range.lowerBound))
-        Circle()
-            .fill(.primary)
-            .frame(width: 3 + sqrt(t) * (maxDiameter - 3), height: 3 + sqrt(t) * (maxDiameter - 3))
-            .frame(width: maxDiameter, height: maxDiameter)
-    }
-}
-
-private struct SizePopover: View {
+struct SizePopover: View {
     @ObservedObject var state: EditorState
 
     var body: some View {
@@ -87,7 +128,7 @@ private struct SizePopover: View {
     }
 }
 
-private struct ColorPopover: View {
+struct ColorPopover: View {
     @ObservedObject var state: EditorState
 
     /// Neutrals first, then a hue wheel, then skin and earth tones.
@@ -109,7 +150,7 @@ private struct ColorPopover: View {
                             .fill(Color(rgba: c))
                             .frame(width: 40, height: 40)
                             .overlay(RoundedRectangle(cornerRadius: 8)
-                                .strokeBorder(c == state.color ? Color.accentColor : .white.opacity(0.2),
+                                .strokeBorder(c == state.color ? Theme.accent : .white.opacity(0.2),
                                               lineWidth: c == state.color ? 3 : 1))
                     }
                     .accessibilityLabel(String(format: "#%06X", hex))

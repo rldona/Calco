@@ -1,31 +1,7 @@
 import SwiftUI
 
-/// Toolbar button showing the current layer; opens the layers panel.
-struct LayersButton: View {
-    @ObservedObject var state: EditorState
-    @State private var showing = false
-
-    var body: some View {
-        Button { showing = true } label: {
-            HStack(spacing: 5) {
-                Image(systemName: "square.3.layers.3d")
-                Text(state.currentLayer?.name ?? "—")
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
-                    .frame(maxWidth: 110)
-                    .fixedSize()
-                if state.currentLayer?.locked == true {
-                    Image(systemName: "lock.fill").font(.caption2)
-                }
-            }
-        }
-        .help("Layers")
-        .popover(isPresented: $showing) { LayersPanel(state: state) }
-    }
-}
-
-/// The clip's layer stack, top layer first like every drawing app.
-/// Tap a row to paint on it; drag the handle to reorder.
+/// The clip's layer stack, top layer first like every drawing app. Lives on the right of the
+/// canvas (hidden in Zen mode). Tap a row to paint on it; drag the handle to reorder.
 struct LayersPanel: View {
     @ObservedObject var state: EditorState
     @State private var naming: Naming?
@@ -44,11 +20,11 @@ struct LayersPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Layers").font(.headline)
+                Text("Layers").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text)
                 Spacer()
-                Text(state.clip.name).font(.caption).foregroundStyle(.secondary)
+                Text(state.clip.name).font(.caption).foregroundStyle(Theme.textFaint).lineLimit(1)
             }
-            .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 6)
+            .padding(.horizontal, 10).padding(.top, 8).padding(.bottom, 4)
 
             List {
                 ForEach(rows) { layer in
@@ -64,11 +40,11 @@ struct LayersPanel: View {
                 }
             }
             .listStyle(.plain)
+            .scrollContentBackground(.hidden)
             .environment(\.editMode, .constant(.active))
-            .frame(height: min(CGFloat(state.layers.count) * 64 + 8, 360))
 
-            Divider()
-            HStack(spacing: 18) {
+            Divider().overlay(Theme.hairline)
+            HStack(spacing: 14) {
                 Button { name = ""; naming = .add } label: { Label("New layer", systemImage: "plus") }
                 Button {
                     name = state.currentLayer?.name ?? ""
@@ -83,9 +59,11 @@ struct LayersPanel: View {
             }
             .labelStyle(.iconOnly)
             .buttonStyle(.borderless)
-            .padding(14)
+            .foregroundStyle(Theme.textDim)
+            .padding(.horizontal, 10).padding(.vertical, 8)
         }
-        .frame(width: 320)
+        .frame(width: 210)
+        .background(Theme.panel, in: RoundedRectangle(cornerRadius: Theme.corner))
         .alert(naming.map { if case .add = $0 { "New layer" } else { "Rename layer" } } ?? "",
                isPresented: Binding(get: { naming != nil }, set: { if !$0 { naming = nil } })) {
             TextField("Name (sketch, line, shadow…)", text: $name)
@@ -122,20 +100,25 @@ private struct LayerRow: View {
     private func row(index: Int, layer: Layer) -> some View {
         let selected = index == state.layerIndex
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 Button { state.toggleLayerVisibility(index) } label: {
                     Image(systemName: layer.visible ? "eye" : "eye.slash")
                         .foregroundStyle(layer.visible ? .primary : .secondary)
-                        .frame(width: 24)
+                        .frame(width: 22)
                 }
                 Text(layer.name)
-                    .font(.body.weight(selected ? .semibold : .regular))
+                    .font(.callout.weight(selected ? .semibold : .regular))
                     .lineLimit(1)
+                    .layoutPriority(1)
                     .foregroundStyle(layer.visible ? .primary : .secondary)
-                Spacer(minLength: 4)
-                Text("\(Int((layer.opacity * 100).rounded()))%")
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                Spacer(minLength: 2)
+                // Only worth the space when it isn't 100%; the selected row has the slider anyway.
+                if layer.opacity < 1 {
+                    Text("\(Int((layer.opacity * 100).rounded()))%")
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .fixedSize()
+                }
                 Button { state.toggleLayerLock(index) } label: {
                     Image(systemName: layer.locked ? "lock.fill" : "lock.open")
                         .foregroundStyle(layer.locked ? .primary : .tertiary)
@@ -154,6 +137,11 @@ private struct LayerRow: View {
         .padding(.vertical, 4)
         .contentShape(Rectangle())
         .onTapGesture { state.layerIndex = index }
-        .listRowBackground(selected ? Color.accentColor.opacity(0.18) : Color.clear)
+        .foregroundStyle(selected ? Theme.accentText : Theme.textDim)
+        .listRowBackground(RoundedRectangle(cornerRadius: 8)
+            .fill(selected ? Theme.accentWash : Color.clear)
+            .padding(.horizontal, 4))
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 2, leading: 10, bottom: 2, trailing: 6))
     }
 }
