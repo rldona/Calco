@@ -79,6 +79,7 @@ Hero.calco/
 `Export → Sprite sheet` produces `<name>.png` + `<name>.json` in the [Aseprite JSON (array) format](https://www.aseprite.org/docs/cli/#data), which Unity, Godot and most engines already understand.
 
 - Frames are packed in a near-square grid of canvas-sized cells, in project order (clip by clip), untrimmed.
+- Cells are separated by a transparent **2 px margin**, also applied around the outer edge, so an engine's bilinear filtering never samples the neighbouring frame. Cell `i` of an `n`-column grid sits at `x = 2 + (i % n) * (w + 2)`, `y = 2 + (i / n) * (h + 2)`; `frames[].frame` carries those positions, while `spriteSourceSize` / `sourceSize` stay the bare canvas size. Slice `bounds` are relative to the sprite (`0,0,w,h`), so the margin doesn't affect them.
 - Visible layers are flattened per frame. `duration` is `hold * 1000 / fps` in ms, using the clip's fps override when set.
 - `meta.frameTags` carries one tag per clip, named by clip **id**, with `direction: "forward"` and a non-standard `loop` boolean.
 - `meta.slices` carries one full-frame slice per clip, named by clip id, keyed at the clip's first frame, with `pivot` in Aseprite's convention: pixels from the top-left. `{0.5, 0}` in `project.json` becomes `{w/2, h}`.

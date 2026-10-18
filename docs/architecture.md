@@ -70,7 +70,10 @@ Only the handle takes touches; everything else falls through to the Pencil.
 `EditorState.exportSpriteSheet` flattens every frame of every clip on the GPU
 (`CanvasRenderer.flatten`: visible layers composited over transparent, no checkerboard, read back) and
 hands the images to `SpriteSheet.build`, which packs them into a near-square grid of canvas-sized cells
-and renders the sheet with CoreGraphics. `SpriteSheet.aseprite` describes it in the Aseprite JSON
+and renders the sheet with CoreGraphics. Cells are separated by a transparent 2 px margin
+(`SpriteSheet.defaultPadding`, also around the outer edge): without it, bilinear filtering in Unity
+samples the edge of the neighbouring cell and sprites show a thin line of the next frame's colour.
+The JSON `frame` rects carry the padded positions; `sourceSize` and slice bounds don't change. `SpriteSheet.aseprite` describes it in the Aseprite JSON
 array format: one `frames[]` entry per frame with `duration = hold * 1000 / fps`, one `frameTags[]`
 entry per clip (`name` is the clip id, plus a non-standard `loop` flag for `calco-unity`), and one
 `slices[]` entry per clip carrying the pivot in Aseprite's convention (pixels from the top-left of a

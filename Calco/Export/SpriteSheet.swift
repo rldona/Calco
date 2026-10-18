@@ -7,7 +7,9 @@ import UniformTypeIdentifiers
 /// Aseprite JSON "array" format, which Unity, Godot and most engines read.
 ///
 /// Pure CoreGraphics: the caller supplies a flattened `CGImage` per frame.
-/// Frames are laid out in a near-square grid, canvas-sized cells, no trimming.
+/// Frames are laid out in a near-square grid, canvas-sized cells, no trimming,
+/// with a transparent `padding` between cells and around the sheet so bilinear
+/// filtering in the engine never samples a neighbouring frame.
 struct SpriteSheet {
     struct Cell {
         var clip: Clip
@@ -16,32 +18,41 @@ struct SpriteSheet {
         var durationMs: Int
     }
 
+    /// Default gap, in pixels, between cells and around the sheet's edge.
+    static let defaultPadding = 2
+
     var canvas: CanvasSize
     var columns: Int
+    var padding: Int
     var size: CGSize
     var cells: [Cell]
     var image: CGImage?
 
     // MARK: - Build
 
-    static func build(project: Project, frameImage: (Clip, Frame) -> CGImage?) -> SpriteSheet {
+    static func build(project: Project, padding: Int = defaultPadding,
+                      frameImage: (Clip, Frame) -> CGImage?) -> SpriteSheet {
         let w = project.canvas.width, h = project.canvas.height
+        let pad = max(padding, 0)
         let all: [(Clip, Frame)] = project.clips.flatMap { clip in clip.frames.map { (clip, $0) } }
         let count = max(all.count, 1)
         let columns = Int(Double(count).squareRoot().rounded(.up))
         let rows = Int((Double(count) / Double(columns)).rounded(.up))
-        let size = CGSize(width: columns * w, height: rows * h)
+        // `pad` on the outside plus `pad` after every cell: pad + n * (cell + pad).
+        let size = CGSize(width: pad + columns * (w + pad), height: pad + rows * (h + pad))
 
         var cells: [Cell] = []
         for (i, (clip, frame)) in all.enumerated() {
             let fps = clip.fps ?? project.fps
             cells.append(Cell(
                 clip: clip, frame: frame,
-                rect: CGRect(x: (i % columns) * w, y: (i / columns) * h, width: w, height: h),
+                rect: CGRect(x: pad + (i % columns) * (w + pad), y: pad + (i / columns) * (h + pad),
+                             width: w, height: h),
                 durationMs: Int((Double(frame.hold) * 1000 / Double(max(fps, 1))).rounded())))
         }
 
-        var sheet = SpriteSheet(canvas: project.canvas, columns: columns, size: size, cells: cells, image: nil)
+        var sheet = SpriteSheet(canvas: project.canvas, columns: columns, padding: pad, size: size,
+                                cells: cells, image: nil)
         sheet.image = sheet.render(frameImage)
         return sheet
     }
