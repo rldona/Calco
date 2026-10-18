@@ -69,27 +69,7 @@ struct ToolbarView: View {
 
             Divider().frame(height: 18)
 
-            // Layers: tap name to select, tap eye to toggle visibility
-            HStack(spacing: 6) {
-                ForEach(Array(state.layers.enumerated()).reversed(), id: \.element.id) { index, layer in
-                    HStack(spacing: 4) {
-                        Button { state.layerIndex = index } label: {
-                            Text(layer.name)
-                                .font(.caption.weight(index == state.layerIndex ? .semibold : .regular))
-                                .lineLimit(1)
-                                .fixedSize()
-                        }
-                        Button { state.toggleLayerVisibility(index) } label: {
-                            Image(systemName: layer.visible ? "eye" : "eye.slash")
-                                .font(.caption)
-                                .foregroundStyle(layer.visible ? .primary : .secondary)
-                        }
-                    }
-                    .padding(.horizontal, 8).padding(.vertical, 5)
-                    .background(index == state.layerIndex ? Color.accentColor.opacity(0.25) : Color.clear,
-                                in: Capsule())
-                }
-            }
+            LayersButton(state: state)
 
             Divider().frame(height: 18)
 

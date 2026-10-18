@@ -409,7 +409,7 @@ final class EditorState: ObservableObject {
     }
 
     func clearCurrentLayer() {
-        guard let f = currentFrame, let l = currentLayer else { return }
+        guard let f = currentFrame, let l = currentLayer, !l.locked else { return }
         recordUndo(textures: [LayerKey(clip: clip.id, frame: f.id, layer: l.id)], copyPixels: true)
         store.clear(clip: clip.id, frame: f.id, layer: l.id)
         isDirty = true
@@ -418,11 +418,87 @@ final class EditorState: ObservableObject {
 
     // MARK: - Layers
 
+    // Layers belong to the clip: every frame of the clip has the same stack, ordered bottom to top.
+    // `id` is the PNG name inside each frame folder, so renaming only changes `name`.
+
+    /// New empty layer just above the current one; becomes the current layer.
+    func addLayer(name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        recordUndo()
+        let layer = Layer(id: Self.clipID(for: trimmed, existing: layers.map(\.id)), name: trimmed)
+        let at = layers.isEmpty ? 0 : layerIndex + 1
+        clip.layers.insert(layer, at: at)
+        layerIndex = at
+        isDirty = true
+    }
+
+    /// Removes the layer and its pixels in every frame of the clip. The last layer can't go.
+    func deleteLayer(_ index: Int) {
+        guard layers.count > 1, layers.indices.contains(index) else { return }
+        let doomed = layers[index]
+        let keys = frames.map { LayerKey(clip: clip.id, frame: $0.id, layer: doomed.id) }
+        recordUndo(textures: keys)
+        for k in keys { store.set(nil, for: k) }
+        clip.layers.remove(at: index)
+        if layerIndex > index || layerIndex >= layers.count { layerIndex = max(0, layerIndex - 1) }
+        isDirty = true
+        refreshClipThumbnails()
+    }
+
+    func renameLayer(_ index: Int, to name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard layers.indices.contains(index), !trimmed.isEmpty, trimmed != layers[index].name else { return }
+        recordUndo()
+        clip.layers[index].name = trimmed
+        isDirty = true
+    }
+
+    /// Moves a layer in the stack (indices bottom to top). The current layer stays current.
+    func moveLayer(from: Int, to: Int) {
+        guard layers.indices.contains(from) else { return }
+        let to = min(max(to, 0), layers.count - 1)
+        guard from != to else { return }
+        recordUndo()
+        let currentID = currentLayer?.id
+        clip.layers.insert(clip.layers.remove(at: from), at: to)
+        if let currentID, let i = layers.firstIndex(where: { $0.id == currentID }) { layerIndex = i }
+        isDirty = true
+        refreshClipThumbnails()
+    }
+
     func toggleLayerVisibility(_ index: Int) {
         guard layers.indices.contains(index) else { return }
         recordUndo()
         clip.layers[index].visible.toggle()
         isDirty = true
+        refreshClipThumbnails()
+    }
+
+    func toggleLayerLock(_ index: Int) {
+        guard layers.indices.contains(index) else { return }
+        recordUndo()
+        clip.layers[index].locked.toggle()
+        isDirty = true
+    }
+
+    /// Slider-friendly: a drag is one undo step. Call `layerOpacityEditingEnded` when it lets go.
+    func setLayerOpacity(_ index: Int, _ opacity: Double) {
+        guard layers.indices.contains(index) else { return }
+        let v = min(max(opacity, 0), 1)
+        guard v != layers[index].opacity else { return }
+        recordUndo(coalescing: "opacity:\(clip.id):\(layers[index].id)")
+        clip.layers[index].opacity = v
+        isDirty = true
+    }
+
+    func layerOpacityEditingEnded() {
+        endCoalescing()
+        refreshClipThumbnails()
+    }
+
+    private func refreshClipThumbnails() {
+        for f in frames { refreshThumbnail(for: f.id) }
     }
 
     // MARK: - Playback
