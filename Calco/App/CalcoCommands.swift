@@ -31,6 +31,8 @@ struct CalcoCommands: Commands {
         CommandMenu("Draw") {
             Button("Brush") { state.tool = .brush }.keyboardShortcut("b", modifiers: [])
             Button("Eraser") { state.tool = .eraser }.keyboardShortcut("e", modifiers: [])
+            Button("Fill") { state.tool = .fill }.keyboardShortcut("g", modifiers: [])
+            Button("Eyedropper") { state.tool = .eyedropper }.keyboardShortcut("i", modifiers: [])
             Button("Smaller") { state.stepToolSize(-1) }.keyboardShortcut("[", modifiers: [])
             Button("Bigger") { state.stepToolSize(1) }.keyboardShortcut("]", modifiers: [])
             Divider()

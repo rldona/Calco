@@ -14,6 +14,10 @@ struct ToolRail: View {
         VStack(spacing: 6) {
             RailButton(icon: "pencil.tip", label: "Brush", active: state.tool == .brush) { state.tool = .brush }
             RailButton(icon: "eraser", label: "Eraser", active: state.tool == .eraser) { state.tool = .eraser }
+            RailButton(icon: "drop.halffull", label: "Fill", active: state.tool == .fill) { state.tool = .fill }
+            RailButton(icon: "eyedropper", label: "Eyedropper", active: state.tool == .eyedropper) {
+                state.tool = .eyedropper
+            }
 
             Divider().overlay(Theme.hairline).padding(.horizontal, 8).padding(.vertical, 4)
 

@@ -14,6 +14,8 @@ final class CanvasUIView: UIView {
     private let mtkView = MTKView()
     private var builder = StrokeBuilder()
     private var activeTouch: UITouch?
+    /// The active touch is a tap for fill / eyedropper, acted on when it lifts.
+    private var activeIsTap = false
     private var strokeTarget: MTLTexture?
 
     weak var state: EditorState?
@@ -51,9 +53,14 @@ final class CanvasUIView: UIView {
     // MARK: - Touch handling
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard activeTouch == nil, let t = touches.first,
-              let state, !state.isPlaying,
-              let target = state.beginStroke() else { return }
+        guard activeTouch == nil, let t = touches.first, let state, !state.isPlaying else { return }
+        if state.tool == .fill || state.tool == .eyedropper {
+            // Wait for the lift: if it turns into a pinch or two-finger tap, touchesCancelled drops it.
+            activeTouch = t
+            activeIsTap = true
+            return
+        }
+        guard let target = state.beginStroke() else { return }
         activeTouch = t
         strokeTarget = target
         builder.begin()
@@ -61,12 +68,21 @@ final class CanvasUIView: UIView {
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let t = activeTouch, touches.contains(t) else { return }
+        guard let t = activeTouch, touches.contains(t), !activeIsTap else { return }
         feed(touch: t, event: event)
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let t = activeTouch, touches.contains(t) else { return }
+        if activeIsTap {
+            activeTouch = nil
+            activeIsTap = false
+            guard let state else { return }
+            let p = state.renderer.canvasPoint(fromViewPoint: t.location(in: self), viewSize: bounds.size,
+                                               transform: state.canvasTransform)
+            if state.tool == .fill { state.fill(at: p) } else { state.pickColor(at: p) }
+            return
+        }
         feed(touch: t, event: event)
         endStroke()
     }
@@ -74,6 +90,7 @@ final class CanvasUIView: UIView {
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard activeTouch != nil else { return }
         activeTouch = nil
+        if activeIsTap { activeIsTap = false; return }
         strokeTarget = nil
         state?.cancelStroke()
     }

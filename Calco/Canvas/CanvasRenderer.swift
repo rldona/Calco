@@ -38,7 +38,8 @@ final class CanvasRenderer {
         var canvasSize: SIMD2<Float>
     }
 
-    enum Tool { case brush, eraser }
+    /// Fill and eyedropper never reach `paint`; they act on a tap (see CanvasUIView).
+    enum Tool { case brush, eraser, fill, eyedropper }
 
     let device: MTLDevice
     let canvasSize: SIMD2<Int>
@@ -153,7 +154,7 @@ final class CanvasRenderer {
         pass.colorAttachments[0].loadAction = .load
         pass.colorAttachments[0].storeAction = .store
         guard let enc = cmd.makeRenderCommandEncoder(descriptor: pass) else { return }
-        enc.setRenderPipelineState(tool == .brush ? brushPipeline : eraserPipeline)
+        enc.setRenderPipelineState(tool == .eraser ? eraserPipeline : brushPipeline)
         enc.setVertexBuffer(buffer, offset: 0, index: 0)
         enc.setVertexBytes(&uniforms, length: MemoryLayout<StampUniforms>.stride, index: 1)
         enc.setFragmentBytes(&uniforms, length: MemoryLayout<StampUniforms>.stride, index: 1)
@@ -225,13 +226,14 @@ final class CanvasRenderer {
         enc.endEncoding()
 
         cmd.addCompletedHandler { _ in
-            completion(Self.image(from: target))
+            completion(Self.image(width: target.width, height: target.height, bytes: Self.bytes(from: target)))
         }
         cmd.commit()
     }
 
     /// Composites `layers` (bottom to top) onto a transparent, canvas-sized image. Blocking. Used by export.
-    func flatten(_ layers: [CompositeLayer]) -> CGImage? {
+    /// Visible layers composited at full size over transparency: what fill and the eyedropper "see".
+    func flattenBytes(_ layers: [CompositeLayer]) -> [UInt8]? {
         let d = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: Self.layerFormat, width: canvasSize.x, height: canvasSize.y, mipmapped: false)
         d.usage = [.renderTarget]
@@ -249,14 +251,22 @@ final class CanvasRenderer {
         enc.endEncoding()
         cmd.commit()
         cmd.waitUntilCompleted()
-        return Self.image(from: target)
+        return Self.bytes(from: target)
+    }
+
+    /// Visible layers composited at full size, as an image.
+    func flatten(_ layers: [CompositeLayer]) -> CGImage? {
+        flattenBytes(layers).flatMap { Self.image(width: canvasSize.x, height: canvasSize.y, bytes: $0) }
     }
 
     // MARK: - CPU transfer
+    //
+    // Pixels on the CPU are RGBA8, premultiplied, row 0 at the top (canvas y down), 4 bytes per
+    // pixel, tightly packed: the same memory layout as `layerFormat`.
 
-    /// Full-resolution copy of a layer as a premultiplied RGBA `CGImage`.
+    /// Full-resolution copy of a layer's pixels.
     /// Blocks until the GPU has finished every command queued before it on `texture`.
-    func readback(_ texture: MTLTexture) -> CGImage? {
+    func readbackBytes(_ texture: MTLTexture) -> [UInt8]? {
         let d = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: Self.layerFormat, width: texture.width, height: texture.height, mipmapped: false)
         d.storageMode = .shared
@@ -267,7 +277,12 @@ final class CanvasRenderer {
         blit.endEncoding()
         cmd.commit()
         cmd.waitUntilCompleted()
-        return Self.image(from: staging)
+        return Self.bytes(from: staging)
+    }
+
+    /// Full-resolution copy of a layer as a premultiplied RGBA `CGImage`.
+    func readback(_ texture: MTLTexture) -> CGImage? {
+        readbackBytes(texture).flatMap { Self.image(width: texture.width, height: texture.height, bytes: $0) }
     }
 
     /// Replaces the contents of `texture` with `image`, scaled to fit if the sizes differ.
@@ -284,7 +299,13 @@ final class CanvasRenderer {
             return true
         }
         guard drawn else { return }
+        upload(bytes: bytes, into: texture)
+    }
 
+    /// Replaces the contents of `texture` with canvas-sized pixels (see the layout above).
+    func upload(bytes: [UInt8], into texture: MTLTexture) {
+        let w = texture.width, h = texture.height
+        guard bytes.count == w * h * 4 else { return }
         let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: Self.layerFormat, width: w, height: h, mipmapped: false)
         d.storageMode = .shared
         guard let staging = device.makeTexture(descriptor: d),
@@ -292,7 +313,7 @@ final class CanvasRenderer {
               let blit = cmd.makeBlitCommandEncoder() else { return }
         bytes.withUnsafeBytes { ptr in
             staging.replace(region: MTLRegionMake2D(0, 0, w, h), mipmapLevel: 0,
-                            withBytes: ptr.baseAddress!, bytesPerRow: bytesPerRow)
+                            withBytes: ptr.baseAddress!, bytesPerRow: w * 4)
         }
         blit.copy(from: staging, to: texture)
         blit.endEncoding()
@@ -303,18 +324,21 @@ final class CanvasRenderer {
     private static let cgBitmapInfo = CGBitmapInfo(
         rawValue: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue)
 
-    /// Wraps the pixels of a shared-storage texture in a `CGImage`. The GPU must already be done with it.
-    private static func image(from texture: MTLTexture) -> CGImage? {
+    /// The pixels of a shared-storage texture. The GPU must already be done with it.
+    private static func bytes(from texture: MTLTexture) -> [UInt8] {
         let w = texture.width, h = texture.height
-        let bytesPerRow = w * 4
-        var bytes = [UInt8](repeating: 0, count: bytesPerRow * h)
+        var bytes = [UInt8](repeating: 0, count: w * h * 4)
         bytes.withUnsafeMutableBytes { ptr in
-            texture.getBytes(ptr.baseAddress!, bytesPerRow: bytesPerRow,
+            texture.getBytes(ptr.baseAddress!, bytesPerRow: w * 4,
                              from: MTLRegionMake2D(0, 0, w, h), mipmapLevel: 0)
         }
+        return bytes
+    }
+
+    private static func image(width w: Int, height h: Int, bytes: [UInt8]) -> CGImage? {
         guard let provider = CGDataProvider(data: Data(bytes) as CFData) else { return nil }
         return CGImage(width: w, height: h, bitsPerComponent: 8, bitsPerPixel: 32,
-                       bytesPerRow: bytesPerRow, space: CGColorSpaceCreateDeviceRGB(),
+                       bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(),
                        bitmapInfo: cgBitmapInfo, provider: provider, decode: nil,
                        shouldInterpolate: true, intent: .defaultIntent)
     }

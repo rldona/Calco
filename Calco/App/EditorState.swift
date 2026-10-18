@@ -19,7 +19,11 @@ final class EditorState: ObservableObject {
     @Published var clipIndex = 0
     @Published var frameIndex = 0
     @Published var layerIndex = 0
-    @Published var tool: CanvasRenderer.Tool = .brush
+    @Published var tool: CanvasRenderer.Tool = .brush {
+        didSet { if tool == .eyedropper && oldValue != .eyedropper { toolBeforeEyedropper = oldValue } }
+    }
+    /// The eyedropper is one-shot: after a pick you're back on this.
+    private var toolBeforeEyedropper: CanvasRenderer.Tool = .brush
     /// Radii in canvas pixels at full pressure, one per tool. Remembered across launches.
     @Published var brushSize: Float = 6 { didSet { saveToolSettings() } }
     @Published var eraserSize: Float = 18 { didSet { saveToolSettings() } }
@@ -721,6 +725,49 @@ final class EditorState: ObservableObject {
         if let f = currentFrame { refreshThumbnail(for: f.id) }
     }
 
+    // MARK: - Fill and eyedropper
+
+    /// How different a pixel may be from the one tapped and still be filled (0–255 per channel).
+    static let fillTolerance = 40
+    /// Extra pixels the fill grows by, so it tucks under anti-aliased line edges.
+    static let fillGrow = 2
+
+    /// Bucket fill at a canvas point. The region comes from all visible layers of the frame (so
+    /// lines on "Line" bound a fill on "Color"); the paint goes on the current layer. Undoable.
+    func fill(at point: SIMD2<Float>) {
+        guard !isPlaying, let f = currentFrame, let l = currentLayer, !l.locked else { return }
+        let w = renderer.canvasSize.x, h = renderer.canvasSize.y
+        let seed = (x: Int(point.x.rounded(.down)), y: Int(point.y.rounded(.down)))
+        guard (0..<w).contains(seed.x), (0..<h).contains(seed.y),
+              let seen = renderer.flattenBytes(frameLayers(f.id, opacity: 1, tint: nil)) else { return }
+        let region = FloodFill.region(in: seen, width: w, height: h, seed: seed, tolerance: Self.fillTolerance)
+        guard !region.isEmpty else { return }
+        let mask = FloodFill.grow(region, width: w, height: h, by: Self.fillGrow)
+
+        let key = LayerKey(clip: clip.id, frame: f.id, layer: l.id)
+        recordUndo(textures: [key], copyPixels: true)
+        guard let target = store.texture(clip: key.clip, frame: key.frame, layer: key.layer),
+              var pixels = renderer.readbackBytes(target) else { return }
+        FloodFill.paint(mask, color: SIMD3(color.x, color.y, color.z), into: &pixels)
+        renderer.upload(bytes: pixels, into: target)
+        isDirty = true
+        refreshThumbnail(for: f.id)
+    }
+
+    /// Takes the colour of what's on screen at a canvas point (all visible layers), then returns
+    /// to the tool used before the eyedropper. Tapping empty canvas changes nothing.
+    @discardableResult
+    func pickColor(at point: SIMD2<Float>) -> Bool {
+        defer { if tool == .eyedropper { tool = toolBeforeEyedropper } }
+        guard let f = currentFrame,
+              let seen = renderer.flattenBytes(frameLayers(f.id, opacity: 1, tint: nil)),
+              let picked = FloodFill.color(in: seen, width: renderer.canvasSize.x, height: renderer.canvasSize.y,
+                                           at: (Int(point.x.rounded(.down)), Int(point.y.rounded(.down))))
+        else { return false }
+        color = SIMD4(picked, 1)
+        return true
+    }
+
     // MARK: - Tool settings
 
     /// Size of whichever tool is active.
@@ -769,7 +816,8 @@ final class EditorState: ObservableObject {
 
     func setColor(_ c: SIMD4<Float>) {
         color = SIMD4<Float>(min(max(c.x, 0), 1), min(max(c.y, 0), 1), min(max(c.z, 0), 1), 1)
-        tool = .brush
+        // A colour is for painting: leave the eraser, but keep filling if that's what you were doing.
+        if tool != .fill { tool = .brush }
     }
 
     // MARK: - Undo / redo

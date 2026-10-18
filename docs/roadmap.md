@@ -39,6 +39,18 @@ Calco's own look, aimed squarely at being better to work in than RoughAnimator.
 - [ ] Custom icon set (brush, eraser, onion skin, pivot) instead of SF Symbols
 - [ ] Landscape and Stage Manager sizes checked on a device
 
+## v0.4 — "draw and colour"
+
+What RoughAnimator users reach for most, done the Calco way (from its tutorial chapters and user comments).
+
+- [x] Fill bucket (G): fills the region under the finger using all visible layers as the outline, slides under anti-aliased edges; undoable
+- [x] Eyedropper (I): picks the colour from what's on screen, then hands you back the tool you had
+- [ ] Lasso select + transform (move / scale / rotate) with an anchor you can move by finger
+- [ ] Stroke smoothing (stabiliser) and a pressure on/off switch
+- [ ] Brush opacity (needs strokes rendered to their own buffer first, so overlaps don't build up)
+- [ ] Resize the canvas after creating the project
+- [ ] Draw behind (paint under what's already on the layer, for colouring under lines)
+
 ## Later
 
 - Pixel-art mode
