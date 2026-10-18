@@ -48,7 +48,7 @@ final class CanvasUIView: UIView {
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard activeTouch == nil, let t = touches.first,
               let state, !state.isPlaying,
-              let target = state.paintTarget else { return }
+              let target = state.beginStroke() else { return }
         activeTouch = t
         strokeTarget = target
         builder.begin()

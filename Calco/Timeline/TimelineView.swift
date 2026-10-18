@@ -109,6 +109,7 @@ private struct FrameDropDelegate: DropDelegate {
 
     func performDrop(info: DropInfo) -> Bool {
         dragging = nil
+        state.endCoalescing()
         return true
     }
 }

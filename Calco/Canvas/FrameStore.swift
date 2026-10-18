@@ -49,6 +49,25 @@ final class FrameStore {
         }
     }
 
+    // MARK: - History
+
+    /// The texture currently stored for a layer, without allocating one.
+    func raw(_ k: LayerKey) -> MTLTexture? {
+        textures[key(k.clip, k.frame, k.layer)]
+    }
+
+    /// Puts a texture back (or removes it with nil). Used by undo/redo to swap whole textures.
+    func set(_ texture: MTLTexture?, for k: LayerKey) {
+        textures[key(k.clip, k.frame, k.layer)] = texture
+    }
+
+    /// A fresh texture with the layer's current pixels; nil if the layer was never drawn on.
+    func copy(of k: LayerKey) -> MTLTexture? {
+        guard let src = raw(k), let dst = renderer.makeLayerTexture() else { return nil }
+        renderer.copy(src, to: dst)
+        return dst
+    }
+
     // MARK: - Disk transfer
 
     /// Pixels of a layer for saving. Nil for a layer that was never drawn on (omitted from the package).

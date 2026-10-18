@@ -40,6 +40,11 @@ final class EditorState: ObservableObject {
     private var nextFrameNumber = 0
     private var playTask: Task<Void, Never>?
 
+    @Published private var undoStack: [Snapshot] = []
+    @Published private var redoStack: [Snapshot] = []
+    private var coalesceTag: String?
+    static let historyLimit = 50
+
     init?(device: MTLDevice, screenFormat: MTLPixelFormat) {
         let project = Self.defaultProject()
         guard let renderer = CanvasRenderer(
@@ -179,8 +184,11 @@ final class EditorState: ObservableObject {
             store.load(image, clip: key.clip, frame: key.frame, layer: key.layer)
         }
         nextFrameNumber = (project.clips.flatMap(\.frames).compactMap { Int($0.id) }.max() ?? -1) + 1
-        if frames.isEmpty { addFrame() }
+        if frames.isEmpty { insertBlankFrame() }
         for f in frames { refreshThumbnail(for: f.id) }
+        undoStack = []
+        redoStack = []
+        coalesceTag = nil
     }
 
     // MARK: - Clips
@@ -204,18 +212,20 @@ final class EditorState: ObservableObject {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         stop()
+        recordUndo()
         var c = Clip(id: Self.clipID(for: trimmed, existing: project.clips.map(\.id)), name: trimmed)
         c.layers = clip.layers
         c.fps = clip.fps
         project.clips.append(c)
         selectClip(project.clips.count - 1)
-        addFrame()
+        insertBlankFrame()
     }
 
     /// Keeps the id (it's the folder name on disk); only the display name changes.
     func renameClip(_ name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed != clip.name else { return }
+        recordUndo()
         clip.name = trimmed
         isDirty = true
     }
@@ -224,6 +234,7 @@ final class EditorState: ObservableObject {
         guard project.clips.count > 1 else { return }
         stop()
         let doomed = clip
+        recordUndo(textures: doomed.frames.flatMap { layerKeys(doomed, frame: $0.id) })
         for f in doomed.frames {
             store.remove(clip: doomed.id, frame: f.id, layers: doomed.layers.map(\.id))
             thumbnails.removeValue(forKey: f.id)
@@ -246,11 +257,13 @@ final class EditorState: ObservableObject {
     func setPivot(_ p: Pivot) {
         let clamped = Pivot(x: min(max(p.x, 0), 1), y: min(max(p.y, 0), 1))
         guard clamped != clip.pivot else { return }
+        recordUndo(coalescing: "pivot:\(clip.id)")
         clip.pivot = clamped
         isDirty = true
     }
 
     func toggleLoop() {
+        recordUndo()
         clip.loop.toggle()
         isDirty = true
     }
@@ -259,6 +272,7 @@ final class EditorState: ObservableObject {
     func setClipFPS(_ fps: Int?) {
         let v = fps.map { min(max($0, 1), 60) }
         guard v != clip.fps else { return }
+        recordUndo(coalescing: "fps:\(clip.id)")
         clip.fps = v
         isDirty = true
     }
@@ -319,6 +333,11 @@ final class EditorState: ObservableObject {
     }
 
     func addFrame() {
+        recordUndo()
+        insertBlankFrame()
+    }
+
+    private func insertBlankFrame() {
         let f = Frame(id: newFrameID(), hold: 1)
         let at = frames.isEmpty ? 0 : frameIndex + 1
         clip.frames.insert(f, at: at)
@@ -329,6 +348,7 @@ final class EditorState: ObservableObject {
     func duplicateFrame() {
         guard let src = currentFrame else { return }
         let f = Frame(id: newFrameID(), hold: src.hold)
+        recordUndo(textures: layerKeys(clip, frame: f.id))
         clip.frames.insert(f, at: frameIndex + 1)
         store.duplicate(clip: clip.id, from: src.id, to: f.id, layers: layers.map(\.id))
         frameIndex += 1
@@ -338,6 +358,7 @@ final class EditorState: ObservableObject {
 
     func deleteFrame() {
         guard frames.count > 1, let f = currentFrame else { return }
+        recordUndo(textures: layerKeys(clip, frame: f.id))
         clip.frames.remove(at: frameIndex)
         store.remove(clip: clip.id, frame: f.id, layers: layers.map(\.id))
         thumbnails.removeValue(forKey: f.id)
@@ -348,6 +369,7 @@ final class EditorState: ObservableObject {
     func moveFrame(by offset: Int) {
         let to = frameIndex + offset
         guard frames.indices.contains(to) else { return }
+        recordUndo()
         clip.frames.swapAt(frameIndex, to)
         frameIndex = to
         isDirty = true
@@ -358,6 +380,7 @@ final class EditorState: ObservableObject {
         guard let from = frames.firstIndex(where: { $0.id == id }) else { return }
         let to = min(max(index, 0), frames.count - 1)
         guard from != to else { return }
+        recordUndo(coalescing: "move:\(id)")
         let selectedID = currentFrame?.id
         clip.frames.insert(clip.frames.remove(at: from), at: to)
         if let selectedID, let i = frames.firstIndex(where: { $0.id == selectedID }) {
@@ -367,13 +390,15 @@ final class EditorState: ObservableObject {
     }
 
     func setHold(_ hold: Int) {
-        guard currentFrame != nil else { return }
+        guard let f = currentFrame, max(1, hold) != f.hold else { return }
+        recordUndo(coalescing: "hold:\(f.id)")
         clip.frames[frameIndex].hold = max(1, hold)
         isDirty = true
     }
 
     func clearCurrentLayer() {
         guard let f = currentFrame, let l = currentLayer else { return }
+        recordUndo(textures: [LayerKey(clip: clip.id, frame: f.id, layer: l.id)], copyPixels: true)
         store.clear(clip: clip.id, frame: f.id, layer: l.id)
         isDirty = true
         refreshThumbnail(for: f.id)
@@ -383,6 +408,7 @@ final class EditorState: ObservableObject {
 
     func toggleLayerVisibility(_ index: Int) {
         guard layers.indices.contains(index) else { return }
+        recordUndo()
         clip.layers[index].visible.toggle()
         isDirty = true
     }
@@ -480,8 +506,87 @@ final class EditorState: ObservableObject {
         }
     }
 
+    /// Records the layer's pixels for undo and returns the texture to paint into, or nil if painting isn't allowed.
+    func beginStroke() -> MTLTexture? {
+        guard let f = currentFrame, let l = currentLayer, !l.locked else { return nil }
+        recordUndo(textures: [LayerKey(clip: clip.id, frame: f.id, layer: l.id)], copyPixels: true)
+        return paintTarget
+    }
+
     func strokeEnded() {
         isDirty = true
         if let f = currentFrame { refreshThumbnail(for: f.id) }
+    }
+
+    // MARK: - Undo / redo
+
+    /// The model, the selection, and the layer textures one edit touched, as they were before (or after) it.
+    /// A nil texture means the layer had none (blank). Textures are swapped, not copied, on undo/redo.
+    private struct Snapshot {
+        var project: Project
+        var clipIndex: Int
+        var frameIndex: Int
+        var layerIndex: Int
+        var textures: [LayerKey: MTLTexture?]
+    }
+
+    var canUndo: Bool { !undoStack.isEmpty }
+    var canRedo: Bool { !redoStack.isEmpty }
+
+    private func layerKeys(_ clip: Clip, frame: String) -> [LayerKey] {
+        clip.layers.map { LayerKey(clip: clip.id, frame: frame, layer: $0.id) }
+    }
+
+    private func snapshot(_ textures: [LayerKey: MTLTexture?]) -> Snapshot {
+        Snapshot(project: project, clipIndex: clipIndex, frameIndex: frameIndex,
+                 layerIndex: layerIndex, textures: textures)
+    }
+
+    /// Call right before an edit. `textures` are the layers the edit creates, removes or paints into;
+    /// `copyPixels` when it changes them in place (strokes, clear). Edits sharing a `coalescing` tag
+    /// in a row (a drag, a stepper) become one undo step.
+    private func recordUndo(textures keys: [LayerKey] = [], copyPixels: Bool = false, coalescing tag: String? = nil) {
+        if let tag, tag == coalesceTag, !undoStack.isEmpty { return }
+        coalesceTag = tag
+        var saved: [LayerKey: MTLTexture?] = [:]
+        for k in keys { saved.updateValue(copyPixels ? store.copy(of: k) : store.raw(k), forKey: k) }
+        undoStack.append(snapshot(saved))
+        if undoStack.count > Self.historyLimit { undoStack.removeFirst() }
+        redoStack.removeAll()
+    }
+
+    /// Ends a coalesced run early, so the next drag of the same thing is its own undo step.
+    func endCoalescing() {
+        coalesceTag = nil
+    }
+
+    func undo() {
+        guard let s = undoStack.popLast() else { return }
+        redoStack.append(snapshot(currentTextures(s)))
+        apply(s)
+    }
+
+    func redo() {
+        guard let s = redoStack.popLast() else { return }
+        undoStack.append(snapshot(currentTextures(s)))
+        apply(s)
+    }
+
+    private func currentTextures(_ s: Snapshot) -> [LayerKey: MTLTexture?] {
+        var out: [LayerKey: MTLTexture?] = [:]
+        for k in s.textures.keys { out.updateValue(store.raw(k), forKey: k) }
+        return out
+    }
+
+    private func apply(_ s: Snapshot) {
+        stop()
+        coalesceTag = nil
+        project = s.project
+        clipIndex = min(s.clipIndex, project.clips.count - 1)
+        frameIndex = min(s.frameIndex, max(0, frames.count - 1))
+        layerIndex = min(s.layerIndex, max(0, layers.count - 1))
+        for (k, t) in s.textures { store.set(t, for: k) }
+        isDirty = true
+        for f in frames { refreshThumbnail(for: f.id) }
     }
 }

@@ -21,7 +21,7 @@ The v0.1 UI grew one control per feature. This pass makes it a tool you can work
 - [ ] Layers panel (add / delete / rename / reorder / opacity) instead of ad-hoc controls
 - [ ] Tool panel: brush size, colour, eraser
 - [ ] Gestures: two-finger tap undo, three-finger redo, pinch zoom / pan / rotate
-- [ ] Undo / redo stack
+- [x] Undo / redo stack (50 steps; strokes, clear, frames, clips, layer visibility, clip settings; ⌘Z / ⇧⌘Z)
 - [ ] Keyboard shortcuts for hardware keyboards
 - [ ] Consistent iconography and layout pass (portrait and landscape)
 
