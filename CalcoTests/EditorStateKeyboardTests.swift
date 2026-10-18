@@ -6,6 +6,12 @@ import Metal
 @MainActor
 final class EditorStateKeyboardTests: XCTestCase {
 
+    // Default layer names are localized; the host app may have been left in Spanish.
+    override func setUp() {
+        super.setUp()
+        AppLanguage.apply(.english, save: false)
+    }
+
     private func makeState() throws -> EditorState {
         guard let device = MTLCreateSystemDefaultDevice(),
               let state = EditorState(device: device, screenFormat: .bgra8Unorm) else {

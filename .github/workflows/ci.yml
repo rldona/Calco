@@ -29,6 +29,7 @@ jobs:
       - name: Test
         run: |
           set -o pipefail
+          mkdir -p build
           SIM="$(scripts/ci/pick-simulator.sh)"
           echo "Testing on $(xcrun simctl list devices | grep "$SIM")"
           xcodebuild test \

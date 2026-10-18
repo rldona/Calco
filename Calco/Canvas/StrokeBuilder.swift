@@ -19,6 +19,15 @@ struct StrokeBuilder {
     /// wobble. `finish()` draws the rest of the way to where the pen lifted.
     var smoothing: Float = 0
 
+    // Spelled out: with private state the synthesized initializer isn't visible outside this file
+    // on every compiler (Xcode 26 hides it from the tests).
+    init(baseRadius: Float = 6, minRadiusFactor: Float = 0.15, spacing: Float = 0.25, smoothing: Float = 0) {
+        self.baseRadius = baseRadius
+        self.minRadiusFactor = minRadiusFactor
+        self.spacing = spacing
+        self.smoothing = smoothing
+    }
+
     private var last: Sample?
     private var leftover: Float = 0
     /// Last raw input, so `finish()` can close the gap the stabiliser leaves.
