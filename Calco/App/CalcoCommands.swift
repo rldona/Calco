@@ -26,6 +26,15 @@ struct CalcoCommands: Commands {
         }
 
         // Edit
+        CommandGroup(replacing: .appSettings) {
+            Button("Preferences…") { state.showingPreferences = true }.keyboardShortcut(",")
+        }
+        CommandGroup(replacing: .pasteboard) {
+            Button("Cut") { state.cutSelection() }.keyboardShortcut("x").disabled(state.isInGallery)
+            Button("Copy") { state.copySelection() }.keyboardShortcut("c").disabled(state.isInGallery)
+            Button("Paste") { state.paste() }.keyboardShortcut("v").disabled(state.isInGallery || state.clipboard == nil)
+            Button("Select All") { state.selectAll() }.keyboardShortcut("a").disabled(state.isInGallery)
+        }
         CommandGroup(replacing: .undoRedo) {
             Button("Undo") { state.undo() }.keyboardShortcut("z").disabled(!state.canUndo)
             Button("Redo") { state.redo() }.keyboardShortcut("z", modifiers: [.command, .shift]).disabled(!state.canRedo)
@@ -52,7 +61,9 @@ struct CalcoCommands: Commands {
             Divider()
             Button("Zoom In") { state.canvasTransform.zoom(by: 1.25) }.keyboardShortcut("=")
             Button("Zoom Out") { state.canvasTransform.zoom(by: 0.8) }.keyboardShortcut("-")
-            Button("Fit Canvas") { state.canvasTransform = .identity }.keyboardShortcut("0")
+            Button("Fit Canvas") { state.fitCanvas() }.keyboardShortcut("0")
+            Button(state.canvasTransform.flipped ? "Unflip View" : "Flip View") { state.canvasTransform.flipped.toggle() }
+                .keyboardShortcut("h", modifiers: [])
             Button(state.isZen ? "Leave Zen Mode" : "Zen Mode") { state.isZen.toggle() }
                 .keyboardShortcut("f", modifiers: [.command, .control])
             Divider()
@@ -67,10 +78,12 @@ struct CalcoCommands: Commands {
             Button("Previous Frame") { state.stepFrame(-1) }.keyboardShortcut(.leftArrow, modifiers: [])
             Button("Next Frame") { state.stepFrame(1) }.keyboardShortcut(.rightArrow, modifiers: [])
             Divider()
-            Button("New Frame") { state.addFrame() }.keyboardShortcut("n", modifiers: [.option])
-            Button("Duplicate Frame") { state.duplicateFrame() }.keyboardShortcut("d")
-            Button("Delete Frame") { state.deleteFrame() }.keyboardShortcut(.delete)
-                .disabled(state.frames.count <= 1)
+            // Same as the bar: the current layer's drawing, or whole frames with Sync Layers on.
+            Button(state.syncLayers ? "New Frame" : "New Drawing") { state.addDrawing() }.keyboardShortcut("n", modifiers: [.option])
+            Button(state.syncLayers ? "Duplicate Frame" : "Duplicate Drawing") { state.duplicateDrawing() }.keyboardShortcut("d")
+            Button(state.syncLayers ? "Delete Frame" : "Delete Drawing") { state.deleteDrawing() }.keyboardShortcut(.delete)
+                .disabled(state.syncLayers && state.frames.count <= 1)
+            Toggle("Sync Layers", isOn: $state.syncLayers)
             Divider()
             Button("Move Frame Earlier") { state.moveFrame(by: -1) }.keyboardShortcut(.leftArrow, modifiers: [.option])
             Button("Move Frame Later") { state.moveFrame(by: 1) }.keyboardShortcut(.rightArrow, modifiers: [.option])

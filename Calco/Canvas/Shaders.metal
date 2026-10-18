@@ -15,7 +15,17 @@ struct Stamp {
 struct StampUniforms {
     float2 canvasSize; // pixels
     float4 color;      // straight alpha
+    float  hard;       // 1 = pixel art: a pixel is fully in or out, no antialiased edge
 };
+
+// How much of the disc covers this fragment: a soft edge one pixel wide, or (pixel art) all or nothing
+// by the pixel centre, so a one-pixel brush paints exactly one pixel.
+static float stampCoverage(float2 local, float hard) {
+    float d = length(local);
+    if (hard > 0.5) return d <= 1.0 ? 1.0 : 0.0;
+    float edge = fwidth(d) * 1.5;
+    return 1.0 - smoothstep(1.0 - edge, 1.0, d);
+}
 
 struct StampVertexOut {
     float4 position [[position]];
@@ -50,21 +60,18 @@ vertex StampVertexOut stamp_vertex(uint vid [[vertex_id]],
 fragment float4 stamp_fragment(StampVertexOut in [[stage_in]],
                                constant StampUniforms &u [[buffer(1)]])
 {
-    float d = length(in.local);
-    float edge = fwidth(d) * 1.5;
-    float coverage = 1.0 - smoothstep(1.0 - edge, 1.0, d);
-    float a = coverage * in.alpha * u.color.a;
+    float coverage = stampCoverage(in.local, u.hard);
+    float a = coverage * (u.hard > 0.5 ? 1.0 : in.alpha) * u.color.a;
     return float4(u.color.rgb * a, a);
 }
 
 // Eraser: outputs coverage in alpha, pipeline blends (zero, oneMinusSrcAlpha)
 // so destination is multiplied by (1 - coverage).
-fragment float4 eraser_fragment(StampVertexOut in [[stage_in]])
+fragment float4 eraser_fragment(StampVertexOut in [[stage_in]],
+                                constant StampUniforms &u [[buffer(1)]])
 {
-    float d = length(in.local);
-    float edge = fwidth(d) * 1.5;
-    float coverage = 1.0 - smoothstep(1.0 - edge, 1.0, d);
-    return float4(0, 0, 0, coverage * in.alpha);
+    float coverage = stampCoverage(in.local, u.hard);
+    return float4(0, 0, 0, coverage * (u.hard > 0.5 ? 1.0 : in.alpha));
 }
 
 // ---------------------------------------------------------------------------
@@ -81,6 +88,7 @@ struct CompositeUniforms {
     float  opacity;
     float  tintAmount;  // 0 = original colors, 1 = fully tinted (onion skin)
     float2 canvasSize;  // for checkerboard cell size
+    float  useMask;     // 1 = only where `mask` has paint (layer masked to the one below)
 };
 
 struct CompositeVertexOut {
@@ -105,7 +113,8 @@ vertex CompositeVertexOut composite_vertex(uint vid [[vertex_id]],
 
 fragment float4 composite_fragment(CompositeVertexOut in [[stage_in]],
                                    constant CompositeUniforms &u [[buffer(0)]],
-                                   texture2d<float> layer [[texture(0)]])
+                                   texture2d<float> layer [[texture(0)]],
+                                   texture2d<float> mask [[texture(1)]])
 {
     // Magnified (the usual case on screen) shows the sprite's real pixels, like any sprite
     // editor: blending them on the way up is what made strokes look blurry. Shrunk (thumbnails,
@@ -114,6 +123,7 @@ fragment float4 composite_fragment(CompositeVertexOut in [[stage_in]],
     float4 c = layer.sample(s, in.uv);          // premultiplied
     float3 tinted = u.tint.rgb * c.a;           // tint keeps coverage
     c.rgb = mix(c.rgb, tinted, u.tintAmount);
+    if (u.useMask > 0.5) c *= mask.sample(s, in.uv).a;
     return c * u.opacity;
 }
 

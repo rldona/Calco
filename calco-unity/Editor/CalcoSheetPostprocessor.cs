@@ -24,6 +24,7 @@ namespace Calco
         {
             importer.textureType = TextureImporterType.Sprite;
             importer.spriteImportMode = SpriteImportMode.Multiple;
+            if (sheet.meta.pixelsPerUnit > 0) importer.spritePixelsPerUnit = sheet.meta.pixelsPerUnit;
             if (importer.mipmapEnabled) importer.mipmapEnabled = false;
 
             int texHeight = sheet.meta.size != null && sheet.meta.size.h > 0 ? sheet.meta.size.h : TextureHeight(importer);

@@ -9,6 +9,9 @@ struct CanvasTransform: Equatable {
     var scale: CGFloat = 1
     var rotation: CGFloat = 0
     var offset: CGSize = .zero
+    /// Mirrored left to right on screen only (the drawing isn't touched), to catch mistakes with
+    /// fresh eyes. Survives fitting the canvas.
+    var flipped = false
 
     static let identity = CanvasTransform()
     static let scaleRange: ClosedRange<CGFloat> = 0.25...16
@@ -18,7 +21,7 @@ struct CanvasTransform: Equatable {
         let fit = CanvasRenderer.fitRect(canvas: canvas, in: viewSize)
         let base = fit.width / CGFloat(canvas.x)
         return CGAffineTransform(translationX: -CGFloat(canvas.x) / 2, y: -CGFloat(canvas.y) / 2)
-            .concatenating(CGAffineTransform(scaleX: base * scale, y: base * scale))
+            .concatenating(CGAffineTransform(scaleX: (flipped ? -1 : 1) * base * scale, y: base * scale))
             .concatenating(CGAffineTransform(rotationAngle: rotation))
             .concatenating(CGAffineTransform(translationX: fit.midX + offset.width * unitsPerPoint,
                                              y: fit.midY + offset.height * unitsPerPoint))
@@ -58,6 +61,9 @@ struct CanvasTransform: Equatable {
         offset = CGSize(width: offset.width * f, height: offset.height * f)
         scale = newScale
     }
+
+    /// Fitted and upright, whether or not it's mirrored.
+    var isFit: Bool { scale == 1 && rotation == 0 && offset == .zero }
 
     mutating func pan(by delta: CGSize) {
         offset.width += delta.width

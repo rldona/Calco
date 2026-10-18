@@ -98,6 +98,9 @@ struct GalleryView: View {
                 .accessibilityHidden(true)
             Text("Calco").font(.title2.weight(.semibold)).foregroundStyle(Theme.text)
             Spacer()
+            Button { state.showingPreferences = true } label: { Label("Preferences", systemImage: "gearshape") }
+                .labelStyle(.iconOnly)
+                .foregroundStyle(Theme.textDim)
             Button { showingImport = true } label: { Label("Open from Files", systemImage: "folder") }
                 .foregroundStyle(Theme.textDim)
             Button { showingNew = true } label: {
@@ -242,7 +245,8 @@ private struct ProjectCard: View {
     static func summary(_ entry: ProjectLibrary.Entry) -> String {
         let clips = entry.project.clips.count
         let c = entry.project.canvas
-        return "\(clips) \(clips == 1 ? "clip" : "clips") · \(c.width)×\(c.height) · \(entry.project.fps) fps"
+        let count = clips == 1 ? String(localized: "1 clip", bundle: AppLanguage.bundle) : String(localized: "\(clips) clips", bundle: AppLanguage.bundle)
+        return "\(count) · \(c.width)×\(c.height) · \(entry.project.fps) fps"
     }
 
     var body: some View {
@@ -251,7 +255,7 @@ private struct ProjectCard: View {
                 AnimatedPreview(preview: preview).aspectRatio(1, contentMode: .fit)
                 Text(entry.name).font(.callout.weight(.medium)).foregroundStyle(Theme.text).lineLimit(1)
                 HStack(spacing: 4) {
-                    Text("\(entry.project.clips.count) \(entry.project.clips.count == 1 ? "clip" : "clips") ·")
+                    Text(entry.project.clips.count == 1 ? "1 clip ·" : "\(entry.project.clips.count) clips ·")
                     Text(entry.modified, format: .relative(presentation: .named))
                 }
                 .font(.caption).foregroundStyle(Theme.textFaint).lineLimit(1)

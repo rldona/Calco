@@ -30,6 +30,10 @@ struct SpriteSheet {
         var powerOfTwo = false
         /// Clip ids to include, in project order. Nil = every clip.
         var clips: [String]? = nil
+        /// Write each frame's drawing labels (Calco extension `frames[].label`), for animation events.
+        var labels = false
+        /// Calco extension `meta.pixelsPerUnit`, read by calco-unity.
+        var pixelsPerUnit: Int? = nil
     }
 
     /// Default gap, in pixels, between cells and around the sheet's edge.
@@ -40,6 +44,8 @@ struct SpriteSheet {
     var padding: Int
     var scale: Double = 1
     var trimmed = false
+    var labels = false
+    var pixelsPerUnit: Int?
     var size: CGSize
     var cells: [Cell]
     var image: CGImage?
@@ -93,7 +99,8 @@ struct SpriteSheet {
         }
 
         var sheet = SpriteSheet(canvas: project.canvas, columns: columns, padding: pad, scale: scale,
-                                trimmed: options.trim, size: size, cells: cells, image: nil)
+                                trimmed: options.trim, labels: options.labels, pixelsPerUnit: options.pixelsPerUnit,
+                                size: size, cells: cells, image: nil)
         sheet.image = sheet.render(images)
         return sheet
     }
@@ -152,6 +159,8 @@ struct SpriteSheet {
             var spriteSourceSize: Rect
             var sourceSize: Size
             var duration: Int
+            /// Calco extension: labels of the drawings that start on this frame, comma-separated.
+            var label: String? = nil
         }
         struct Tag: Encodable {
             var name: String
@@ -180,6 +189,8 @@ struct SpriteSheet {
             var scale = "1"
             var frameTags: [Tag]
             var slices: [Slice]
+            /// Calco extension for calco-unity.
+            var pixelsPerUnit: Int? = nil
         }
         var frames: [FrameEntry]
         var meta: Meta
@@ -205,7 +216,8 @@ struct SpriteSheet {
                     trimmed: trimmed,
                     spriteSourceSize: .init(x: s(cell.source.minX), y: s(cell.source.minY), w: fw, h: fh),
                     sourceSize: .init(w: w, h: h),
-                    duration: cell.durationMs))
+                    duration: cell.durationMs,
+                    label: labels ? Self.label(of: cell) : nil))
                 index += 1
             }
             tags.append(.init(name: clip.id, from: from, to: index - 1, loop: clip.loop))
@@ -219,7 +231,18 @@ struct SpriteSheet {
         return Aseprite(frames: frames,
                         meta: .init(image: imageName, size: .init(w: Int(size.width), h: Int(size.height)),
                                     scale: scale == scale.rounded() ? "\(Int(scale))" : "\(scale)",
-                                    frameTags: tags, slices: slices))
+                                    frameTags: tags, slices: slices, pixelsPerUnit: pixelsPerUnit))
+    }
+
+    /// Labels of the drawings that start on a frame (held drawings were labelled where they start),
+    /// in layer order. Nil when there are none.
+    static func label(of cell: Cell) -> String? {
+        // A linked repeat (a cycle) carries its original's label, so a footstep event fires every loop.
+        let names = cell.clip.layers.compactMap { layer in
+            cell.frame.labels[layer.id]
+                ?? cell.frame.links[layer.id].flatMap { id in cell.clip.frames.first { $0.id == id }?.labels[layer.id] }
+        }
+        return names.isEmpty ? nil : names.joined(separator: ",")
     }
 
     /// Clips in the order their cells appear, which is project order.
@@ -241,19 +264,25 @@ struct SpriteSheet {
         }
     }
 
-    /// Writes `<baseName>.png` and `<baseName>.json` into `folder`, returning both URLs (PNG first).
+    /// Writes `<baseName>.png` into `folder`.
     @discardableResult
-    func write(to folder: URL, baseName: String) throws -> [URL] {
+    func writePNG(to folder: URL, baseName: String) throws -> URL {
         guard let image else { throw Error.noImage }
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let png = folder.appendingPathComponent("\(baseName).png")
-        let json = folder.appendingPathComponent("\(baseName).json")
-
         guard let dest = CGImageDestinationCreateWithURL(png as CFURL, UTType.png.identifier as CFString, 1, nil) else {
             throw Error.pngEncodingFailed
         }
         CGImageDestinationAddImage(dest, image, nil)
         guard CGImageDestinationFinalize(dest) else { throw Error.pngEncodingFailed }
+        return png
+    }
+
+    /// Writes `<baseName>.png` and `<baseName>.json` into `folder`, returning both URLs (PNG first).
+    @discardableResult
+    func write(to folder: URL, baseName: String) throws -> [URL] {
+        let png = try writePNG(to: folder, baseName: baseName)
+        let json = folder.appendingPathComponent("\(baseName).json")
 
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

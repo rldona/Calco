@@ -10,15 +10,21 @@ struct ExportProfile: Codable, Equatable, Identifiable {
         case gif
         /// One PNG per tick of each clip, holds expanded, for engines that play image sequences.
         case pngSequence
+        /// The sprite sheet PNG plus a Godot 4 SpriteFrames resource (.tres): one animation per clip.
+        case godot
 
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .spriteSheet: "Sprite sheet + JSON"
-            case .gif: "GIF"
-            case .pngSequence: "PNG sequence"
+            case .spriteSheet: String(localized: "Sprite sheet + JSON", bundle: AppLanguage.bundle)
+            case .gif: String(localized: "GIF", bundle: AppLanguage.bundle)
+            case .pngSequence: String(localized: "PNG sequence", bundle: AppLanguage.bundle)
+            case .godot: String(localized: "Godot SpriteFrames", bundle: AppLanguage.bundle)
             }
         }
+
+        /// Targets that pack a sheet (scale, trim, padding, power of two all apply).
+        var isSheet: Bool { self == .spriteSheet || self == .godot }
     }
 
     var id = UUID()
@@ -31,20 +37,54 @@ struct ExportProfile: Codable, Equatable, Identifiable {
     var trim = false
     var padding = SpriteSheet.defaultPadding
     var powerOfTwo = false
+    /// Sprite sheet only: tells calco-unity the texture's pixels per unit. Nil leaves Unity's setting alone.
+    var pixelsPerUnit: Int? = nil
+    /// Sprite sheet only: drawing labels become Unity animation events (`OnCalcoLabel(string)`).
+    var labelEvents = false
 
     static let scales: [Double] = [0.5, 1, 2, 4]
 
     var sheetOptions: SpriteSheet.Options {
-        SpriteSheet.Options(padding: padding, scale: scale, trim: trim, powerOfTwo: powerOfTwo, clips: clips)
+        SpriteSheet.Options(padding: padding, scale: scale, trim: trim, powerOfTwo: powerOfTwo, clips: clips,
+                            labels: labelEvents, pixelsPerUnit: pixelsPerUnit)
+    }
+
+    init(id: UUID = UUID(), name: String, target: Target = .spriteSheet, clips: [String]? = nil, scale: Double = 1,
+         trim: Bool = false, padding: Int = SpriteSheet.defaultPadding, powerOfTwo: Bool = false,
+         pixelsPerUnit: Int? = nil, labelEvents: Bool = false) {
+        self.id = id; self.name = name; self.target = target; self.clips = clips; self.scale = scale
+        self.trim = trim; self.padding = padding; self.powerOfTwo = powerOfTwo
+        self.pixelsPerUnit = pixelsPerUnit; self.labelEvents = labelEvents
+    }
+
+    // Lenient decoding: profiles saved by an older Calco miss newer fields and keep their defaults.
+    private enum CodingKeys: String, CodingKey {
+        case id, name, target, clips, scale, trim, padding, powerOfTwo, pixelsPerUnit, labelEvents
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        target = (try? c.decode(Target.self, forKey: .target)) ?? .spriteSheet
+        clips = try c.decodeIfPresent([String].self, forKey: .clips)
+        scale = try c.decodeIfPresent(Double.self, forKey: .scale) ?? 1
+        trim = try c.decodeIfPresent(Bool.self, forKey: .trim) ?? false
+        padding = try c.decodeIfPresent(Int.self, forKey: .padding) ?? SpriteSheet.defaultPadding
+        powerOfTwo = try c.decodeIfPresent(Bool.self, forKey: .powerOfTwo) ?? false
+        pixelsPerUnit = try c.decodeIfPresent(Int.self, forKey: .pixelsPerUnit)
+        labelEvents = try c.decodeIfPresent(Bool.self, forKey: .labelEvents) ?? false
     }
 
     /// One line for lists: "Sprite sheet · 2× · trimmed".
     var summary: String {
         var parts = [target.title]
         if scale != 1 { parts.append(scale < 1 ? "½×" : "\(Int(scale))×") }
-        if target == .spriteSheet && trim { parts.append("trimmed") }
-        if target == .spriteSheet && powerOfTwo { parts.append("power of two") }
-        if let clips { parts.append(clips.count == 1 ? "1 clip" : "\(clips.count) clips") }
+        if target.isSheet && trim { parts.append(String(localized: "trimmed", bundle: AppLanguage.bundle)) }
+        if target.isSheet && powerOfTwo { parts.append(String(localized: "power of two", bundle: AppLanguage.bundle)) }
+        if target == .spriteSheet, let ppu = pixelsPerUnit { parts.append(String(localized: "\(ppu) PPU", bundle: AppLanguage.bundle)) }
+        if target == .spriteSheet && labelEvents { parts.append(String(localized: "events", bundle: AppLanguage.bundle)) }
+        if let clips { parts.append(clips.count == 1 ? String(localized: "1 clip", bundle: AppLanguage.bundle) : String(localized: "\(clips.count) clips", bundle: AppLanguage.bundle)) }
         return parts.joined(separator: " · ")
     }
 
@@ -59,6 +99,8 @@ struct ExportProfile: Codable, Equatable, Identifiable {
                       target: .gif),
         ExportProfile(id: UUID(uuidString: "00000000-0000-0000-0000-00000000C005")!, name: "PNG frames",
                       target: .pngSequence),
+        ExportProfile(id: UUID(uuidString: "00000000-0000-0000-0000-00000000C006")!, name: "Godot",
+                      target: .godot),
     ]
 }
 

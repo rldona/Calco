@@ -51,7 +51,7 @@ enum ProjectDocument {
     static func layerKeys(of project: Project) -> [LayerKey] {
         project.clips.flatMap { clip in
             clip.frames.indices.flatMap { i in
-                clip.layers.filter { !clip.isHeld(layer: $0.id, at: i) }
+                clip.layers.filter { !clip.isHeld(layer: $0.id, at: i) && clip.frames[i].links[$0.id] == nil }
                     .map { LayerKey(clip: clip.id, frame: clip.frames[i].id, layer: $0.id) }
             }
         }

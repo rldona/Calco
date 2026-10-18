@@ -33,7 +33,7 @@ Hero.calco/
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "name": "Hero",
   "canvas": { "width": 512, "height": 512 },
   "fps": 12,
@@ -70,11 +70,14 @@ Hero.calco/
 | `fps` | Project default. A clip may override it. |
 | `clips[].pivot` | Normalized `0..1`, origin bottom-left (Unity convention). `{0.5, 0}` = bottom center. |
 | `clips[].layers` | Ordered bottom to top. Layer `id` is the PNG basename inside each frame folder. |
+| `clips[].layers[].maskBelow` | Optional, default `false`. The layer only shows where the nearest unmasked layer below it has paint (a clipping mask); exports flatten it that way. |
 | `clips[].frames[].id` | Frame folder name. Order in the array is playback order. |
 | `clips[].frames[].hold` | How many ticks at the clip's fps this frame stays on screen. Default `1`. |
 | `clips[].frames[].labels` | Optional (format 2). Names for this frame's own drawings, by layer id, e.g. `{"line": "contact"}`. |
 | `clips[].frames[].held` | Optional (format 2). Layer ids that keep showing the previous frame's drawing here, like a hold on an exposure sheet; those layers have no PNG in this frame's folder. Ignored on a clip's first frame. |
+| `clips[].frames[].links` | Optional (format 3). Layer id → frame id: that layer shows the other frame's drawing here, linked, as in a cycle (editing one edits all). No PNG in this frame's folder for those layers. A link to a frame that doesn't exist shows nothing. |
 | `references` | Optional guide images drawn under everything, never exported. |
+| `pixelArt` | Optional, default `false`. When `true` the editor draws, erases, fills and moves selections with hard edges (no antialiasing). Doesn't change how the file is read. |
 
 ## Export: sprite sheet
 

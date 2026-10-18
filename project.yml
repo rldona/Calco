@@ -1,6 +1,7 @@
 name: Calco
 options:
   bundleIdPrefix: dev.plazoleta
+  developmentLanguage: en
   deploymentTarget:
     iOS: "17.0"
   xcodeVersion: "26.0"
@@ -16,6 +17,8 @@ targets:
     info:
       path: Calco/Info.plist
       properties:
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [en, es]
         UILaunchScreen: {}
         UISupportedInterfaceOrientations~ipad:
           - UIInterfaceOrientationPortrait

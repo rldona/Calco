@@ -6,11 +6,20 @@ struct CalcoApp: App {
     @StateObject private var state = EditorState.make()
     @Environment(\.scenePhase) private var scenePhase
 
+    init() {
+        // Before any text is drawn: English by default, whatever the iPad's language.
+        AppLanguage.apply(AppLanguage.saved, save: false)
+    }
+
     var body: some Scene {
         WindowGroup {
             Group {
                 if state.isInGallery { GalleryView(state: state) } else { ContentView(state: state) }
             }
+            // A new language redraws every view in it.
+            .id(state.language)
+            .sheet(isPresented: $state.showingPreferences) { PreferencesView(state: state) }
+            .environment(\.locale, state.language.locale)
             // Tapping a .calco package in Files.
             .onOpenURL { url in state.open(url) }
         }

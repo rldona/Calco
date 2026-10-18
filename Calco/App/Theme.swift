@@ -33,7 +33,7 @@ extension View {
 /// Square icon button for the rail and bars. `active` paints it with the accent.
 struct RailButton: View {
     let icon: String
-    let label: String
+    let label: LocalizedStringKey
     var active = false
     var size: CGFloat = 36
     let action: () -> Void

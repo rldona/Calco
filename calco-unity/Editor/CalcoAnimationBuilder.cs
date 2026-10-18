@@ -42,16 +42,23 @@ namespace Calco
             AssetDatabase.SaveAssets();
         }
 
+        /// <summary>Method an animation event calls for a drawing label: <c>void OnCalcoLabel(string label)</c>.</summary>
+        public const string EventFunction = "OnCalcoLabel";
+
         static AnimationClip BuildClip(CalcoSheet sheet, CalcoSheet.Tag tag, string sheetName,
                                        Dictionary<string, Sprite> byName, string path)
         {
             var keys = new List<ObjectReferenceKeyframe>();
+            var events = new List<AnimationEvent>();
             float time = 0f;
             Sprite last = null;
             for (int i = tag.from; i <= tag.to && i < sheet.frames.Length; i++)
             {
                 if (!byName.TryGetValue(sheet.SpriteName(sheetName, i), out var sprite)) continue;
                 keys.Add(new ObjectReferenceKeyframe { time = time, value = sprite });
+                if (!string.IsNullOrEmpty(sheet.frames[i].label))
+                    foreach (var label in sheet.frames[i].label.Split(','))
+                        events.Add(new AnimationEvent { time = time, functionName = EventFunction, stringParameter = label.Trim() });
                 time += Mathf.Max(sheet.frames[i].duration, 1) / 1000f;
                 last = sprite;
             }
@@ -67,6 +74,9 @@ namespace Calco
             clip.frameRate = FrameRate(sheet, tag);
             var binding = EditorCurveBinding.PPtrCurve("", typeof(SpriteRenderer), "m_Sprite");
             AnimationUtility.SetObjectReferenceCurve(clip, binding, keys.ToArray());
+
+            // Always set, so removing a label in Calco removes its event on the next import.
+            AnimationUtility.SetAnimationEvents(clip, events.ToArray());
 
             var settings = AnimationUtility.GetAnimationClipSettings(clip);
             settings.loopTime = tag.loop;

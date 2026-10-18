@@ -17,6 +17,7 @@ final class CanvasRenderer {
     private struct StampUniforms {
         var canvasSize: SIMD2<Float>
         var color: SIMD4<Float>
+        var hard: Float = 0
     }
 
     /// One layer to composite, bottom to top.
@@ -25,6 +26,8 @@ final class CanvasRenderer {
         var opacity: Float = 1
         var tint: SIMD3<Float> = .zero
         var tintAmount: Float = 0
+        /// Only shows where this texture has paint: the base of a layer masked to the one below.
+        var mask: MTLTexture? = nil
     }
 
     private struct CompositeUniforms {
@@ -36,15 +39,33 @@ final class CanvasRenderer {
         var opacity: Float
         var tintAmount: Float
         var canvasSize: SIMD2<Float>
+        /// 1 = multiply by the mask texture's alpha (a layer masked to the one below).
+        var useMask: Float = 0
     }
 
     /// Fill and eyedropper never reach `paint`; they act on a tap (see CanvasUIView).
     enum Tool { case brush, eraser, fill, eyedropper, lasso }
 
+    /// Where new paint goes on the layer: over what's there, under it (colour under line art), or
+    /// only on what's already drawn, keeping its transparency (shading).
+    enum PaintMode: String, CaseIterable, Identifiable {
+        case front, behind, inside
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .front: String(localized: "In front", bundle: AppLanguage.bundle)
+            case .behind: String(localized: "Behind", bundle: AppLanguage.bundle)
+            case .inside: String(localized: "Inside", bundle: AppLanguage.bundle)
+            }
+        }
+    }
+
     let device: MTLDevice
     let canvasSize: SIMD2<Int>
     private let queue: MTLCommandQueue
     private let brushPipeline: MTLRenderPipelineState
+    private let brushBehindPipeline: MTLRenderPipelineState
+    private let brushInsidePipeline: MTLRenderPipelineState
     private let eraserPipeline: MTLRenderPipelineState
     private let screenCompositePipeline: MTLRenderPipelineState
     private let screenCheckerPipeline: MTLRenderPipelineState
@@ -76,6 +97,25 @@ final class CanvasRenderer {
         brush.fragmentFunction = lib.makeFunction(name: "stamp_fragment")
         premultipliedOver(brush, format: Self.layerFormat)
 
+        // Destination over: new paint only shows where the layer is still see-through.
+        let behind = MTLRenderPipelineDescriptor()
+        behind.vertexFunction = brush.vertexFunction
+        behind.fragmentFunction = brush.fragmentFunction
+        premultipliedOver(behind, format: Self.layerFormat)
+        behind.colorAttachments[0].sourceRGBBlendFactor = .oneMinusDestinationAlpha
+        behind.colorAttachments[0].sourceAlphaBlendFactor = .oneMinusDestinationAlpha
+        behind.colorAttachments[0].destinationRGBBlendFactor = .one
+        behind.colorAttachments[0].destinationAlphaBlendFactor = .one
+
+        // Source atop: colour lands only where there's already paint, and coverage never changes.
+        let inside = MTLRenderPipelineDescriptor()
+        inside.vertexFunction = brush.vertexFunction
+        inside.fragmentFunction = brush.fragmentFunction
+        premultipliedOver(inside, format: Self.layerFormat)
+        inside.colorAttachments[0].sourceRGBBlendFactor = .destinationAlpha
+        inside.colorAttachments[0].sourceAlphaBlendFactor = .zero
+        inside.colorAttachments[0].destinationAlphaBlendFactor = .one
+
         let eraser = MTLRenderPipelineDescriptor()
         eraser.vertexFunction = lib.makeFunction(name: "stamp_vertex")
         eraser.fragmentFunction = lib.makeFunction(name: "eraser_fragment")
@@ -93,6 +133,8 @@ final class CanvasRenderer {
 
         do {
             brushPipeline = try device.makeRenderPipelineState(descriptor: brush)
+            brushBehindPipeline = try device.makeRenderPipelineState(descriptor: behind)
+            brushInsidePipeline = try device.makeRenderPipelineState(descriptor: inside)
             eraserPipeline = try device.makeRenderPipelineState(descriptor: eraser)
             screenCompositePipeline = try device.makeRenderPipelineState(descriptor: composite("composite_fragment", format: screenFormat))
             screenCheckerPipeline = try device.makeRenderPipelineState(descriptor: composite("checker_fragment", format: screenFormat))
@@ -139,28 +181,40 @@ final class CanvasRenderer {
     // MARK: - Painting
 
     /// Paint stamps into `target` immediately (own command buffer).
-    func paint(_ stamps: [Stamp], into target: MTLTexture, color: SIMD4<Float>, tool: Tool) {
+    /// `hard` is pixel art: every stamp sits on a pixel centre and covers whole pixels only.
+    func paint(_ stamps: [Stamp], into target: MTLTexture, color: SIMD4<Float>, tool: Tool, hard: Bool = false,
+               mode: PaintMode = .front) {
         guard !stamps.isEmpty, let cmd = queue.makeCommandBuffer() else { return }
+        let stamps = hard ? stamps.map(Self.snappedToPixel) : stamps
         let count = stamps.count
         // One buffer per call: a shared, reused buffer would be overwritten by the next paint
         // before the GPU has read it, since we commit without waiting.
         guard let buffer = stamps.withUnsafeBytes({ src in
             device.makeBuffer(bytes: src.baseAddress!, length: src.count, options: .storageModeShared)
         }) else { return }
-        var uniforms = StampUniforms(canvasSize: SIMD2<Float>(Float(canvasSize.x), Float(canvasSize.y)), color: color)
+        var uniforms = StampUniforms(canvasSize: SIMD2<Float>(Float(canvasSize.x), Float(canvasSize.y)), color: color,
+                                     hard: hard ? 1 : 0)
 
         let pass = MTLRenderPassDescriptor()
         pass.colorAttachments[0].texture = target
         pass.colorAttachments[0].loadAction = .load
         pass.colorAttachments[0].storeAction = .store
         guard let enc = cmd.makeRenderCommandEncoder(descriptor: pass) else { return }
-        enc.setRenderPipelineState(tool == .eraser ? eraserPipeline : brushPipeline)
+        enc.setRenderPipelineState(tool == .eraser ? eraserPipeline
+                                   : mode == .behind ? brushBehindPipeline
+                                   : mode == .inside ? brushInsidePipeline : brushPipeline)
         enc.setVertexBuffer(buffer, offset: 0, index: 0)
         enc.setVertexBytes(&uniforms, length: MemoryLayout<StampUniforms>.stride, index: 1)
         enc.setFragmentBytes(&uniforms, length: MemoryLayout<StampUniforms>.stride, index: 1)
         enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: count)
         enc.endEncoding()
         cmd.commit()
+    }
+
+    /// A pixel-art stamp: centred on the pixel under it, and the brush size read as a width in
+    /// pixels (size 1 is one pixel, 3 a 3×3 block) instead of a radius.
+    static func snappedToPixel(_ s: Stamp) -> Stamp {
+        Stamp(position: s.position.rounded(.down) + 0.5, radius: max(0.5, s.radius / 2), alpha: 1)
     }
 
     // MARK: - Compositing
@@ -359,9 +413,11 @@ final class CanvasRenderer {
             u.opacity = layer.opacity
             u.tint = SIMD4<Float>(layer.tint, 1)
             u.tintAmount = layer.tintAmount
+            u.useMask = layer.mask == nil ? 0 : 1
             enc.setVertexBytes(&u, length: MemoryLayout<CompositeUniforms>.stride, index: 0)
             enc.setFragmentBytes(&u, length: MemoryLayout<CompositeUniforms>.stride, index: 0)
             enc.setFragmentTexture(layer.texture, index: 0)
+            enc.setFragmentTexture(layer.mask ?? layer.texture, index: 1)
             enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
         }
     }

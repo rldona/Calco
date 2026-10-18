@@ -55,8 +55,8 @@ struct FloatingSelection: Equatable {
 /// Pure CoreGraphics so it's testable without Metal.
 enum SelectionPixels {
 
-    /// Anti-aliased coverage (0–255) of a closed polygon, one byte per pixel.
-    static func rasterize(_ polygon: [CGPoint], width: Int, height: Int) -> [UInt8] {
+    /// Coverage (0–255) of a closed polygon, one byte per pixel: anti-aliased, or (`hard`) all or nothing.
+    static func rasterize(_ polygon: [CGPoint], width: Int, height: Int, hard: Bool = false) -> [UInt8] {
         var mask = [UInt8](repeating: 0, count: width * height)
         guard polygon.count >= 3 else { return mask }
         mask.withUnsafeMutableBytes { ptr in
@@ -64,6 +64,7 @@ enum SelectionPixels {
                                       bytesPerRow: width, space: CGColorSpaceCreateDeviceGray(),
                                       bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return }
             flipToCanvas(ctx, height: height)
+            ctx.setShouldAntialias(!hard)
             ctx.setFillColor(gray: 1, alpha: 1)
             ctx.addLines(between: polygon)
             ctx.closePath()
@@ -92,15 +93,18 @@ enum SelectionPixels {
         stride(from: 3, to: rgba.count, by: 4).allSatisfy { rgba[$0] == 0 }
     }
 
-    /// `rgba` drawn through a canvas-space affine transform (high-quality resampling).
-    static func render(_ rgba: [UInt8], width: Int, height: Int, transform: CGAffineTransform) -> [UInt8] {
+    /// `rgba` drawn through a canvas-space affine transform: high-quality resampling, or (`hard`)
+    /// nearest pixel, so pixel art stays crisp when moved, scaled or rotated.
+    static func render(_ rgba: [UInt8], width: Int, height: Int, transform: CGAffineTransform,
+                       hard: Bool = false) -> [UInt8] {
         var out = [UInt8](repeating: 0, count: width * height * 4)
         guard rgba.count == out.count, let image = image(rgba, width: width, height: height) else { return out }
         out.withUnsafeMutableBytes { ptr in
             guard let ctx = CGContext(data: ptr.baseAddress, width: width, height: height, bitsPerComponent: 8,
                                       bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
                                       bitmapInfo: bitmapInfo) else { return }
-            ctx.interpolationQuality = .high
+            ctx.interpolationQuality = hard ? .none : .high
+            ctx.setShouldAntialias(!hard)
             flipToCanvas(ctx, height: height)
             ctx.concatenate(transform)
             // The image's row 0 is the canvas top; undo the flip just for drawing it upright.

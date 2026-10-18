@@ -166,7 +166,7 @@ final class EditorStateExposureTests: XCTestCase {
 
         let other = try makeState()
         other.open(url)
-        XCTAssertEqual(other.project.version, 2)
+        XCTAssertEqual(other.project.version, Project.currentFormatVersion)
         XCTAssertEqual(other.frames.map(\.held), [[], ["color"], ["color"]])
         XCTAssertGreaterThan(shown(other, frame: 2, x: 50, y: 50), 200, "export and thumbnails see the hold")
     }

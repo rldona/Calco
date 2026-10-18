@@ -86,6 +86,7 @@ struct ExportProfilesSheet: View {
 private struct ProfileEditor: View {
     @ObservedObject var state: EditorState
     @Binding var profile: ExportProfile
+    @State private var issues: [ExportChecks.Issue] = []
 
     var body: some View {
         Form {
@@ -112,7 +113,7 @@ private struct ProfileEditor: View {
                     ForEach(ExportProfile.scales, id: \.self) { s in Text(s < 1 ? "½×" : "\(Int(s))×").tag(s) }
                 }
                 .pickerStyle(.segmented)
-                if profile.target == .spriteSheet {
+                if profile.target.isSheet {
                     Toggle("Trim transparent borders", isOn: $profile.trim)
                     Stepper("Padding \(profile.padding) px", value: $profile.padding, in: 0...16)
                     Toggle("Power-of-two sheet", isOn: $profile.powerOfTwo)
@@ -122,6 +123,50 @@ private struct ProfileEditor: View {
             } footer: {
                 Text(footnote).font(.caption)
             }
+            Section {
+                if issues.isEmpty {
+                    Label("Nothing to fix", systemImage: "checkmark.circle").foregroundStyle(.secondary)
+                } else {
+                    ForEach(issues) { issue in
+                        Label(issue.message, systemImage: icon(issue.kind))
+                            .font(.callout)
+                            .foregroundStyle(Theme.accentText)
+                    }
+                }
+            } header: {
+                Text("Before you export")
+            } footer: {
+                Text("Advice only: a jump lifts the feet on purpose, for example.").font(.caption)
+            }
+            if profile.target == .spriteSheet {
+                Section {
+                    Toggle("Set pixels per unit", isOn: Binding(
+                        get: { profile.pixelsPerUnit != nil },
+                        set: { profile.pixelsPerUnit = $0 ? (profile.pixelsPerUnit ?? 100) : nil }))
+                    if let ppu = profile.pixelsPerUnit {
+                        Stepper("\(ppu) pixels per unit", value: Binding(
+                            get: { ppu }, set: { profile.pixelsPerUnit = $0 }), in: 1...1024, step: ppu < 32 ? 1 : 8)
+                    }
+                    Toggle("Labels as animation events", isOn: $profile.labelEvents)
+                } header: {
+                    Text("Unity")
+                } footer: {
+                    Text(profile.labelEvents
+                         ? "A drawing labelled \"step\" calls OnCalcoLabel(\"step\") on the GameObject when its frame plays. Add that method to a script on the same object."
+                         : "Pixels per unit is written for calco-unity; leave it off to keep the texture's own setting.")
+                    .font(.caption)
+                }
+            }
+        }
+        .task(id: profile.clips) { issues = state.exportChecks(clips: profile.clips) }
+    }
+
+    private func icon(_ kind: ExportChecks.Issue.Kind) -> String {
+        switch kind {
+        case .emptyFrame: "square.dashed"
+        case .hiddenLayer: "eye.slash"
+        case .feetDrift: "figure.walk.motion"
+        case .loopRepeats: "repeat.1"
         }
     }
 
@@ -130,9 +175,12 @@ private struct ProfileEditor: View {
         let h = Int((Double(state.project.canvas.height) * profile.scale).rounded())
         switch profile.target {
         case .spriteSheet:
-            return "Frames \(w) × \(h) px\(profile.trim ? " before trimming. Each clip is trimmed to the box its drawings use; the JSON keeps the pivot in place for Unity" : "")."
-        case .gif: return "One GIF per clip, \(w) × \(h) px."
-        case .pngSequence: return "A folder per clip, one \(w) × \(h) PNG per tick (holds repeated)."
+            return profile.trim
+                ? String(localized: "Frames \(w) × \(h) px before trimming. Each clip is trimmed to the box its drawings use; the JSON keeps the pivot in place for Unity.", bundle: AppLanguage.bundle)
+                : String(localized: "Frames \(w) × \(h) px.", bundle: AppLanguage.bundle)
+        case .gif: return String(localized: "One GIF per clip, \(w) × \(h) px.", bundle: AppLanguage.bundle)
+        case .pngSequence: return String(localized: "A folder per clip, one \(w) × \(h) PNG per tick (holds repeated).", bundle: AppLanguage.bundle)
+        case .godot: return String(localized: "PNG + SpriteFrames .tres with one animation per clip, \(w) × \(h) px frames. Keep both files together; set the AnimatedSprite2D offset for the pivot.", bundle: AppLanguage.bundle)
         }
     }
 }

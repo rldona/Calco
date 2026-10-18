@@ -67,6 +67,12 @@ struct TimelineView: View {
         return max(0, state.frames.count - 1)
     }
 
+    /// A drawing's right edge dragged to `dragX`: it lasts up to there, pushing what follows.
+    private func dragEdge(layer: String, start: Int, toX dragX: CGFloat) {
+        let ticks = Int(((dragX - x(ofFrame: start)) / tick).rounded(.up))
+        state.setDrawingDuration(layer: layer, start: start, ticks: ticks)
+    }
+
     private func select(frame: Int, layer: String) {
         state.frameIndex = frame
         if let i = state.layers.firstIndex(where: { $0.id == layer }) { state.layerIndex = i }
@@ -76,6 +82,8 @@ struct TimelineView: View {
     private var rows: [Layer] { state.layers.reversed() }
 
     private func width(_ frame: Frame) -> CGFloat { tick * CGFloat(frame.hold) }
+
+    private func ticks(_ frames: ArraySlice<Frame>) -> Int { frames.reduce(0) { $0 + $1.hold } }
 
     private func x(ofFrame index: Int) -> CGFloat {
         state.frames.prefix(index).reduce(0) { $0 + width($1) }
@@ -130,20 +138,37 @@ struct TimelineView: View {
         .font(.body)
     }
 
-    /// Quick onion skin: on/off and how many frames each way, without opening the popover.
+    /// Onion skin, said in words: a named switch, then (when it's on) how many drawings before and
+    /// after show through, each next to the colour it's tinted with.
     private var onionControls: some View {
-        HStack(spacing: 6) {
-            Toggle(isOn: $state.onion.enabled) { Image(systemName: "circle.lefthalf.filled.righthalf.striped.horizontal") }
-                .toggleStyle(.button)
-                .help("Onion skin")
-            Group {
-                Circle().fill(Color(rgba: SIMD4(state.onion.beforeTint, 1))).frame(width: 8, height: 8)
-                CompactStepper(title: "", value: $state.onion.before, range: 0...5)
-                CompactStepper(title: "", value: $state.onion.after, range: 0...5)
-                Circle().fill(Color(rgba: SIMD4(state.onion.afterTint, 1))).frame(width: 8, height: 8)
+        HStack(spacing: 8) {
+            Button { state.onion.enabled.toggle() } label: {
+                Label("Onion skin", systemImage: "circle.lefthalf.filled.righthalf.striped.horizontal")
+                    .labelStyle(.titleAndIcon).font(.caption.weight(.medium)).fixedSize()
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .foregroundStyle(state.onion.enabled ? Theme.onAccent : Theme.textDim)
+                    .background(state.onion.enabled ? Theme.accent : .clear, in: Capsule())
+                    .overlay(Capsule().strokeBorder(state.onion.enabled ? .clear : Theme.hairline))
             }
-            .opacity(state.onion.enabled ? 1 : 0.35)
+            .buttonStyle(.plain)
+            .accessibilityValue(state.onion.enabled ? "On" : "Off")
+            .help("See the drawings before and after this one, faded, to draw in between")
+            if state.onion.enabled {
+                onionCount("Before", value: $state.onion.before, tint: state.onion.beforeTint)
+                onionCount("After", value: $state.onion.after, tint: state.onion.afterTint)
+            }
         }
+    }
+
+    private func onionCount(_ title: LocalizedStringKey, value: Binding<Int>, tint: SIMD3<Float>) -> some View {
+        HStack(spacing: 5) {
+            Circle().fill(Color(rgba: SIMD4(tint, 1))).frame(width: 9, height: 9)
+            CompactStepper(title: title, value: value, range: 0...5)
+        }
+        .padding(.leading, 8).padding(.trailing, 2).padding(.vertical, 2)
+        .overlay(Capsule().strokeBorder(Theme.hairline))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text("Onion skin")) 
     }
 
     // MARK: Grid
@@ -192,13 +217,17 @@ struct TimelineView: View {
     private func row(_ layer: Layer) -> some View {
         let clip = state.clip
         let isCurrentLayer = layer.id == state.currentLayer?.id
-        let currentRun = clip.sourceIndex(layer: layer.id, at: state.frameIndex)
+        let currentRun = clip.cellStart(layer: layer.id, at: state.frameIndex)
         return HStack(spacing: 0) {
             ForEach(Array(clip.runs(of: layer.id).enumerated()), id: \.offset) { n, run in
                 let span = clip.frames[run.start..<(run.start + run.count)]
                 let w = span.reduce(0) { $0 + width($1) }
                 let selected = isCurrentLayer && run.start == currentRun
-                let drawn = state.store.existingTexture(clip: clip.id, frame: clip.frames[run.start].id, layer: layer.id) != nil
+                let drawn = state.drawingKey(layer: layer.id, at: run.start)
+                    .flatMap { state.store.existingTexture(clip: $0.clip, frame: $0.frame, layer: $0.layer) } != nil
+                let linkedTo = clip.isLinked(layer: layer.id, at: run.start)
+                    ? clip.runs(of: layer.id).firstIndex { $0.start == clip.sourceIndex(layer: layer.id, at: run.start) }
+                    : nil
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 4)
                         .fill(selected ? Theme.accentWash : (drawn ? Theme.raised : Color.clear))
@@ -206,9 +235,16 @@ struct TimelineView: View {
                         .strokeBorder(selected ? Theme.accent : Theme.hairline,
                                       style: StrokeStyle(lineWidth: selected ? 1.5 : 0.75, dash: drawn ? [] : [3, 3]))
                     HStack(spacing: 4) {
+                        if let linkedTo {
+                            Image(systemName: "link").font(.system(size: 8, weight: .semibold))
+                            Text(state.drawingLabel(layer: layer.id, at: run.start) ?? "\(linkedTo + 1)")
+                                .font(.system(size: 10, weight: .medium, design: .rounded))
+                                .lineLimit(1)
+                        } else {
                         Text(clip.frames[run.start].labels[layer.id] ?? "\(n + 1)")
                             .font(.system(size: 10, weight: .medium, design: .rounded))
                             .lineLimit(1)
+                        }
                         if run.count > 1 {
                             Image(systemName: "arrow.right").font(.system(size: 8, weight: .semibold))
                         }
@@ -231,30 +267,29 @@ struct TimelineView: View {
                     }
                 }
                 .overlay(alignment: .trailing) {
-                    // Drag the right edge to make the drawing last more or fewer frames.
+                    // Drag the right edge (Pencil or finger) to make the drawing last more or fewer
+                    // frames; what comes after moves along.
                     if !layer.locked {
                         Capsule()
-                            .fill(selected ? Theme.accent : Theme.textFaint.opacity(0.5))
-                            .frame(width: 3, height: rowHeight * 0.5)
-                            .frame(width: 14, height: rowHeight)
+                            .fill(selected ? Theme.accent : Theme.textDim)
+                            .frame(width: 4, height: rowHeight * 0.65)
+                            .frame(width: 22, height: rowHeight)
                             .contentShape(Rectangle())
                             .highPriorityGesture(DragGesture(minimumDistance: 2, coordinateSpace: .named(Self.sheet))
-                                .onChanged { g in
-                                    state.setDrawingSpan(layer: layer.id, start: run.start,
-                                                         count: frameIndex(atX: g.location.x) - run.start + 1)
-                                }
+                                .onChanged { g in dragEdge(layer: layer.id, start: run.start, toX: g.location.x) }
                                 .onEnded { _ in state.endCoalescing() })
                             .accessibilityLabel("Drawing length")
-                            .accessibilityValue("\(run.count) frames")
+                            .accessibilityValue("\(ticks(span)) frames")
                             .accessibilityAdjustableAction { dir in
-                                state.setDrawingSpan(layer: layer.id, start: run.start,
-                                                     count: run.count + (dir == .increment ? 1 : -1))
+                                state.setDrawingDuration(layer: layer.id, start: run.start,
+                                                         ticks: ticks(span) + (dir == .increment ? 1 : -1))
                                 state.endCoalescing()
                             }
                     }
                 }
                 .accessibilityElement()
-                .accessibilityLabel("\(layer.name), drawing \(n + 1)\(run.count > 1 ? ", held \(run.count) frames" : "")")
+                .accessibilityLabel(linkedTo.map { "\(layer.name), repeat of drawing \($0 + 1)" } ?? "\(layer.name), drawing \(n + 1)")
+                .accessibilityValue(run.count > 1 ? "held \(run.count) frames" : "")
                 .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
             }
         }
@@ -264,6 +299,11 @@ struct TimelineView: View {
     @ViewBuilder
     private func cellMenu(frame: Int, layer: String) -> some View {
         let held = state.clip.isHeld(layer: layer, at: frame)
+        if state.clip.isLinked(layer: layer, at: state.clip.cellStart(layer: layer, at: frame)) {
+            Button { select(frame: frame, layer: layer); state.releaseCurrentCell(copying: true) } label: {
+                Label("Unlink (keep a copy)", systemImage: "link.badge.plus")
+            }
+        }
         if held {
             Button { select(frame: frame, layer: layer); state.releaseCurrentCell(copying: false) } label: {
                 Label("New drawing here", systemImage: "square.dashed")
@@ -291,66 +331,113 @@ struct TimelineView: View {
 
     private var footer: some View {
         HStack(spacing: 14) {
-            Button { state.addLayerWithDefaultName() } label: {
+            Menu {
+                Button { state.addLayerWithDefaultName() } label: { Label("Empty layer", systemImage: "square") }
+                if let name = state.currentLayer?.name {
+                    Button { state.addLayerMatchingTiming() } label: {
+                        Label("Same timing as \(name), blank", systemImage: "square.on.square.dashed")
+                    }
+                    Button { state.duplicateCurrentLayer() } label: { Label("Duplicate \(name)", systemImage: "square.on.square") }
+                }
+            } label: {
                 Label("New layer", systemImage: "plus").labelStyle(.titleAndIcon).font(.caption)
             }
             LayersButton(state: state)
 
             Spacer(minLength: 8)
 
-            // The current cell: hold the previous drawing, or give it its own.
-            if state.currentCellIsHeld {
-                Button { state.releaseCurrentCell(copying: false) } label: {
-                    Label("New drawing", systemImage: "square.dashed").labelStyle(.titleAndIcon).font(.caption)
-                }
-                Button { state.releaseCurrentCell(copying: true) } label: {
-                    Label("Copy drawing", systemImage: "square.on.square").labelStyle(.titleAndIcon).font(.caption)
-                }
-            } else {
-                Button { state.holdCurrentCell() } label: {
-                    Label("Hold previous", systemImage: "arrow.right.to.line").labelStyle(.titleAndIcon).font(.caption)
-                }
-                .disabled(state.frameIndex == 0)
-            }
+            HoldControl(state: state)
 
-            Button { labelText = state.currentLayer.flatMap { state.drawingLabel(layer: $0.id, at: state.frameIndex) } ?? ""
-                     labeling = true } label: { Label("Label drawing", systemImage: "tag") }
+            drawingActions
+
+            Button { state.syncLayers.toggle() } label: {
+                Label("Sync layers", systemImage: "link")
+                    .labelStyle(.titleAndIcon).font(.caption)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .foregroundStyle(state.syncLayers ? Theme.onAccent : Theme.textDim)
+                    .background(state.syncLayers ? Theme.accent : .clear, in: Capsule())
+                    .overlay(Capsule().strokeBorder(state.syncLayers ? .clear : Theme.hairline))
+            }
+            .accessibilityValue(state.syncLayers ? "On" : "Off")
+
+            FrameMenuButton(state: state)
+        }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.borderless)
+        .foregroundStyle(Theme.textDim)
+    }
+
+    /// What the buttons act on, framed: the current layer's drawing, or with Sync layers every layer.
+    private var drawingActions: some View {
+        HStack(spacing: 12) {
+            Text(actionsCaption)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(Theme.accentText)
+                .lineLimit(1)
+                .fixedSize()
+
+            if !state.syncLayers {
+                // The current cell: hold the previous drawing, or give it its own.
+                if state.currentCellIsLinked {
+                    Button { state.releaseCurrentCell(copying: true) } label: {
+                        Label("Unlink", systemImage: "link").labelStyle(.titleAndIcon).font(.caption).fixedSize()
+                    }
+                } else if state.currentCellIsHeld {
+                    Button { state.releaseCurrentCell(copying: false) } label: {
+                        Label("New drawing", systemImage: "square.dashed").labelStyle(.titleAndIcon).font(.caption).fixedSize()
+                    }
+                    Button { state.releaseCurrentCell(copying: true) } label: {
+                        Label("Copy drawing", systemImage: "square.on.square").labelStyle(.titleAndIcon).font(.caption).fixedSize()
+                    }
+                } else {
+                    Button { state.holdCurrentCell() } label: {
+                        Label("Hold previous", systemImage: "arrow.right.to.line").labelStyle(.titleAndIcon).font(.caption).fixedSize()
+                    }
+                    .disabled(state.frameIndex == 0)
+                }
+
+                Button { labelText = state.currentLayer.flatMap { state.drawingLabel(layer: $0.id, at: state.frameIndex) } ?? ""
+                         labeling = true } label: { Label("Label drawing", systemImage: "tag") }
+            }
 
             Menu {
-                Button { state.setPlayRange(start: true) } label: { Label("Play from this frame", systemImage: "arrow.right.to.line") }
-                Button { state.setPlayRange(start: false) } label: { Label("Play up to this frame", systemImage: "arrow.left.to.line") }
-                if state.playRange != nil {
-                    Button { state.playRange = nil } label: { Label("Play whole clip", systemImage: "arrow.left.and.right") }
+                Button { state.splitCurrentDrawing(copying: false) } label: {
+                    Label("Blank inbetween halfway", systemImage: "square.split.2x1")
+                }
+                Button { state.splitCurrentDrawing(copying: true) } label: {
+                    Label("Duplicate split halfway", systemImage: "square.on.square")
                 }
             } label: {
-                Label("Playback range", systemImage: "arrow.left.and.right.square")
-                    .foregroundStyle(state.playRange == nil ? Theme.textDim : Theme.accent)
+                Label("Split drawing halfway", systemImage: "square.split.2x1")
             }
-
-            Divider().overlay(Theme.hairline).frame(height: 16)
-
-            CompactStepper(title: "Hold", value: Binding(
-                get: { state.currentFrame?.hold ?? 1 },
-                set: { state.setHold($0) }), range: 1...24)
-            Button { state.moveFrame(by: -1) } label: { Label("Move frame earlier", systemImage: "arrowshape.left") }
-                .disabled(state.frameIndex == 0)
-            Button { state.moveFrame(by: 1) } label: { Label("Move frame later", systemImage: "arrowshape.right") }
-                .disabled(state.frameIndex >= state.frames.count - 1)
-            Button { state.duplicateFrame() } label: { Label("Duplicate frame", systemImage: "plus.square.on.square") }
-            Button(role: .destructive) { state.deleteFrame() } label: { Label("Delete frame", systemImage: "trash") }
-                .disabled(state.frames.count <= 1)
-            Button { state.addFrame() } label: {
+            .disabled(!state.canSplitCurrentDrawing)
+            RepeatButton(state: state)
+            Button { state.duplicateDrawing() } label: {
+                Label(state.syncLayers ? "Duplicate frame" : "Duplicate drawing", systemImage: "plus.square.on.square")
+            }
+            Button(role: .destructive) { state.deleteDrawing() } label: {
+                Label(state.syncLayers ? "Delete frame" : "Delete drawing", systemImage: "trash")
+            }
+            .disabled(state.syncLayers && state.frames.count <= 1)
+            Button { state.addDrawing() } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Theme.onAccent)
                     .frame(width: 30, height: 26)
                     .background(Theme.accent, in: RoundedRectangle(cornerRadius: 7))
             }
-            .accessibilityLabel("Add frame")
+            .accessibilityLabel(state.syncLayers ? "Add frame" : "Add drawing")
         }
-        .labelStyle(.iconOnly)
-        .buttonStyle(.borderless)
-        .foregroundStyle(Theme.textDim)
+        .padding(.leading, 10).padding(.trailing, 4).padding(.vertical, 3)
+        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.accent.opacity(0.45)))
+    }
+
+    private var actionsCaption: String {
+        if state.syncLayers { return String(localized: "All layers · frame \(state.frameIndex + 1)", bundle: AppLanguage.bundle) }
+        let name = state.currentLayer?.name ?? String(localized: "Layer", bundle: AppLanguage.bundle)
+        guard let n = state.currentDrawingNumber else { return name }
+        return state.currentCellIsLinked ? String(localized: "\(name) · repeat of drawing \(n)", bundle: AppLanguage.bundle)
+            : String(localized: "\(name) · drawing \(n)", bundle: AppLanguage.bundle)
     }
 }
 
@@ -372,6 +459,10 @@ private struct LayerLabel: View {
             HStack(spacing: 6) {
                 Button { state.toggleLayerVisibility(index) } label: {
                     Image(systemName: layer.visible ? "eye" : "eye.slash").frame(width: 20)
+                }
+                if layer.maskBelow && index > 0 {
+                    Image(systemName: "arrow.turn.left.down").font(.system(size: 9, weight: .semibold))
+                        .accessibilityLabel("Masked to the layer below")
                 }
                 Text(layer.name)
                     .font(.caption.weight(selected ? .semibold : .regular))
@@ -400,6 +491,11 @@ private struct LayerLabel: View {
             .contextMenu {
                 Button { name = layer.name; renaming = true } label: { Label("Rename…", systemImage: "pencil") }
                 Button { editingOpacity = true } label: { Label("Opacity…", systemImage: "circle.lefthalf.filled") }
+                Button { state.toggleLayerMask(index) } label: {
+                    Label(layer.maskBelow ? "Stop masking to layer below" : "Mask to layer below",
+                          systemImage: "arrow.turn.left.down")
+                }
+                .disabled(index == 0 && !layer.maskBelow)
                 Button { state.moveLayer(from: index, to: index + 1) } label: { Label("Move up", systemImage: "arrow.up") }
                     .disabled(index == state.layers.count - 1)
                 Button { state.moveLayer(from: index, to: index - 1) } label: { Label("Move down", systemImage: "arrow.down") }
@@ -483,6 +579,150 @@ private struct ClipTabs: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("All \(state.clip.frames.count) frames of this clip will be removed.")
+        }
+    }
+}
+
+/// Whole-frame actions, for every layer at once: add, duplicate, move, play range, delete.
+private struct FrameMenuButton: View {
+    @ObservedObject var state: EditorState
+    @State private var showing = false
+
+    var body: some View {
+        Button { showing = true } label: {
+            Label("Frame", systemImage: "chevron.down")
+                .labelStyle(TrailingIconLabelStyle()).font(.caption)
+                .foregroundStyle(state.playRange == nil ? Theme.textDim : Theme.accent)
+                .padding(.horizontal, 8).padding(.vertical, 8)
+                .contentShape(Rectangle())
+        }
+        .popover(isPresented: $showing) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Frame \(state.frameIndex + 1), all layers")
+                    .font(.caption).foregroundStyle(Theme.textFaint)
+                    .padding(.horizontal, 10).padding(.bottom, 4)
+                item("Add frame", "plus") { state.addBlankFrame() }
+                item("Duplicate frame", "plus.square.on.square") { state.duplicateFrame() }
+                item("Move earlier", "arrowshape.left") { state.moveFrame(by: -1) }
+                    .disabled(state.frameIndex == 0)
+                item("Move later", "arrowshape.right") { state.moveFrame(by: 1) }
+                    .disabled(state.frameIndex >= state.frames.count - 1)
+                Divider().overlay(Theme.hairline)
+                item("Play from this frame", "arrow.right.to.line") { state.setPlayRange(start: true) }
+                item("Play up to this frame", "arrow.left.to.line") { state.setPlayRange(start: false) }
+                if state.playRange != nil {
+                    item("Play whole clip", "arrow.left.and.right") { state.playRange = nil }
+                }
+                Divider().overlay(Theme.hairline)
+                item("Delete frame", "trash", role: .destructive) { state.deleteFrame(); showing = false }
+                    .disabled(state.frames.count <= 1)
+            }
+            .padding(.vertical, 10)
+            .frame(width: 240)
+            .buttonStyle(.borderless)
+            .tint(Theme.accent)
+            .preferredColorScheme(.dark)
+        }
+    }
+
+    private func item(_ title: LocalizedStringKey, _ icon: String, role: ButtonRole? = nil, action: @escaping () -> Void) -> some View {
+        Button(role: role, action: action) {
+            Label(title, systemImage: icon).labelStyle(.titleAndIcon).font(.callout)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .contentShape(Rectangle())
+        }
+        .foregroundStyle(role == .destructive ? Color.red : Theme.text)
+    }
+}
+
+/// "Frame ⌄": title first, icon after.
+private struct TrailingIconLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 3) { configuration.title; configuration.icon.imageScale(.small) }
+    }
+}
+
+/// How long the frame at the playhead stays on screen (every layer). Lit up when it's held, so a
+/// long frame is easy to spot.
+private struct HoldControl: View {
+    @ObservedObject var state: EditorState
+
+    private var hold: Int { state.currentFrame?.hold ?? 1 }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "timer")
+            Text(hold == 1 ? "Lasts 1 frame" : "Lasts \(hold) frames")
+                .font(.caption.weight(.medium))
+                .monospacedDigit()
+                .fixedSize()
+            step("minus", by: -1).disabled(hold <= 1)
+            step("plus", by: 1).disabled(hold >= 24)
+        }
+        .labelStyle(.titleAndIcon)
+        .foregroundStyle(hold > 1 ? Theme.accentText : Theme.text)
+        .padding(.leading, 10).padding(.trailing, 4).padding(.vertical, 3)
+        .background(hold > 1 ? Theme.accentWash : Color.white.opacity(0.06), in: Capsule())
+        .overlay(Capsule().strokeBorder(hold > 1 ? Theme.accent.opacity(0.6) : Theme.hairline))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Frame length")
+        .accessibilityValue(hold == 1 ? "1 frame" : "\(hold) frames")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: state.setHold(hold + 1)
+            case .decrement: state.setHold(hold - 1)
+            @unknown default: break
+            }
+        }
+    }
+
+    private func step(_ icon: String, by delta: Int) -> some View {
+        Button { state.setHold(hold + delta) } label: {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold))
+                .frame(width: 30, height: 26)
+                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 7))
+                .contentShape(Rectangle())
+        }
+    }
+}
+
+/// "Repeat": a cycle of the last few drawings, linked, right after the one at the playhead.
+private struct RepeatButton: View {
+    @ObservedObject var state: EditorState
+    @State private var showing = false
+    @State private var count = 2
+
+    var body: some View {
+        Button { count = max(1, min(count, state.drawingsUpToPlayhead)); showing = true } label: {
+            Label("Repeat drawings", systemImage: "repeat")
+        }
+        .disabled(state.drawingsUpToPlayhead == 0)
+        .popover(isPresented: $showing) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Repeat as a cycle").font(.headline)
+                CompactStepper(title: state.syncLayers ? "Last drawings, every layer" : "Last drawings",
+                               value: $count, range: 1...max(1, state.drawingsUpToPlayhead))
+                Text(count == 1 ? "Adds this drawing again after itself, linked: change one and every repeat changes. Unlink a repeat to make it its own drawing."
+                     : "Adds the last \(count) drawings again after this one, linked: change one and every repeat changes. Unlink a repeat to make it its own drawing.")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    state.repeatDrawings(count: count)
+                    showing = false
+                } label: {
+                    Text(count == 1 ? "Repeat 1 drawing" : "Repeat \(count) drawings")
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Theme.onAccent)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding(20)
+            .frame(width: 300)
+            .tint(Theme.accent)
+            .preferredColorScheme(.dark)
         }
     }
 }

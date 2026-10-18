@@ -11,6 +11,7 @@ struct ToolRail: View {
     @State private var editingColor = false
     @State private var editingFill = false
     @State private var editingBrush = false
+    @State private var editingLasso = false
 
     var body: some View {
         VStack(spacing: 6) {
@@ -28,7 +29,11 @@ struct ToolRail: View {
             RailButton(icon: "eyedropper", label: "Eyedropper", active: state.tool == .eyedropper) {
                 state.tool = .eyedropper
             }
-            RailButton(icon: "lasso", label: "Lasso", active: state.tool == .lasso) { state.tool = .lasso }
+            // Tap once for the lasso, again for select all and paste.
+            RailButton(icon: "lasso", label: "Lasso", active: state.tool == .lasso) {
+                if state.tool == .lasso { editingLasso = true } else { state.tool = .lasso }
+            }
+            .popover(isPresented: $editingLasso, arrowEdge: .leading) { LassoOptions(state: state) { editingLasso = false } }
 
             Divider().overlay(Theme.hairline).padding(.horizontal, 8).padding(.vertical, 4)
 
@@ -56,6 +61,7 @@ struct ToolRail: View {
         }
         .frame(width: 40)
         .calcoPanel(padding: 5)
+        .onChange(of: state.colorPickerRequest) { editingColor = true }
     }
 }
 
@@ -114,13 +120,15 @@ private struct VerticalSizeSlider: View {
     }
 }
 
-/// The brush's options: stabiliser and pressure.
+/// The brush's options: where it draws, stabiliser, pressure and pixel art.
 struct BrushOptions: View {
     @ObservedObject var state: EditorState
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Brush").font(.headline)
+            PaintModePicker(state: state)
+            Divider()
             HStack {
                 Text("Smoothing").font(.subheadline)
                 Spacer()
@@ -133,6 +141,16 @@ struct BrushOptions: View {
                 .fixedSize(horizontal: false, vertical: true)
             Divider()
             Toggle("Pencil pressure changes size", isOn: $state.usePressure).font(.subheadline)
+            Toggle("Only Apple Pencil draws", isOn: $state.pencilOnly).font(.subheadline)
+            Text("Fingers still zoom, pan and undo. Double tap or squeeze the Pencil does what you chose in Settings → Apple Pencil.")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Divider()
+            Toggle("Pixel art", isOn: Binding(get: { state.project.pixelArt }, set: { state.setPixelArt($0) }))
+                .font(.subheadline)
+            Text("This project: brush, eraser, fill and lasso with hard edges, every pixel fully on or off.")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(20)
         .frame(width: 300)
@@ -146,6 +164,8 @@ struct FillOptions: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Fill").font(.headline)
+            PaintModePicker(state: state)
+            Divider()
             Text("Close gaps").font(.subheadline).foregroundStyle(.secondary)
             Picker("Close gaps", selection: $state.fillGaps) {
                 ForEach(EditorState.FillGaps.allCases) { Text($0.title).tag($0) }
@@ -246,5 +266,58 @@ extension SIMD4 where Scalar == Float {
 extension Color {
     init(rgba c: SIMD4<Float>) {
         self.init(.sRGB, red: Double(c.x), green: Double(c.y), blue: Double(c.z), opacity: Double(c.w))
+    }
+}
+
+/// Where new paint lands on the layer, shared by brush and fill.
+struct PaintModePicker: View {
+    @ObservedObject var state: EditorState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Draws").font(.subheadline).foregroundStyle(.secondary)
+            Picker("Draws", selection: $state.paintMode) {
+                ForEach(CanvasRenderer.PaintMode.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            Text(state.paintMode.explanation)
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+extension CanvasRenderer.PaintMode {
+    var explanation: String {
+        switch self {
+        case .front: String(localized: "Over what's already on the layer.", bundle: AppLanguage.bundle)
+        case .behind: String(localized: "Under what's already on the layer: colour under line art without touching the lines.", bundle: AppLanguage.bundle)
+        case .inside: String(localized: "Only on what's already drawn, keeping its edges: shading and recolouring.", bundle: AppLanguage.bundle)
+        }
+    }
+}
+
+/// The lasso's options: select the whole drawing, or paste what was copied.
+struct LassoOptions: View {
+    @ObservedObject var state: EditorState
+    let done: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Lasso").font(.headline)
+            Button { state.selectAll(); done() } label: {
+                Label("Select all", systemImage: "selection.pin.in.out").frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Button { state.paste(); done() } label: {
+                Label("Paste", systemImage: "doc.on.clipboard").frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .disabled(state.clipboard == nil)
+            Text("Copy or cut from the bar above a selection. Paste lands where it was copied, on whichever frame and layer you're on.")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .buttonStyle(.bordered)
+        .padding(20)
+        .frame(width: 280)
     }
 }

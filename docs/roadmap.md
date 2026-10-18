@@ -54,9 +54,7 @@ What RoughAnimator users reach for most, done the Calco way (from its tutorial c
 - [x] Lasso (L): lift, move, scale (corner), rotate (knob), flip, with an anchor you drag by finger without moving the drawing; one undo step; ✓ / Return applies, ✕ / Esc cancels, tapping outside applies
 - [x] Stroke smoothing (stabiliser) and a pressure on/off switch (tap the brush again; remembered)
 - [x] Canvas shows real pixels when magnified (no more blurry strokes)
-- [ ] Brush opacity (needs strokes rendered to their own buffer first, so overlaps don't build up)
-- [ ] Resize the canvas after creating the project
-- [ ] Draw behind (paint under what's already on the layer, for colouring under lines)
+- Brush opacity and draw behind moved to v0.8, canvas resize to v0.10
 
 ## v0.5 — "exposure sheet"
 
@@ -79,11 +77,51 @@ drawing held for the whole clip while the character changes every 2 frames. Chan
 - [x] Export profiles: saved, app-wide combinations (target, clips, scale, trim, padding, power-of-two); presets Unity, Unity · trimmed, Pixel art 4×, GIF to share, PNG frames; "Export again" (⇧⌘E)
 - [x] Export only some clips; GIF per clip; PNG sequence per clip (holds expanded)
 - [x] Trim transparent borders, one box per clip, with the pivot kept right in Unity (checked in Unity 6000.6 batch mode); scale ½× / 1× / 2× / 4×
-- [ ] Godot target (SpriteFrames .tres)
-- [ ] Unity: pixels per unit, animation events from drawing labels; importer checked against held cells
-- [ ] Consistency checks before export: pivot / feet drifting, size changing, cycles that don't close, empty frames, hidden layers
+- [x] Godot target (SpriteFrames .tres; not yet opened in a real Godot)
+- [x] Unity: pixels per unit, animation events from drawing labels; importer checked against held cells
+- [x] Consistency checks before export: feet drifting (clips anchored at the feet), empty frames, hidden layers with drawings, loops whose last frame repeats the first. Later: size changing between frames
+- [x] The bar acts on the current layer's drawing (add / duplicate / delete, like RoughAnimator's "Independent"); "Sync layers" makes it act on whole frames; whole-frame actions in a "Frame" menu
+- [x] New layer: empty, "same timing, blank" (a colour pass under line art), or a duplicate
+- [x] Onion skin counts drawings, not frames, so holds and empty frames don't hide the pose before
+- [x] "Lasts N frames" control in the bar; dragging a drawing's end (Pencil or finger) pushes what follows instead of eating it, also past the end of the clip
 
-## v0.7 — "assist"
+## v0.7 — "animator"
+
+What RoughAnimator users reach for first, ordered by what matters for game sprites.
+
+- [x] Pixel-art mode: hard-edged brush, eraser, fill and lasso (no antialiasing), per project; brush size is a width in pixels
+- [x] Draw in front / behind / inside (keeps the layer's transparency, for shading), brush and fill; mask a layer to the one below (clipping mask, exported flattened)
+- [x] Cycles: "Repeat" adds the last N drawings again after the playhead, linked (change one, every repeat changes), with their timing and labels (Unity events fire every loop); unlink a repeat to make it its own drawing. Format 3 (`frames[].links`)
+- [x] Inbetween halfway: a blank drawing that splits the current one's time in two; duplicate split halfway (current layer, total length unchanged)
+- [x] Copy / cut / paste / delete with the lasso, across frames and layers (paste lands where it was copied); select all (⌘C ⌘X ⌘V ⌘A)
+- [x] Flip the canvas view horizontally (drawing unchanged; top bar button or H)
+- [x] Pencil only (fingers never draw, starts from the system setting) and Apple Pencil double tap / squeeze: eraser, previous tool or colours, as chosen in Settings
+
+## v0.8 — "brushes and fill"
+
+- [ ] Brush opacity and flow (needs strokes rendered to their own buffer first, so overlaps don't build up)
+- [ ] Brush presets; custom brush shapes from a PNG
+- [ ] Straight lines, rectangles, ellipses
+- [x] Draw behind (done with v0.7's draw modes)
+- [ ] Fill: sample this layer / this and above / all; expand and soften the edge; lasso fill
+
+## v0.9 — "timeline and layers"
+
+- [ ] Edit several drawings at once (select a range)
+- [ ] "Keep total length": lengthening a drawing shortens the next
+- [ ] Pinch to zoom the timeline
+- [ ] Shift and trace: move the onion skin to trace a pose somewhere else
+- [ ] Merge down; blend modes (multiply, screen, add)
+
+## v0.10 — "in and out"
+
+- [ ] Import an image or an image sequence as a layer; import video for rotoscoping
+- [ ] Import layers from another project
+- [ ] Export MP4; export only the playback range
+- [ ] Resize or crop the canvas after creating the project
+- [ ] Preferences: left-handed, brush cursor on Pencil hover, minimum pressure size, custom keyboard shortcuts
+
+## v0.11 — "assist"
 
 Helps without drawing for you: guides on their own layer, never final art.
 
@@ -94,13 +132,11 @@ Helps without drawing for you: guides on their own layer, never final art.
 
 ## Later
 
-- Pixel-art mode
-- Custom brushes
 - iCloud sync
 - Audio track with waveform and scrubbing (lip sync)
-- Textured brushes (grain, flow, spacing)
+- Textured brushes (grain)
 - iPhone
 
 ## Never (on purpose)
 
-- Camera, tweening, vectors, rigging. That's a different product.
+- Camera, tweening, vectors, rigging, audio-driven shorts. That's a different product.

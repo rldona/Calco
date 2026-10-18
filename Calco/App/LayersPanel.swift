@@ -63,6 +63,11 @@ struct LayersPanel: View {
                     naming = .rename(state.layerIndex)
                 } label: { Label("Rename", systemImage: "pencil") }
                 Button { state.clearCurrentLayer() } label: { Label("Clear layer", systemImage: "eraser.line.dashed") }
+                Button { state.toggleLayerMask(state.layerIndex) } label: {
+                    Label("Mask to layer below", systemImage: "arrow.turn.left.down")
+                }
+                .foregroundStyle(state.currentLayer?.maskBelow == true ? Theme.accent : Theme.textDim)
+                .disabled(state.layerIndex == 0 && state.currentLayer?.maskBelow != true)
                     .disabled(state.currentLayer?.locked ?? true)
                     .help("Clear this frame's drawing on the layer")
                 Spacer()
@@ -76,10 +81,10 @@ struct LayersPanel: View {
         }
         .frame(width: 210)
         .background(Theme.panel, in: RoundedRectangle(cornerRadius: Theme.corner))
-        .alert(naming.map { if case .add = $0 { "New layer" } else { "Rename layer" } } ?? "",
+        .alert(naming.map { if case .add = $0 { LocalizedStringKey("New layer") } else { LocalizedStringKey("Rename layer") } } ?? "",
                isPresented: Binding(get: { naming != nil }, set: { if !$0 { naming = nil } })) {
             TextField("Name (sketch, line, shadow…)", text: $name)
-            Button(naming.map { if case .add = $0 { "Add" } else { "Rename" } } ?? "OK") {
+            Button(naming.map { if case .add = $0 { LocalizedStringKey("Add") } else { LocalizedStringKey("Rename") } } ?? "OK") {
                 switch naming {
                 case .add: state.addLayer(name: name)
                 case .rename(let i): state.renameLayer(i, to: name)
@@ -117,6 +122,12 @@ private struct LayerRow: View {
                     Image(systemName: layer.visible ? "eye" : "eye.slash")
                         .foregroundStyle(layer.visible ? .primary : .secondary)
                         .frame(width: 22)
+                }
+                if layer.maskBelow && index > 0 {
+                    Button { state.toggleLayerMask(index) } label: {
+                        Image(systemName: "arrow.turn.left.down").font(.caption)
+                    }
+                    .accessibilityLabel("Masked to the layer below; tap to stop")
                 }
                 Text(layer.name)
                     .font(.callout.weight(selected ? .semibold : .regular))

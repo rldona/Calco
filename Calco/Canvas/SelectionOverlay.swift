@@ -127,12 +127,15 @@ struct SelectionOverlay: View {
     }
 }
 
-/// Flip, cancel and apply, floating above the selection.
+/// Copy, cut, delete, flip, cancel and apply, floating above the selection.
 private struct SelectionBar: View {
     @ObservedObject var state: EditorState
 
     var body: some View {
         HStack(spacing: 2) {
+            RailButton(icon: "doc.on.doc", label: "Copy", size: 32) { state.copySelection() }
+            RailButton(icon: "scissors", label: "Cut", size: 32) { state.cutSelection() }
+            RailButton(icon: "trash", label: "Delete selection", size: 32) { state.deleteSelection() }
             RailButton(icon: "arrow.left.and.right.righttriangle.left.righttriangle.right", label: "Flip horizontally", size: 32) {
                 state.updateSelection { $0.flipped.toggle() }
             }

@@ -141,14 +141,25 @@ enum FloodFill {
         return out
     }
 
-    /// Writes an opaque `color` (0–1 RGB) into every masked pixel of `rgba`.
-    static func paint(_ mask: [Bool], color: SIMD3<Float>, into rgba: inout [UInt8]) {
+    /// Writes an opaque `color` (0–1 RGB) into every masked pixel of premultiplied `rgba`: over what's
+    /// there, behind it (only the see-through part takes the colour), or inside it (recolours what's
+    /// drawn, keeping its coverage).
+    static func paint(_ mask: [Bool], color: SIMD3<Float>, into rgba: inout [UInt8],
+                      mode: CanvasRenderer.PaintMode = .front) {
         guard rgba.count == mask.count * 4 else { return }
-        let r = UInt8((min(max(color.x, 0), 1) * 255).rounded())
-        let g = UInt8((min(max(color.y, 0), 1) * 255).rounded())
-        let b = UInt8((min(max(color.z, 0), 1) * 255).rounded())
+        let rgb = [color.x, color.y, color.z].map { Int((min(max($0, 0), 1) * 255).rounded()) }
         for (i, on) in mask.enumerated() where on {
-            rgba[i * 4] = r; rgba[i * 4 + 1] = g; rgba[i * 4 + 2] = b; rgba[i * 4 + 3] = 255
+            let p = i * 4, a = Int(rgba[p + 3])
+            switch mode {
+            case .front:
+                for c in 0..<3 { rgba[p + c] = UInt8(rgb[c]) }
+                rgba[p + 3] = 255
+            case .behind:
+                for c in 0..<3 { rgba[p + c] = UInt8(min(255, Int(rgba[p + c]) + (rgb[c] * (255 - a) + 127) / 255)) }
+                rgba[p + 3] = 255
+            case .inside:
+                for c in 0..<3 { rgba[p + c] = UInt8((rgb[c] * a + 127) / 255) }
+            }
         }
     }
 

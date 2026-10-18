@@ -25,13 +25,13 @@ struct NewProjectSheet: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3), spacing: 6) {
                                     ForEach(Config.sizes, id: \.self) { side in
-                                        Chip(title: "\(side)",
+                                        Chip(title: Text(verbatim: "\(side)"),
                                              on: !customSize && config.width == side && config.height == side) {
                                             customSize = false
                                             config.width = side; config.height = side
                                         }
                                     }
-                                    Chip(title: "Custom", on: customSize) { customSize = true }
+                                    Chip(title: Text("Custom"), on: customSize) { customSize = true }
                                 }
                                 if customSize {
                                     HStack {
@@ -41,6 +41,15 @@ struct NewProjectSheet: View {
                                 }
                                 Text("\(config.width) × \(config.height) px")
                                     .font(.caption).foregroundStyle(Theme.textFaint)
+                                Toggle(isOn: $config.pixelArt) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Pixel art").font(.subheadline)
+                                        Text("Hard edges: every pixel fully on or off")
+                                            .font(.caption).foregroundStyle(Theme.textFaint)
+                                    }
+                                }
+                                .tint(Theme.accent)
+                                .padding(.top, 4)
                             }
                             SizePreview(width: config.width, height: config.height)
                         }
@@ -97,14 +106,14 @@ struct NewProjectSheet: View {
         .preferredColorScheme(.dark)
     }
 
-    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+    private func section<Content: View>(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title).font(.subheadline).foregroundStyle(Theme.textFaint)
             content()
         }
     }
 
-    private func fps(_ value: Int, _ note: String) -> some View {
+    private func fps(_ value: Int, _ note: LocalizedStringKey) -> some View {
         Button { config.fps = value } label: {
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(value) fps").font(.callout.weight(.semibold))
@@ -135,13 +144,13 @@ struct NewProjectSheet: View {
 
 /// A selectable rounded tag.
 struct Chip: View {
-    let title: String
+    let title: Text
     let on: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Text(title)
+            title
                 .font(.callout)
                 .foregroundStyle(on ? Theme.accentText : Theme.textDim)
                 .frame(maxWidth: .infinity)
@@ -163,7 +172,7 @@ private struct FlowChips: View {
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 6)], spacing: 6) {
             ForEach(items, id: \.self) { item in
-                Chip(title: isOn(item) ? "✓ \(item)" : item, on: isOn(item)) { toggle(item) }
+                Chip(title: Text(verbatim: isOn(item) ? "✓ \(item)" : item), on: isOn(item)) { toggle(item) }
             }
         }
     }

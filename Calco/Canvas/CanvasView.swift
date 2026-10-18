@@ -30,6 +30,9 @@ final class CanvasUIView: UIView {
         isMultipleTouchEnabled = true
         backgroundColor = .clear
         installGestures()
+        let pencil = UIPencilInteraction()
+        pencil.delegate = self
+        addInteraction(pencil)
 
         guard let device = MTLCreateSystemDefaultDevice() else { return }
         mtkView.device = device
@@ -62,6 +65,8 @@ final class CanvasUIView: UIView {
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard activeTouch == nil, let t = touches.first, let state, !state.isPlaying else { return }
+        // Pencil only: a finger on the canvas is for gestures, never a mark.
+        if state.pencilOnly && t.type != .pencil { return }
         switch state.tool {
         case .fill, .eyedropper:
             // Wait for the lift: if it turns into a pinch or two-finger tap, touchesCancelled drops it.
@@ -128,7 +133,7 @@ final class CanvasUIView: UIView {
     private func endStroke() {
         if let state, let target = strokeTarget {
             let tail = builder.finish()
-            if !tail.isEmpty { state.renderer.paint(tail, into: target, color: state.color, tool: state.tool) }
+            if !tail.isEmpty { state.renderer.paint(tail, into: target, color: state.color, tool: state.tool, hard: state.project.pixelArt, mode: state.paintMode) }
         }
         activeTouch = nil
         strokeTarget = nil
@@ -152,7 +157,7 @@ final class CanvasUIView: UIView {
                 : 0.5
             stamps += builder.add(.init(position: canvasPos, force: force))
         }
-        renderer.paint(stamps, into: target, color: state.color, tool: state.tool)
+        renderer.paint(stamps, into: target, color: state.color, tool: state.tool, hard: state.project.pixelArt, mode: state.paintMode)
 
         if let lastSample = samples.last {
             let ms = (CACurrentMediaTime() - lastSample.timestamp) * 1000
@@ -244,5 +249,38 @@ struct CanvasView: UIViewRepresentable {
 
     func updateUIView(_ uiView: CanvasUIView, context: Context) {
         uiView.state = state
+    }
+}
+
+// MARK: - Apple Pencil double tap / squeeze
+
+/// Does what the user picked in Settings → Apple Pencil: switch to the eraser and back, switch to
+/// the previous tool, or show the colours.
+extension CanvasUIView: UIPencilInteractionDelegate {
+    @available(iOS 17.5, *)
+    func pencilInteraction(_ interaction: UIPencilInteraction, didReceiveTap tap: UIPencilInteraction.Tap) {
+        perform(UIPencilInteraction.preferredTapAction)
+    }
+
+    @available(iOS 17.5, *)
+    func pencilInteraction(_ interaction: UIPencilInteraction, didReceiveSqueeze squeeze: UIPencilInteraction.Squeeze) {
+        guard squeeze.phase == .ended else { return }
+        perform(UIPencilInteraction.preferredSqueezeAction)
+    }
+
+    /// Before iPadOS 17.5.
+    func pencilInteractionDidTap(_ interaction: UIPencilInteraction) {
+        perform(UIPencilInteraction.preferredTapAction)
+    }
+
+    private func perform(_ action: UIPencilPreferredAction) {
+        guard let state, !state.isPlaying else { return }
+        switch action {
+        case .switchEraser: state.pencilSwitchEraser()
+        case .switchPrevious: state.pencilSwitchPrevious()
+        case .showColorPalette: state.colorPickerRequest += 1
+        default:
+            if #available(iOS 17.5, *), action == .showContextualPalette { state.colorPickerRequest += 1 }
+        }
     }
 }

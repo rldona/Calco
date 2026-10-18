@@ -26,6 +26,8 @@ namespace Calco
             public Size sourceSize;
             /// <summary>Milliseconds.</summary>
             public int duration = 100;
+            /// <summary>Calco extension: drawing labels starting on this frame, comma-separated. Become animation events.</summary>
+            public string label;
         }
 
         [Serializable]
@@ -67,6 +69,8 @@ namespace Calco
             public string scale;
             public Tag[] frameTags;
             public Slice[] slices;
+            /// <summary>Calco extension. 0 (absent) leaves the texture's pixels per unit alone.</summary>
+            public int pixelsPerUnit;
         }
 
         public Frame[] frames;

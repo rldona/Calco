@@ -3,7 +3,7 @@ import SwiftUI
 /// "fps 12 − +" in the space of a label. Used for fps, hold and onion skin instead of the
 /// system Stepper, whose pill is about as wide as the rest of a toolbar group.
 struct CompactStepper: View {
-    let title: String
+    let title: LocalizedStringKey
     @Binding var value: Int
     let range: ClosedRange<Int>
     /// Dimmed value, e.g. an fps that falls back to the project's.

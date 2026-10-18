@@ -63,12 +63,18 @@ struct TopBar: View {
         HStack(spacing: 16) {
             FileMenu(state: state)
             Spacer()
-            if state.canvasTransform != .identity {
-                Button { state.canvasTransform = .identity } label: {
+            if !state.canvasTransform.isFit {
+                Button { state.fitCanvas() } label: {
                     Image(systemName: "arrow.down.right.and.arrow.up.left")
                 }
                 .help("Fit canvas")
             }
+            Button { state.canvasTransform.flipped.toggle() } label: {
+                Image(systemName: "arrow.left.and.right.righttriangle.left.righttriangle.right")
+                    .foregroundStyle(state.canvasTransform.flipped ? Theme.accent : Theme.textDim)
+            }
+            .help("Flip the view (H): see the drawing mirrored without changing it")
+            .accessibilityLabel(state.canvasTransform.flipped ? "Unflip view" : "Flip view")
             OnionSkinButton(state: state)
             Button { state.isZen = true } label: {
                 Label("Zen", systemImage: "circle.dashed.inset.filled")
@@ -130,18 +136,18 @@ struct OnionSkinButton: View {
                 Toggle("Onion skin", isOn: $state.onion.enabled).font(.headline)
                 Group {
                     HStack {
-                        CompactStepper(title: "Frames before", value: $state.onion.before, range: 0...5)
+                        CompactStepper(title: "Drawings before", value: $state.onion.before, range: 0...5)
                         Spacer()
-                        ColorPicker("Frames before colour", selection: Binding(
+                        ColorPicker("Drawings before colour", selection: Binding(
                             get: { Color(rgba: SIMD4(state.onion.beforeTint, 1)) },
                             set: { let c = SIMD4<Float>($0); state.onion.beforeTint = SIMD3(c.x, c.y, c.z) }),
                                     supportsOpacity: false)
                             .labelsHidden()
                     }
                     HStack {
-                        CompactStepper(title: "Frames after", value: $state.onion.after, range: 0...5)
+                        CompactStepper(title: "Drawings after", value: $state.onion.after, range: 0...5)
                         Spacer()
-                        ColorPicker("Frames after colour", selection: Binding(
+                        ColorPicker("Drawings after colour", selection: Binding(
                             get: { Color(rgba: SIMD4(state.onion.afterTint, 1)) },
                             set: { let c = SIMD4<Float>($0); state.onion.afterTint = SIMD3(c.x, c.y, c.z) }),
                                     supportsOpacity: false)
@@ -177,6 +183,7 @@ struct FileMenu: View {
     var body: some View {
         Menu {
             Button { state.closeToGallery() } label: { Label("All projects", systemImage: "square.grid.2x2") }
+            Button { state.showingPreferences = true } label: { Label("Preferences…", systemImage: "gearshape") }
             Button { state.request = .newProject } label: { Label("New project…", systemImage: "plus") }
             Button { state.request = .open } label: { Label("Open from Files…", systemImage: "folder") }
             Divider()
@@ -324,9 +331,10 @@ struct ExportSheet: View {
     }
 
     private var shareTitle: String {
-        if urls.count == 1, urls[0].hasDirectoryPath { return "Share folder" }
-        if urls.map(\.pathExtension) == ["png", "json"] { return "Share PNG + JSON" }
-        return urls.count == 1 ? "Share \(urls[0].pathExtension.uppercased())" : "Share \(urls.count) files"
+        if urls.count == 1, urls[0].hasDirectoryPath { return String(localized: "Share folder", bundle: AppLanguage.bundle) }
+        if urls.map(\.pathExtension) == ["png", "json"] { return String(localized: "Share PNG + JSON", bundle: AppLanguage.bundle) }
+        return urls.count == 1 ? String(localized: "Share \(urls[0].pathExtension.uppercased())", bundle: AppLanguage.bundle)
+            : String(localized: "Share \(urls.count) files", bundle: AppLanguage.bundle)
     }
 
     private func icon(for url: URL) -> String {
