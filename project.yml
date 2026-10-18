@@ -46,3 +46,6 @@ targets:
     sources: [CalcoTests]
     dependencies:
       - target: Calco
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
