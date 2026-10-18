@@ -47,8 +47,6 @@ final class CanvasRenderer {
     private let thumbCompositePipeline: MTLRenderPipelineState
     private let thumbCheckerPipeline: MTLRenderPipelineState
 
-    private var stampBuffer: MTLBuffer?
-    private var stampBufferCapacity = 0
 
     private static let layerFormat: MTLPixelFormat = .rgba8Unorm
 
@@ -140,15 +138,11 @@ final class CanvasRenderer {
     func paint(_ stamps: [Stamp], into target: MTLTexture, color: SIMD4<Float>, tool: Tool) {
         guard !stamps.isEmpty, let cmd = queue.makeCommandBuffer() else { return }
         let count = stamps.count
-        if stampBufferCapacity < count {
-            stampBufferCapacity = max(count, 4096)
-            stampBuffer = device.makeBuffer(length: stampBufferCapacity * MemoryLayout<Stamp>.stride,
-                                            options: .storageModeShared)
-        }
-        guard let buffer = stampBuffer else { return }
-        stamps.withUnsafeBytes { src in
-            buffer.contents().copyMemory(from: src.baseAddress!, byteCount: count * MemoryLayout<Stamp>.stride)
-        }
+        // One buffer per call: a shared, reused buffer would be overwritten by the next paint
+        // before the GPU has read it, since we commit without waiting.
+        guard let buffer = stamps.withUnsafeBytes({ src in
+            device.makeBuffer(bytes: src.baseAddress!, length: src.count, options: .storageModeShared)
+        }) else { return }
         var uniforms = StampUniforms(canvasSize: SIMD2<Float>(Float(canvasSize.x), Float(canvasSize.y)), color: color)
 
         let pass = MTLRenderPassDescriptor()
