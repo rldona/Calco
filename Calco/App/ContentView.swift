@@ -130,12 +130,22 @@ struct OnionSkinButton: View {
                 Toggle("Onion skin", isOn: $state.onion.enabled).font(.headline)
                 Group {
                     HStack {
-                        Circle().fill(Color(rgba: SIMD4(OnionSkin.beforeTint, 1))).frame(width: 10, height: 10)
                         CompactStepper(title: "Frames before", value: $state.onion.before, range: 0...5)
+                        Spacer()
+                        ColorPicker("Frames before colour", selection: Binding(
+                            get: { Color(rgba: SIMD4(state.onion.beforeTint, 1)) },
+                            set: { let c = SIMD4<Float>($0); state.onion.beforeTint = SIMD3(c.x, c.y, c.z) }),
+                                    supportsOpacity: false)
+                            .labelsHidden()
                     }
                     HStack {
-                        Circle().fill(Color(rgba: SIMD4(OnionSkin.afterTint, 1))).frame(width: 10, height: 10)
                         CompactStepper(title: "Frames after", value: $state.onion.after, range: 0...5)
+                        Spacer()
+                        ColorPicker("Frames after colour", selection: Binding(
+                            get: { Color(rgba: SIMD4(state.onion.afterTint, 1)) },
+                            set: { let c = SIMD4<Float>($0); state.onion.afterTint = SIMD3(c.x, c.y, c.z) }),
+                                    supportsOpacity: false)
+                            .labelsHidden()
                     }
                     HStack {
                         Text("Strength").font(.caption).foregroundStyle(.secondary)

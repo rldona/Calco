@@ -8,8 +8,8 @@ struct OnionSkin: Equatable {
     var opacity: Float = 0.35
     /// Ghost only the layer being drawn on, not the whole frame.
     var currentLayerOnly = false
-    static let beforeTint = SIMD3<Float>(0.85, 0.25, 0.25)
-    static let afterTint  = SIMD3<Float>(0.25, 0.55, 0.85)
+    var beforeTint = SIMD3<Float>(0.85, 0.25, 0.25)
+    var afterTint  = SIMD3<Float>(0.25, 0.55, 0.85)
 }
 
 /// Everything the editor UI and the canvas view share.
@@ -563,6 +563,51 @@ final class EditorState: ObservableObject {
         refreshClipThumbnails()
     }
 
+    /// Makes the drawing that starts at frame `start` on `layer` span `count` frames: frames after
+    /// it become holds of it (their own drawings on that layer are dropped), or, when shortened,
+    /// the frames it no longer covers get blank drawings of their own. A drag is one undo step.
+    func setDrawingSpan(layer: String, start: Int, count: Int) {
+        guard frames.indices.contains(start), !clip.isHeld(layer: layer, at: start),
+              layers.first(where: { $0.id == layer })?.locked == false else { return }
+        let old = clip.runs(of: layer).first { $0.start == start }?.count ?? 1
+        let new = min(max(1, count), frames.count - start)
+        guard new != old else { return }
+        let touched = (start + 1)..<(start + max(old, new))
+        // A drag reaches further as it goes, but only its first step records the undo: save every
+        // cell it could still cover on this layer, not just the ones it touches now.
+        recordUndo(textures: ((start + 1)..<frames.count).map { LayerKey(clip: clip.id, frame: frames[$0].id, layer: layer) },
+                   coalescing: "span:\(layer):\(frames[start].id)")
+        for i in touched {
+            let own = LayerKey(clip: clip.id, frame: frames[i].id, layer: layer)
+            if i < start + new {
+                if !clip.frames[i].held.contains(layer) { clip.frames[i].held.append(layer) }
+                clip.frames[i].labels[layer] = nil
+                store.set(nil, for: own)
+            } else {
+                clip.frames[i].held.removeAll { $0 == layer }
+            }
+        }
+        isDirty = true
+        refreshClipThumbnails()
+    }
+
+    /// The label of the drawing `layer` shows at frame `index`, if it has one.
+    func drawingLabel(layer: String, at index: Int) -> String? {
+        guard frames.indices.contains(index) else { return nil }
+        return frames[clip.sourceIndex(layer: layer, at: index)].labels[layer]
+    }
+
+    /// Names (or, with an empty name, un-names) the current layer's drawing at the playhead.
+    func setCurrentDrawingLabel(_ name: String) {
+        guard let l = currentLayer, frames.indices.contains(frameIndex) else { return }
+        let i = clip.sourceIndex(layer: l.id, at: frameIndex)
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard clip.frames[i].labels[l.id] != (trimmed.isEmpty ? nil : trimmed) else { return }
+        recordUndo()
+        clip.frames[i].labels[l.id] = trimmed.isEmpty ? nil : trimmed
+        isDirty = true
+    }
+
     /// Every (frame, layer) cell of the current clip, held or not.
     private func allCellKeys() -> [LayerKey] {
         frames.flatMap { layerKeys(clip, frame: $0.id) }
@@ -573,10 +618,12 @@ final class EditorState: ObservableObject {
     /// ended up first) gets the drawing it was showing as its own copy. The first frame never holds.
     private func keepingPicture(_ change: () -> Void) {
         var before: [LayerKey: MTLTexture?] = [:]
+        var labelBefore: [LayerKey: String] = [:]
         for i in frames.indices {
             for l in layers {
                 let cell = LayerKey(clip: clip.id, frame: frames[i].id, layer: l.id)
                 before.updateValue(drawingKey(layer: l.id, at: i).flatMap(store.raw), forKey: cell)
+                labelBefore[cell] = drawingLabel(layer: l.id, at: i)
             }
         }
         change()
@@ -591,6 +638,7 @@ final class EditorState: ObservableObject {
                 let now = drawingKey(layer: l.id, at: i).flatMap(store.raw)
                 if (now as AnyObject?) === (expected as AnyObject?) { continue }
                 clip.frames[i].held.removeAll { $0 == l.id }
+                clip.frames[i].labels[l.id] = labelBefore[cell]
                 if let old = entry, let c = store.copy(old) {
                     store.set(c, for: cell)
                     copies[ObjectIdentifier(old)] = c
@@ -797,13 +845,13 @@ final class EditorState: ObservableObject {
                 let idx = frameIndex - i
                 guard frames.indices.contains(idx) else { continue }
                 let fade = 1 - Float(i - 1) / Float(max(onion.before, 1)) * 0.6
-                out += onionLayers(at: idx, opacity: onion.opacity * fade, tint: OnionSkin.beforeTint)
+                out += onionLayers(at: idx, opacity: onion.opacity * fade, tint: onion.beforeTint)
             }
             for i in stride(from: onion.after, through: 1, by: -1) {
                 let idx = frameIndex + i
                 guard frames.indices.contains(idx) else { continue }
                 let fade = 1 - Float(i - 1) / Float(max(onion.after, 1)) * 0.6
-                out += onionLayers(at: idx, opacity: onion.opacity * fade, tint: OnionSkin.afterTint)
+                out += onionLayers(at: idx, opacity: onion.opacity * fade, tint: onion.afterTint)
             }
         }
         if currentFrame != nil {

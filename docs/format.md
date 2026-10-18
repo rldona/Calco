@@ -72,6 +72,7 @@ Hero.calco/
 | `clips[].layers` | Ordered bottom to top. Layer `id` is the PNG basename inside each frame folder. |
 | `clips[].frames[].id` | Frame folder name. Order in the array is playback order. |
 | `clips[].frames[].hold` | How many ticks at the clip's fps this frame stays on screen. Default `1`. |
+| `clips[].frames[].labels` | Optional (format 2). Names for this frame's own drawings, by layer id, e.g. `{"line": "contact"}`. |
 | `clips[].frames[].held` | Optional (format 2). Layer ids that keep showing the previous frame's drawing here, like a hold on an exposure sheet; those layers have no PNG in this frame's folder. Ignored on a clip's first frame. |
 | `references` | Optional guide images drawn under everything, never exported. |
 

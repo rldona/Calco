@@ -5,6 +5,8 @@ import SwiftUI
 /// for the whole clip is a single long cell. Tap a cell to go to that frame and layer.
 struct TimelineView: View {
     @ObservedObject var state: EditorState
+    @State private var labeling = false
+    @State private var labelText = ""
 
     /// Width of one tick (one `hold` unit).
     private let tick: CGFloat = 40
@@ -28,6 +30,7 @@ struct TimelineView: View {
                                 ForEach(rows) { layer in row(layer) }
                             }
                             .overlay(alignment: .topLeading) { playhead }
+                            .coordinateSpace(name: Self.sheet)
                             .padding(.trailing, 8)
                         }
                         .onChange(of: state.frameIndex) { _, _ in
@@ -43,6 +46,30 @@ struct TimelineView: View {
             footer
         }
         .calcoPanel(padding: 10)
+        .alert("Label drawing", isPresented: $labeling) {
+            TextField("contact, passing, up…", text: $labelText)
+            Button("Save") { state.setCurrentDrawingLabel(labelText) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Shown in the cell instead of its number. Leave empty to remove it.")
+        }
+    }
+
+    private static let sheet = "sheet"
+
+    /// The frame under x (in the sheet's coordinates), clamped to the clip.
+    private func frameIndex(atX x: CGFloat) -> Int {
+        var edge: CGFloat = 0
+        for (i, f) in state.frames.enumerated() {
+            edge += width(f)
+            if x < edge { return i }
+        }
+        return max(0, state.frames.count - 1)
+    }
+
+    private func select(frame: Int, layer: String) {
+        state.frameIndex = frame
+        if let i = state.layers.firstIndex(where: { $0.id == layer }) { state.layerIndex = i }
     }
 
     /// Top layer first, like the canvas stacks them.
@@ -110,10 +137,10 @@ struct TimelineView: View {
                 .toggleStyle(.button)
                 .help("Onion skin")
             Group {
-                Circle().fill(Color(rgba: SIMD4(OnionSkin.beforeTint, 1))).frame(width: 8, height: 8)
+                Circle().fill(Color(rgba: SIMD4(state.onion.beforeTint, 1))).frame(width: 8, height: 8)
                 CompactStepper(title: "", value: $state.onion.before, range: 0...5)
                 CompactStepper(title: "", value: $state.onion.after, range: 0...5)
-                Circle().fill(Color(rgba: SIMD4(OnionSkin.afterTint, 1))).frame(width: 8, height: 8)
+                Circle().fill(Color(rgba: SIMD4(state.onion.afterTint, 1))).frame(width: 8, height: 8)
             }
             .opacity(state.onion.enabled ? 1 : 0.35)
         }
@@ -135,17 +162,16 @@ struct TimelineView: View {
                     .overlay(alignment: .leading) { Rectangle().fill(Theme.hairline).frame(width: 1, height: 6) }
                     .contentShape(Rectangle())
                     .onTapGesture { state.frameIndex = i }
-                    .contextMenu {
-                        Button { state.frameIndex = i; state.setPlayRange(start: true) } label: {
-                            Label("Play from here", systemImage: "arrow.right.to.line")
+                    // Hold the number, then drag: the frame (all its layers) moves along the sheet.
+                    .gesture(LongPressGesture(minimumDuration: 0.25)
+                        .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.sheet)))
+                        .onChanged { value in
+                            guard case .second(true, let drag?) = value else { return }
+                            state.moveFrame(id: frame.id, to: frameIndex(atX: drag.location.x))
                         }
-                        Button { state.frameIndex = i; state.setPlayRange(start: false) } label: {
-                            Label("Play up to here", systemImage: "arrow.left.to.line")
-                        }
-                        if state.playRange != nil {
-                            Button { state.playRange = nil } label: { Label("Play whole clip", systemImage: "arrow.left.and.right") }
-                        }
-                    }
+                        .onEnded { _ in state.endCoalescing() })
+                    .accessibilityLabel("Frame \(i + 1)")
+                    .accessibilityHint("Hold and drag to move the frame")
                     .id(frame.id)
             }
         }
@@ -180,7 +206,9 @@ struct TimelineView: View {
                         .strokeBorder(selected ? Theme.accent : Theme.hairline,
                                       style: StrokeStyle(lineWidth: selected ? 1.5 : 0.75, dash: drawn ? [] : [3, 3]))
                     HStack(spacing: 4) {
-                        Text("\(n + 1)").font(.system(size: 10, weight: .medium, design: .rounded))
+                        Text(clip.frames[run.start].labels[layer.id] ?? "\(n + 1)")
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                            .lineLimit(1)
                         if run.count > 1 {
                             Image(systemName: "arrow.right").font(.system(size: 8, weight: .semibold))
                         }
@@ -197,17 +225,65 @@ struct TimelineView: View {
                         ForEach(Array(span.enumerated()), id: \.element.id) { k, frame in
                             Color.clear.contentShape(Rectangle())
                                 .frame(width: width(frame))
-                                .onTapGesture {
-                                    state.frameIndex = run.start + k
-                                    if let i = state.layers.firstIndex(where: { $0.id == layer.id }) { state.layerIndex = i }
-                                }
+                                .onTapGesture { select(frame: run.start + k, layer: layer.id) }
+                                .contextMenu { cellMenu(frame: run.start + k, layer: layer.id) }
                         }
+                    }
+                }
+                .overlay(alignment: .trailing) {
+                    // Drag the right edge to make the drawing last more or fewer frames.
+                    if !layer.locked {
+                        Capsule()
+                            .fill(selected ? Theme.accent : Theme.textFaint.opacity(0.5))
+                            .frame(width: 3, height: rowHeight * 0.5)
+                            .frame(width: 14, height: rowHeight)
+                            .contentShape(Rectangle())
+                            .highPriorityGesture(DragGesture(minimumDistance: 2, coordinateSpace: .named(Self.sheet))
+                                .onChanged { g in
+                                    state.setDrawingSpan(layer: layer.id, start: run.start,
+                                                         count: frameIndex(atX: g.location.x) - run.start + 1)
+                                }
+                                .onEnded { _ in state.endCoalescing() })
+                            .accessibilityLabel("Drawing length")
+                            .accessibilityValue("\(run.count) frames")
+                            .accessibilityAdjustableAction { dir in
+                                state.setDrawingSpan(layer: layer.id, start: run.start,
+                                                     count: run.count + (dir == .increment ? 1 : -1))
+                                state.endCoalescing()
+                            }
                     }
                 }
                 .accessibilityElement()
                 .accessibilityLabel("\(layer.name), drawing \(n + 1)\(run.count > 1 ? ", held \(run.count) frames" : "")")
                 .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
             }
+        }
+    }
+
+    /// Long-press a cell: what the exposure sheet can do with it.
+    @ViewBuilder
+    private func cellMenu(frame: Int, layer: String) -> some View {
+        let held = state.clip.isHeld(layer: layer, at: frame)
+        if held {
+            Button { select(frame: frame, layer: layer); state.releaseCurrentCell(copying: false) } label: {
+                Label("New drawing here", systemImage: "square.dashed")
+            }
+            Button { select(frame: frame, layer: layer); state.releaseCurrentCell(copying: true) } label: {
+                Label("Copy drawing here", systemImage: "square.on.square")
+            }
+        } else if frame > 0 {
+            Button { select(frame: frame, layer: layer); state.holdCurrentCell() } label: {
+                Label("Hold previous drawing", systemImage: "arrow.right.to.line")
+            }
+        }
+        Button {
+            select(frame: frame, layer: layer)
+            labelText = state.drawingLabel(layer: layer, at: frame) ?? ""
+            labeling = true
+        } label: { Label("Label…", systemImage: "tag") }
+        Divider()
+        Button(role: .destructive) { select(frame: frame, layer: layer); state.clearCurrentLayer() } label: {
+            Label("Clear drawing", systemImage: "eraser.line.dashed")
         }
     }
 
@@ -235,6 +311,20 @@ struct TimelineView: View {
                     Label("Hold previous", systemImage: "arrow.right.to.line").labelStyle(.titleAndIcon).font(.caption)
                 }
                 .disabled(state.frameIndex == 0)
+            }
+
+            Button { labelText = state.currentLayer.flatMap { state.drawingLabel(layer: $0.id, at: state.frameIndex) } ?? ""
+                     labeling = true } label: { Label("Label drawing", systemImage: "tag") }
+
+            Menu {
+                Button { state.setPlayRange(start: true) } label: { Label("Play from this frame", systemImage: "arrow.right.to.line") }
+                Button { state.setPlayRange(start: false) } label: { Label("Play up to this frame", systemImage: "arrow.left.to.line") }
+                if state.playRange != nil {
+                    Button { state.playRange = nil } label: { Label("Play whole clip", systemImage: "arrow.left.and.right") }
+                }
+            } label: {
+                Label("Playback range", systemImage: "arrow.left.and.right.square")
+                    .foregroundStyle(state.playRange == nil ? Theme.textDim : Theme.accent)
             }
 
             Divider().overlay(Theme.hairline).frame(height: 16)

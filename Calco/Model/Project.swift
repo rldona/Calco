@@ -50,20 +50,24 @@ struct Frame: Codable, Equatable, Identifiable {
     /// Layers that keep showing the drawing from the frame before (an exposure-sheet hold), so
     /// they have no drawing of their own here. Never applies to a clip's first frame.
     var held: [String] = []
+    /// Optional names for this frame's own drawings, by layer id ("contact", "passing"…).
+    var labels: [String: String] = [:]
 
-    init(id: String, hold: Int = 1, held: [String] = []) {
+    init(id: String, hold: Int = 1, held: [String] = [], labels: [String: String] = [:]) {
         self.id = id
         self.hold = hold
         self.held = held
+        self.labels = labels
     }
 
-    private enum CodingKeys: String, CodingKey { case id, hold, held }
+    private enum CodingKeys: String, CodingKey { case id, hold, held, labels }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
         hold = try c.decodeIfPresent(Int.self, forKey: .hold) ?? 1
         held = try c.decodeIfPresent([String].self, forKey: .held) ?? []
+        labels = try c.decodeIfPresent([String: String].self, forKey: .labels) ?? [:]
     }
 
     func encode(to encoder: Encoder) throws {
@@ -71,6 +75,7 @@ struct Frame: Codable, Equatable, Identifiable {
         try c.encode(id, forKey: .id)
         try c.encode(hold, forKey: .hold)
         if !held.isEmpty { try c.encode(held, forKey: .held) }
+        if !labels.isEmpty { try c.encode(labels, forKey: .labels) }
     }
 }
 

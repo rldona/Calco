@@ -170,4 +170,63 @@ final class EditorStateExposureTests: XCTestCase {
         XCTAssertEqual(other.frames.map(\.held), [[], ["color"], ["color"]])
         XCTAssertGreaterThan(shown(other, frame: 2, x: 50, y: 50), 200, "export and thumbnails see the hold")
     }
+
+    func testDraggingADrawingsEdgeExtendsAndShrinksIt() throws {
+        let state = try makeState()
+        try dot(state, at: SIMD2(60, 60))           // line @ 000
+        state.addFrame(); state.addFrame(); state.addFrame()
+        try dot(state, at: SIMD2(300, 300))         // line @ 003
+        // Drag frame 0's line out over three frames, as one gesture.
+        state.setDrawingSpan(layer: "line", start: 0, count: 2)
+        state.setDrawingSpan(layer: "line", start: 0, count: 4)
+        state.endCoalescing()
+        XCTAssertEqual(state.clip.runs(of: "line").map(\.count), [4])
+        XCTAssertEqual(shown(state, frame: 3, x: 300, y: 300), 0, "covered drawing is replaced by the hold")
+        XCTAssertGreaterThan(shown(state, frame: 3, x: 60, y: 60), 200)
+
+        state.setDrawingSpan(layer: "line", start: 0, count: 2)
+        state.endCoalescing()
+        XCTAssertEqual(state.clip.runs(of: "line").map(\.count), [2, 1, 1], "frames it leaves get their own blank drawings")
+        XCTAssertEqual(shown(state, frame: 2, x: 60, y: 60), 0)
+
+        state.undo(); state.undo()
+        XCTAssertEqual(state.clip.runs(of: "line").map(\.count), [1, 1, 1, 1], "each drag undoes in one step")
+        XCTAssertGreaterThan(shown(state, frame: 3, x: 300, y: 300), 200)
+    }
+
+    func testSpanStaysInsideTheClipAndRespectsTheLock() throws {
+        let state = try makeState()
+        state.addFrame()
+        state.setDrawingSpan(layer: "line", start: 0, count: 99)
+        XCTAssertEqual(state.clip.runs(of: "line").map(\.count), [2])
+        state.toggleLayerLock(1)
+        state.setDrawingSpan(layer: "line", start: 0, count: 1)
+        XCTAssertEqual(state.clip.runs(of: "line").map(\.count), [2])
+    }
+
+    func testLabelsFollowTheDrawingAndSurviveSaving() throws {
+        let state = try makeState()
+        try backgroundAndThreeFrames(state)
+        state.layerIndex = 0
+        state.frameIndex = 2                        // held cell: labels the held drawing
+        state.setCurrentDrawingLabel("  room  ")
+        XCTAssertEqual(state.frames[0].labels, ["color": "room"])
+        XCTAssertEqual(state.drawingLabel(layer: "color", at: 1), "room")
+
+        state.frameIndex = 0
+        state.deleteFrame()                         // the drawing moves to 001, and its name with it
+        XCTAssertEqual(state.drawingLabel(layer: "color", at: 0), "room")
+
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Labels-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("L.calco", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        state.save(to: url)
+        let other = try makeState()
+        other.open(url)
+        XCTAssertEqual(other.drawingLabel(layer: "color", at: 1), "room")
+
+        state.setCurrentDrawingLabel("")
+        XCTAssertNil(state.drawingLabel(layer: "color", at: 0))
+    }
 }

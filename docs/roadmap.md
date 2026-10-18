@@ -63,11 +63,11 @@ drawing held for the whole clip while the character changes every 2 frames. Chan
 - [x] Per-layer exposures as held cells: a layer can keep showing the previous drawing (format 2). New frames hold every layer but the one being drawn; add / duplicate / delete / move keep every frame looking the same; painting a held cell edits the held drawing
 - [x] Timeline rows are the layers: name, eye, lock and opacity inline, long-press for rename / order / delete; a held drawing is one long cell; tap a cell to go there; clips as tabs
 - [x] Hold previous / new drawing / copy drawing per cell
-- [ ] Extend a drawing by dragging its end; drag frames to reorder in the sheet
+- [x] Extend or shorten a drawing by dragging its end; hold a frame number and drag to reorder; long-press a cell for hold / new / copy / label / clear
 - [x] Onion skin in the timeline (on/off, before / after), current layer only option; held layers no longer ghost over themselves
-- [ ] Onion skin colours
-- [x] Playback range (in / out): long-press a frame number
-- [ ] Drawing labels
+- [x] Onion skin colours
+- [x] Playback range (in / out) from the footer menu
+- [x] Drawing labels, shown in the cell
 - [ ] Export and Unity importer flatten per-layer exposures (no change for Unity)
 
 ## Later
