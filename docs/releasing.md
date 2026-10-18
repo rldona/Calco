@@ -67,6 +67,14 @@ gh secret set ASC_PRIVATE_KEY < AuthKey_XXXXXXXXXX.p8
 
 If any is missing, the release workflow says which ones and stops before building.
 
+### 5. Install it on your iPad with TestFlight
+
+1. In App Store Connect → the app → **TestFlight** → **Internal Testing** → **+**, create a group (for example *Team*) and add yourself.
+2. Install **TestFlight** from the App Store on the iPad and sign in with the same Apple ID.
+3. After a release, the build takes a few minutes to process; then it appears in TestFlight with **Install**. Later builds show up there as updates.
+
+The app declares no non-exempt encryption (`ITSAppUsesNonExemptEncryption` in `project.yml`), so builds don't wait on the export compliance question.
+
 ## Helper scripts
 
 - `scripts/ci/changelog-section.sh X.Y.Z` prints a version's changelog section (try it before tagging).
