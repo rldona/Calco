@@ -45,7 +45,7 @@ namespace Calco
                     // Aseprite rects are top-left; Unity's are bottom-left.
                     rect = new Rect(f.x, texHeight - f.y - f.h, f.w, f.h),
                     alignment = (int)SpriteAlignment.Custom,
-                    pivot = tag != null ? sheet.PivotFor(tag) : new Vector2(0.5f, 0f),
+                    pivot = sheet.PivotFor(tag, sheet.frames[i]),
                     border = Vector4.zero,
                 });
             }

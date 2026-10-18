@@ -172,6 +172,7 @@ struct FileMenu: View {
     @State private var exported: [URL] = []
     @State private var exportTitle = ""
     @State private var showingExport = false
+    @State private var showingProfiles = false
 
     var body: some View {
         Menu {
@@ -184,8 +185,13 @@ struct FileMenu: View {
                 Label("Save As…", systemImage: "square.and.arrow.down.on.square")
             }
             Divider()
-            Button { state.request = .exportSpriteSheet } label: {
-                Label("Export sprite sheet…", systemImage: "square.grid.3x3.square")
+            Button { state.request = .export } label: {
+                Label("Export…", systemImage: "square.and.arrow.up.on.square")
+            }
+            if let last = state.lastExportProfile {
+                Button { state.request = .exportAgain } label: {
+                    Label("Export again · \(last.name)", systemImage: "arrow.clockwise")
+                }
             }
             Button { state.request = .exportGIF } label: {
                 Label("Export GIF (\(state.clip.name))…", systemImage: "film")
@@ -215,6 +221,13 @@ struct FileMenu: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Saved to On My iPad › Calco as a .calco package.")
+        }
+        .sheet(isPresented: $showingProfiles) {
+            ExportProfilesSheet(state: state) { urls, name in
+                exported = urls
+                exportTitle = name
+                showingExport = true
+            }
         }
         .sheet(isPresented: $showingExport) {
             ExportSheet(title: exportTitle, urls: exported, name: state.project.name)
@@ -246,10 +259,12 @@ struct FileMenu: View {
         case .saveAs:
             saveAsName = state.project.name
             showingSaveAs = true
-        case .exportSpriteSheet:
-            if let urls = state.exportSpriteSheet() {
+        case .export:
+            showingProfiles = true
+        case .exportAgain:
+            if let profile = state.lastExportProfile, let urls = state.export(profile) {
                 exported = urls
-                exportTitle = "Sprite sheet"
+                exportTitle = profile.name
                 showingExport = true
             }
         case .exportGIF:
@@ -295,7 +310,7 @@ struct ExportSheet: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                 ShareLink(items: urls) {
-                    Label(urls.count > 1 ? "Share PNG + JSON" : "Share GIF", systemImage: "square.and.arrow.up")
+                    Label(shareTitle, systemImage: "square.and.arrow.up")
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -308,7 +323,14 @@ struct ExportSheet: View {
         .presentationDetents([.medium, .large])
     }
 
+    private var shareTitle: String {
+        if urls.count == 1, urls[0].hasDirectoryPath { return "Share folder" }
+        if urls.map(\.pathExtension) == ["png", "json"] { return "Share PNG + JSON" }
+        return urls.count == 1 ? "Share \(urls[0].pathExtension.uppercased())" : "Share \(urls.count) files"
+    }
+
     private func icon(for url: URL) -> String {
+        if url.hasDirectoryPath { return "folder" }
         switch url.pathExtension {
         case "png": return "photo"
         case "gif": return "film"

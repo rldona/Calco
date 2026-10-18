@@ -69,7 +69,7 @@ final class EditorState: ObservableObject {
 
     /// Actions that need a dialog or sheet owned by a view (the file menu). Menus and keyboard
     /// shortcuts set it; the view presents what's needed and clears it.
-    enum Request: Equatable { case newProject, open, saveAs, exportSpriteSheet, exportGIF }
+    enum Request: Equatable { case newProject, open, saveAs, export, exportAgain, exportGIF }
     @Published var request: Request?
 
     private(set) var renderer: CanvasRenderer
@@ -77,6 +77,17 @@ final class EditorState: ObservableObject {
     private let screenFormat: MTLPixelFormat
     /// Where tool settings are remembered. Nil (tests, previews) keeps them in memory only.
     private let defaults: UserDefaults?
+
+    /// Saved export profiles (app-wide) and the one used last.
+    @Published var exportProfiles: [ExportProfile] = ExportProfile.presets {
+        didSet { ExportProfileStore(defaults: defaults).save(exportProfiles) }
+    }
+    @Published var lastExportProfileID: UUID? {
+        didSet { ExportProfileStore(defaults: defaults).lastUsed = lastExportProfileID }
+    }
+    var lastExportProfile: ExportProfile? {
+        exportProfiles.first { $0.id == lastExportProfileID }
+    }
 
     private var nextFrameNumber = 0
     private var playTask: Task<Void, Never>?
@@ -99,6 +110,9 @@ final class EditorState: ObservableObject {
         self.store = FrameStore(renderer: renderer)
         self.screenFormat = screenFormat
         self.defaults = defaults
+        let profiles = ExportProfileStore(defaults: defaults)
+        self.exportProfiles = profiles.load()
+        self.lastExportProfileID = profiles.lastUsed
         try? install(project, images: [:])
         isDirty = false
         loadToolSettings()
@@ -428,6 +442,68 @@ final class EditorState: ObservableObject {
             return try sheet.write(to: folder, baseName: project.name)
         } catch {
             lastError = "Couldn't export \(project.name).\n\(error.localizedDescription)"
+            return nil
+        }
+    }
+
+    /// Runs an export profile into `directory`/Exports/<project>/<profile>/ and returns the files
+    /// written (for sharing), or nil after setting `lastError`.
+    func export(_ profile: ExportProfile, in directory: URL = EditorState.documentsDirectory) -> [URL]? {
+        stop()
+        commitSelection()
+        let folder = directory
+            .appendingPathComponent("Exports", isDirectory: true)
+            .appendingPathComponent(project.name, isDirectory: true)
+            .appendingPathComponent(ProjectLibrary.cleanName(profile.name), isDirectory: true)
+        let clips = project.clips.filter { profile.clips?.contains($0.id) ?? true }
+        guard !clips.isEmpty else {
+            lastError = "\(profile.name) doesn't include any clip of \(project.name)."
+            return nil
+        }
+        do {
+            try? FileManager.default.removeItem(at: folder)   // a profile's folder is always its latest run
+            let urls: [URL]
+            switch profile.target {
+            case .spriteSheet:
+                let sheet = SpriteSheet.build(project: project, options: profile.sheetOptions) { clip, frame in
+                    flattenedImage(clip: clip, frameID: frame.id)
+                }
+                urls = try sheet.write(to: folder, baseName: project.name)
+            case .gif:
+                let canvas = CanvasSize(width: max(1, Int((Double(project.canvas.width) * profile.scale).rounded())),
+                                        height: max(1, Int((Double(project.canvas.height) * profile.scale).rounded())))
+                urls = try clips.map { clip in
+                    let fps = Double(max(clip.fps ?? project.fps, 1))
+                    let frames = clip.frames.map { f in
+                        GIFExport.Frame(image: flattenedImage(clip: clip, frameID: f.id).flatMap { ImageScaling.scale($0, by: profile.scale) },
+                                        durationSeconds: Double(f.hold) / fps)
+                    }
+                    let url = folder.appendingPathComponent("\(project.name)-\(clip.id).gif")
+                    try GIFExport.write(frames, canvas: canvas, loop: clip.loop, to: url)
+                    return url
+                }
+            case .pngSequence:
+                for clip in clips {
+                    let clipFolder = folder.appendingPathComponent(clip.id, isDirectory: true)
+                    var tick = 0
+                    for f in clip.frames {
+                        let image = flattenedImage(clip: clip, frameID: f.id).flatMap { ImageScaling.scale($0, by: profile.scale) }
+                            ?? ImageScaling.blank(width: Int((Double(project.canvas.width) * profile.scale).rounded()),
+                                                  height: Int((Double(project.canvas.height) * profile.scale).rounded()))
+                        for _ in 0..<max(f.hold, 1) {
+                            let url = clipFolder.appendingPathComponent(String(format: "%@_%03d.png", clip.id, tick))
+                            if let image { try ImageScaling.writePNG(image, to: url) }
+                            tick += 1
+                        }
+                    }
+                }
+                // A folder per clip, a file per tick: share the export folder itself.
+                urls = [folder]
+            }
+            lastExportProfileID = profile.id
+            return urls
+        } catch {
+            lastError = "Couldn't export with \(profile.name).\n\(error.localizedDescription)"
             return nil
         }
     }

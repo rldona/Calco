@@ -20,7 +20,8 @@ https://github.com/rldona/Calco.git?path=/calco-unity
 
 ## Use
 
-1. In Calco, **File → Export sprite sheet…** and share the PNG + JSON to your Unity project's `Assets/`.
+1. In Calco, **File → Export…**, pick a sprite sheet profile ("Unity", "Unity · trimmed"…) and share the
+   PNG + JSON to your Unity project's `Assets/`.
    Keep them in the same folder with the same base name.
 2. Unity imports the PNG; the importer sees the JSON and does the rest.
 3. Put `Hero.controller` on an `Animator` next to a `SpriteRenderer`.
@@ -40,6 +41,7 @@ Aseprite itself also work:
 | `meta.frameTags[]` | One `AnimationClip` per tag, named `<sheet>_<tag>` |
 | `meta.frameTags[].loop` | Clip `loopTime`. Calco writes it; absent (plain Aseprite) means loop |
 | `meta.slices[]` named like a tag | That tag's sprite pivot, converted from top-left pixels to normalized bottom-left |
+| `frames[].trimmed`, `spriteSourceSize`, `sourceSize` | For trimmed frames the canvas pivot is moved onto the trimmed box, so the character stands in the same place as untrimmed (the pivot may fall outside the box, e.g. feet below a trimmed shadow) |
 
 Pixels per unit default to **100**, Unity's default. Change it on the texture if your canvas isn't that scale;
 it's preserved across reimports.

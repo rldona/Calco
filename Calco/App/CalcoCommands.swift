@@ -18,7 +18,10 @@ struct CalcoCommands: Commands {
             Button("Save As…") { state.request = .saveAs }.keyboardShortcut("s", modifiers: [.command, .shift]).disabled(state.isInGallery)
         }
         CommandGroup(replacing: .importExport) {
-            Button("Export Sprite Sheet…") { state.request = .exportSpriteSheet }.keyboardShortcut("e").disabled(state.isInGallery)
+            Button("Export…") { state.request = .export }.keyboardShortcut("e").disabled(state.isInGallery)
+            Button("Export Again\(state.lastExportProfile.map { " (\($0.name))" } ?? "")") { state.request = .exportAgain }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+                .disabled(state.isInGallery || state.lastExportProfile == nil)
             Button("Export GIF…") { state.request = .exportGIF }.keyboardShortcut("g").disabled(state.isInGallery)
         }
 

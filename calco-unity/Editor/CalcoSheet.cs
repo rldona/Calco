@@ -109,6 +109,23 @@ namespace Calco
             return new Vector2(0.5f, 0f);
         }
 
+        /// <summary>
+        /// Pivot for one sprite. Same as <see cref="PivotFor(Tag)"/> for full-canvas frames; for trimmed
+        /// frames the canvas pivot is moved onto the trimmed box, so the character stays put in the scene.
+        /// </summary>
+        public Vector2 PivotFor(Tag tag, Frame frame)
+        {
+            var canvasPivot = tag != null ? PivotFor(tag) : new Vector2(0.5f, 0f);
+            var box = frame.spriteSourceSize;
+            var canvas = frame.sourceSize;
+            if (!frame.trimmed || box == null || canvas == null || box.w == 0 || box.h == 0 || canvas.w == 0 || canvas.h == 0)
+                return canvasPivot;
+            // Canvas pivot in pixels from the top-left, then relative to the box, back to bottom-left normalized.
+            float px = canvasPivot.x * canvas.w;
+            float py = (1f - canvasPivot.y) * canvas.h;
+            return new Vector2((px - box.x) / box.w, 1f - (py - box.y) / box.h);
+        }
+
         /// <summary>Tag that owns frame <paramref name="index"/>, or null.</summary>
         public Tag TagForFrame(int index)
         {

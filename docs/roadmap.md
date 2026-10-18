@@ -1,5 +1,9 @@
 # Roadmap
 
+Calco is for **indie game developers who animate on iPad**: tablet ergonomics (Pencil, gestures,
+Zen) are the base of every screen, and the game pipeline is what sets it apart from RoughAnimator.
+A Mac version can come later on the same core.
+
 ## v0.1 — "it moves in Unity"
 
 - [x] Metal canvas PoC: Pencil input, pressure, one brush, acceptable latency (~9 ms on iPad Pro 11)
@@ -69,6 +73,24 @@ drawing held for the whole clip while the character changes every 2 frames. Chan
 - [x] Playback range (in / out) from the footer menu
 - [x] Drawing labels, shown in the cell
 - [ ] Export and Unity importer flatten per-layer exposures (no change for Unity)
+
+## v0.6 — "pipeline"
+
+- [x] Export profiles: saved, app-wide combinations (target, clips, scale, trim, padding, power-of-two); presets Unity, Unity · trimmed, Pixel art 4×, GIF to share, PNG frames; "Export again" (⇧⌘E)
+- [x] Export only some clips; GIF per clip; PNG sequence per clip (holds expanded)
+- [x] Trim transparent borders, one box per clip, with the pivot kept right in Unity (checked in Unity 6000.6 batch mode); scale ½× / 1× / 2× / 4×
+- [ ] Godot target (SpriteFrames .tres)
+- [ ] Unity: pixels per unit, animation events from drawing labels; importer checked against held cells
+- [ ] Consistency checks before export: pivot / feet drifting, size changing, cycles that don't close, empty frames, hidden layers
+
+## v0.7 — "assist"
+
+Helps without drawing for you: guides on their own layer, never final art.
+
+- [ ] Reference images to trace over (`references/` in the format already)
+- [ ] Recolour a colour across a clip; apply a palette
+- [ ] Mirror or ping-pong a clip
+- [ ] Inbetween suggestions as a translucent guide
 
 ## Later
 
