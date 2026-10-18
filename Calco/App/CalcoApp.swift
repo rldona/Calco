@@ -23,7 +23,8 @@ extension EditorState {
     /// Every supported iPad has a Metal device; failing here means a broken build, not a user error.
     static func make() -> EditorState {
         guard let device = MTLCreateSystemDefaultDevice(),
-              let state = EditorState(device: device, screenFormat: CanvasUIView.screenFormat) else {
+              let state = EditorState(device: device, screenFormat: CanvasUIView.screenFormat,
+                                      defaults: .standard) else {
             fatalError("Metal is unavailable or the shader library failed to load")
         }
         return state

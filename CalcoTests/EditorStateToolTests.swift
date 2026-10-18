@@ -59,6 +59,40 @@ final class EditorStateToolTests: XCTestCase {
         XCTAssertEqual(state.tool, .brush)
     }
 
+    func testSizesAndColourAreRememberedAcrossLaunches() throws {
+        let suite = "EditorStateToolTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("Metal unavailable") }
+
+        let first = try XCTUnwrap(EditorState(device: device, screenFormat: .bgra8Unorm, defaults: defaults))
+        XCTAssertEqual(first.brushSize, 6, "fresh install keeps the defaults")
+        first.toolSize = 14
+        first.tool = .eraser
+        first.toolSize = 30
+        first.setColor(SIMD4<Float>(0.2, 0.4, 0.6, 1))
+
+        let second = try XCTUnwrap(EditorState(device: device, screenFormat: .bgra8Unorm, defaults: defaults))
+        XCTAssertEqual(second.brushSize, 14)
+        XCTAssertEqual(second.eraserSize, 30)
+        XCTAssertEqual(second.color, SIMD4<Float>(0.2, 0.4, 0.6, 1))
+    }
+
+    func testGarbageInDefaultsFallsBackToDefaults() throws {
+        let suite = "EditorStateToolTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("Metal unavailable") }
+        defaults.set(Float(900), forKey: "tool.brushSize")
+        defaults.set("big", forKey: "tool.eraserSize")
+        defaults.set([Float(2), 0, 0], forKey: "tool.color")
+
+        let state = try XCTUnwrap(EditorState(device: device, screenFormat: .bgra8Unorm, defaults: defaults))
+        XCTAssertEqual(state.brushSize, 6)
+        XCTAssertEqual(state.eraserSize, 18)
+        XCTAssertEqual(state.color, SIMD4<Float>(0, 0, 0, 1))
+    }
+
     func testHexAndSwiftUIColourConversion() {
         XCTAssertEqual(SIMD4<Float>(hex: 0xFF8000), SIMD4<Float>(1, 128.0 / 255, 0, 1))
         let c = SIMD4<Float>(0.2, 0.4, 0.6, 1)

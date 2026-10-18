@@ -20,11 +20,11 @@ final class EditorState: ObservableObject {
     @Published var frameIndex = 0
     @Published var layerIndex = 0
     @Published var tool: CanvasRenderer.Tool = .brush
-    /// Radii in canvas pixels at full pressure, one per tool.
-    @Published var brushSize: Float = 6
-    @Published var eraserSize: Float = 18
+    /// Radii in canvas pixels at full pressure, one per tool. Remembered across launches.
+    @Published var brushSize: Float = 6 { didSet { saveToolSettings() } }
+    @Published var eraserSize: Float = 18 { didSet { saveToolSettings() } }
     /// Brush colour, straight RGBA. Always opaque for now: overlapping stamps would build up any translucency.
-    @Published var color = SIMD4<Float>(0, 0, 0, 1)
+    @Published var color = SIMD4<Float>(0, 0, 0, 1) { didSet { saveToolSettings() } }
     static let sizeRange: ClosedRange<Float> = 1...64
     @Published var onion = OnionSkin()
     @Published var isPlaying = false
@@ -44,6 +44,8 @@ final class EditorState: ObservableObject {
     private(set) var renderer: CanvasRenderer
     private(set) var store: FrameStore
     private let screenFormat: MTLPixelFormat
+    /// Where tool settings are remembered. Nil (tests, previews) keeps them in memory only.
+    private let defaults: UserDefaults?
 
     private var nextFrameNumber = 0
     private var playTask: Task<Void, Never>?
@@ -55,7 +57,7 @@ final class EditorState: ObservableObject {
     private var pendingStroke: Snapshot?
     static let historyLimit = 50
 
-    init?(device: MTLDevice, screenFormat: MTLPixelFormat) {
+    init?(device: MTLDevice, screenFormat: MTLPixelFormat, defaults: UserDefaults? = nil) {
         let project = Self.defaultProject()
         guard let renderer = CanvasRenderer(
             device: device,
@@ -65,8 +67,10 @@ final class EditorState: ObservableObject {
         self.renderer = renderer
         self.store = FrameStore(renderer: renderer)
         self.screenFormat = screenFormat
+        self.defaults = defaults
         try? install(project, images: [:])
         isDirty = false
+        loadToolSettings()
     }
 
     static func defaultProject(name: String = "Untitled") -> Project {
@@ -638,6 +642,35 @@ final class EditorState: ObservableObject {
     func stepToolSize(_ direction: Int) {
         let step: Float = toolSize < 10 ? 1 : toolSize < 30 ? 2 : 4
         toolSize += Float(direction) * step
+    }
+
+    private enum ToolKey {
+        static let brushSize = "tool.brushSize"
+        static let eraserSize = "tool.eraserSize"
+        static let color = "tool.color"
+    }
+
+    private var loadingToolSettings = false
+
+    /// Missing or out-of-range values keep the defaults.
+    private func loadToolSettings() {
+        guard let defaults else { return }
+        loadingToolSettings = true
+        defer { loadingToolSettings = false }
+        let range = Self.sizeRange
+        if let v = defaults.object(forKey: ToolKey.brushSize) as? Float, range.contains(v) { brushSize = v }
+        if let v = defaults.object(forKey: ToolKey.eraserSize) as? Float, range.contains(v) { eraserSize = v }
+        if let c = defaults.array(forKey: ToolKey.color) as? [Float], c.count == 3,
+           c.allSatisfy({ (0...1).contains($0) }) {
+            color = SIMD4<Float>(c[0], c[1], c[2], 1)
+        }
+    }
+
+    private func saveToolSettings() {
+        guard let defaults, !loadingToolSettings else { return }
+        defaults.set(brushSize, forKey: ToolKey.brushSize)
+        defaults.set(eraserSize, forKey: ToolKey.eraserSize)
+        defaults.set([color.x, color.y, color.z], forKey: ToolKey.color)
     }
 
     func setColor(_ c: SIMD4<Float>) {
