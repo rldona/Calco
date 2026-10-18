@@ -17,8 +17,9 @@ targets:
       path: Calco/Info.plist
       properties:
         UILaunchScreen: {}
-        UIRequiresFullScreen: true
         UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         UIFileSharingEnabled: true
