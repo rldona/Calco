@@ -3,11 +3,11 @@
 ## v0.1 — "it moves in Unity"
 
 - [x] Metal canvas PoC: Pencil input, pressure, one brush, acceptable latency (~9 ms on iPad Pro 11)
-- [ ] Layers per frame with opacity/visibility
-- [ ] Frame strip: add / duplicate / delete / reorder / hold
-- [ ] Onion skin (configurable before/after)
+- [x] Layers per frame with opacity/visibility
+- [x] Frame strip: add / duplicate / delete / reorder / hold (reorder by arrows; drag later)
+- [x] Onion skin (configurable before/after)
 - [ ] Clips (idle, run…) with pivot
-- [ ] Loop playback
+- [x] Loop playback
 - [ ] `.calco` save/load (see `format.md`)
 - [ ] Export sprite sheet PNG + Aseprite JSON
 - [ ] Export GIF

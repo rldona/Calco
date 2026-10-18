@@ -3,18 +3,19 @@ import MetalKit
 import SwiftUI
 
 /// UIKit view that owns the MTKView and handles Apple Pencil input.
-/// Uses coalesced touches for full 240 Hz sampling and renders on every
-/// display refresh. No predicted touches yet (they need an overlay layer
-/// that gets rewound); measure latency first, add prediction if needed.
+/// Paints into whatever `EditorState.paintTarget` says, and composites
+/// `EditorState.visibleLayers()` every display refresh.
 final class CanvasUIView: UIView {
 
     private let mtkView = MTKView()
-    private var renderer: CanvasRenderer?
     private var builder = StrokeBuilder()
     private var activeTouch: UITouch?
+    private var strokeTarget: MTLTexture?
 
-    /// Called on the main thread with the latency estimate (ms) of the last stroke segment.
+    weak var state: EditorState?
     var onLatencySample: ((Double) -> Void)?
+
+    static let screenFormat: MTLPixelFormat = .bgra8Unorm
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -23,7 +24,7 @@ final class CanvasUIView: UIView {
 
         guard let device = MTLCreateSystemDefaultDevice() else { return }
         mtkView.device = device
-        mtkView.colorPixelFormat = .bgra8Unorm
+        mtkView.colorPixelFormat = Self.screenFormat
         mtkView.framebufferOnly = true
         mtkView.preferredFramesPerSecond = 120
         mtkView.isPaused = false
@@ -38,21 +39,18 @@ final class CanvasUIView: UIView {
             mtkView.topAnchor.constraint(equalTo: topAnchor),
             mtkView.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
-
-        renderer = CanvasRenderer(device: device,
-                                  canvasSize: SIMD2<Int>(1024, 1024),
-                                  pixelFormat: mtkView.colorPixelFormat)
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
-    func clear() { renderer?.clear() }
-
     // MARK: - Touch handling
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard activeTouch == nil, let t = touches.first else { return }
+        guard activeTouch == nil, let t = touches.first,
+              let state, !state.isPlaying,
+              let target = state.paintTarget else { return }
         activeTouch = t
+        strokeTarget = target
         builder.begin()
         feed(touch: t, event: event)
     }
@@ -65,19 +63,27 @@ final class CanvasUIView: UIView {
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let t = activeTouch, touches.contains(t) else { return }
         feed(touch: t, event: event)
-        activeTouch = nil
+        endStroke()
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        endStroke()
+    }
+
+    private func endStroke() {
         activeTouch = nil
+        strokeTarget = nil
+        state?.strokeEnded()
     }
 
     private func feed(touch: UITouch, event: UIEvent?) {
-        guard let renderer else { return }
+        guard let state, let target = strokeTarget else { return }
+        let renderer = state.renderer
         let samples = event?.coalescedTouches(for: touch) ?? [touch]
         let scale = window?.screen.scale ?? UIScreen.main.scale
         let viewSize = CGSize(width: bounds.width * scale, height: bounds.height * scale)
 
+        builder.baseRadius = state.tool == .eraser ? 18 : 6
         var stamps: [CanvasRenderer.Stamp] = []
         for s in samples {
             let p = s.preciseLocation(in: self)
@@ -88,7 +94,7 @@ final class CanvasUIView: UIView {
                 : 0.5
             stamps += builder.add(.init(position: canvasPos, force: force))
         }
-        renderer.enqueue(stamps)
+        renderer.paint(stamps, into: target, color: SIMD4<Float>(0, 0, 0, 1), tool: state.tool)
 
         if let lastSample = samples.last {
             let ms = (CACurrentMediaTime() - lastSample.timestamp) * 1000
@@ -101,19 +107,23 @@ extension CanvasUIView: MTKViewDelegate {
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
     func draw(in view: MTKView) {
-        guard let renderer, let drawable = view.currentDrawable else { return }
-        renderer.draw(to: drawable, viewSize: view.drawableSize)
+        // MTKView calls this on the main thread.
+        MainActor.assumeIsolated {
+            guard let state, let drawable = view.currentDrawable else { return }
+            state.renderer.present(state.visibleLayers(), to: drawable, viewSize: view.drawableSize)
+        }
     }
 }
 
 // MARK: - SwiftUI bridge
 
 struct CanvasView: UIViewRepresentable {
+    @ObservedObject var state: EditorState
     @Binding var latencyMs: Double
-    var clearToken: Int
 
     func makeUIView(context: Context) -> CanvasUIView {
         let v = CanvasUIView(frame: .zero)
+        v.state = state
         v.onLatencySample = { ms in
             DispatchQueue.main.async { latencyMs = ms }
         }
@@ -121,15 +131,6 @@ struct CanvasView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: CanvasUIView, context: Context) {
-        if context.coordinator.lastClearToken != clearToken {
-            context.coordinator.lastClearToken = clearToken
-            uiView.clear()
-        }
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    final class Coordinator {
-        var lastClearToken = 0
+        uiView.state = state
     }
 }
