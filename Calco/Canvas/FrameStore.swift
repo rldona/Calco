@@ -1,4 +1,5 @@
 import Metal
+import CoreGraphics
 
 /// Holds one GPU texture per (clip, frame, layer). Lazily allocated.
 /// The `Project` model is the source of truth for which keys should exist;
@@ -46,5 +47,18 @@ final class FrameStore {
         if let t = existingTexture(clip: clip, frame: frame, layer: layer) {
             renderer.clear(t)
         }
+    }
+
+    // MARK: - Disk transfer
+
+    /// Pixels of a layer for saving. Nil for a layer that was never drawn on (omitted from the package).
+    func image(clip: String, frame: String, layer: String) -> CGImage? {
+        existingTexture(clip: clip, frame: frame, layer: layer).flatMap(renderer.readback)
+    }
+
+    /// Fills a layer from a loaded PNG, allocating its texture.
+    func load(_ image: CGImage, clip: String, frame: String, layer: String) {
+        guard let t = texture(clip: clip, frame: frame, layer: layer) else { return }
+        renderer.upload(image, into: t)
     }
 }

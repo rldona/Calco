@@ -4,10 +4,17 @@ import Metal
 @main
 struct CalcoApp: App {
     @StateObject private var state = EditorState.make()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
             ContentView(state: state)
+                // Tapping a .calco package in Files.
+                .onOpenURL { url in state.open(url) }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // iPadOS can kill a backgrounded app at any time; don't lose work that already has a file.
+            if phase == .background { state.saveIfNeeded() }
         }
     }
 }

@@ -207,22 +207,76 @@ final class CanvasRenderer {
         enc.endEncoding()
 
         cmd.addCompletedHandler { _ in
-            let bytesPerRow = w * 4
-            var bytes = [UInt8](repeating: 0, count: bytesPerRow * h)
-            bytes.withUnsafeMutableBytes { ptr in
-                target.getBytes(ptr.baseAddress!, bytesPerRow: bytesPerRow,
-                                from: MTLRegionMake2D(0, 0, w, h), mipmapLevel: 0)
-            }
-            let data = Data(bytes)
-            guard let provider = CGDataProvider(data: data as CFData) else { completion(nil); return }
-            let info = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue)
-            let image = CGImage(width: w, height: h, bitsPerComponent: 8, bitsPerPixel: 32,
-                                bytesPerRow: bytesPerRow, space: CGColorSpaceCreateDeviceRGB(),
-                                bitmapInfo: info, provider: provider, decode: nil,
-                                shouldInterpolate: true, intent: .defaultIntent)
-            completion(image)
+            completion(Self.image(from: target))
         }
         cmd.commit()
+    }
+
+    // MARK: - CPU transfer
+
+    /// Full-resolution copy of a layer as a premultiplied RGBA `CGImage`.
+    /// Blocks until the GPU has finished every command queued before it on `texture`.
+    func readback(_ texture: MTLTexture) -> CGImage? {
+        let d = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: Self.layerFormat, width: texture.width, height: texture.height, mipmapped: false)
+        d.storageMode = .shared
+        guard let staging = device.makeTexture(descriptor: d),
+              let cmd = queue.makeCommandBuffer(),
+              let blit = cmd.makeBlitCommandEncoder() else { return nil }
+        blit.copy(from: texture, to: staging)
+        blit.endEncoding()
+        cmd.commit()
+        cmd.waitUntilCompleted()
+        return Self.image(from: staging)
+    }
+
+    /// Replaces the contents of `texture` with `image`, scaled to fit if the sizes differ.
+    func upload(_ image: CGImage, into texture: MTLTexture) {
+        let w = texture.width, h = texture.height
+        let bytesPerRow = w * 4
+        var bytes = [UInt8](repeating: 0, count: bytesPerRow * h)
+        let drawn = bytes.withUnsafeMutableBytes { ptr -> Bool in
+            guard let ctx = CGContext(data: ptr.baseAddress, width: w, height: h, bitsPerComponent: 8,
+                                      bytesPerRow: bytesPerRow, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: Self.cgBitmapInfo.rawValue) else { return false }
+            ctx.interpolationQuality = .high
+            ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+            return true
+        }
+        guard drawn else { return }
+
+        let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: Self.layerFormat, width: w, height: h, mipmapped: false)
+        d.storageMode = .shared
+        guard let staging = device.makeTexture(descriptor: d),
+              let cmd = queue.makeCommandBuffer(),
+              let blit = cmd.makeBlitCommandEncoder() else { return }
+        bytes.withUnsafeBytes { ptr in
+            staging.replace(region: MTLRegionMake2D(0, 0, w, h), mipmapLevel: 0,
+                            withBytes: ptr.baseAddress!, bytesPerRow: bytesPerRow)
+        }
+        blit.copy(from: staging, to: texture)
+        blit.endEncoding()
+        cmd.commit()
+    }
+
+    /// RGBA8, premultiplied, row 0 at the top: the same memory layout as `layerFormat`.
+    private static let cgBitmapInfo = CGBitmapInfo(
+        rawValue: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue)
+
+    /// Wraps the pixels of a shared-storage texture in a `CGImage`. The GPU must already be done with it.
+    private static func image(from texture: MTLTexture) -> CGImage? {
+        let w = texture.width, h = texture.height
+        let bytesPerRow = w * 4
+        var bytes = [UInt8](repeating: 0, count: bytesPerRow * h)
+        bytes.withUnsafeMutableBytes { ptr in
+            texture.getBytes(ptr.baseAddress!, bytesPerRow: bytesPerRow,
+                             from: MTLRegionMake2D(0, 0, w, h), mipmapLevel: 0)
+        }
+        guard let provider = CGDataProvider(data: Data(bytes) as CFData) else { return nil }
+        return CGImage(width: w, height: h, bitsPerComponent: 8, bitsPerPixel: 32,
+                       bytesPerRow: bytesPerRow, space: CGColorSpaceCreateDeviceRGB(),
+                       bitmapInfo: cgBitmapInfo, provider: provider, decode: nil,
+                       shouldInterpolate: true, intent: .defaultIntent)
     }
 
     private func encodeComposite(_ enc: MTLRenderCommandEncoder, layers: [CompositeLayer], rect: SIMD4<Float>,

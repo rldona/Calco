@@ -24,22 +24,22 @@ final class EditorState: ObservableObject {
     @Published var isPlaying = false
     @Published private(set) var thumbnails: [String: CGImage] = [:]
 
-    let renderer: CanvasRenderer
-    let store: FrameStore
+    /// Where the project lives on disk. Nil until the first save.
+    @Published private(set) var documentURL: URL?
+    /// True when there are changes since the last save or load.
+    @Published private(set) var isDirty = false
+    /// Last file error, shown by the UI and cleared by it.
+    @Published var lastError: String?
+
+    private(set) var renderer: CanvasRenderer
+    private(set) var store: FrameStore
+    private let screenFormat: MTLPixelFormat
 
     private var nextFrameNumber = 0
     private var playTask: Task<Void, Never>?
 
     init?(device: MTLDevice, screenFormat: MTLPixelFormat) {
-        let project = Project(
-            name: "Untitled",
-            canvas: CanvasSize(width: 512, height: 512),
-            fps: 12,
-            clips: [Clip(id: "idle", name: "Idle",
-                         layers: [Layer(id: "color", name: "Color"),
-                                  Layer(id: "line", name: "Line")],
-                         frames: [])]
-        )
+        let project = Self.defaultProject()
         guard let renderer = CanvasRenderer(
             device: device,
             canvasSize: SIMD2<Int>(project.canvas.width, project.canvas.height),
@@ -47,8 +47,23 @@ final class EditorState: ObservableObject {
         self.project = project
         self.renderer = renderer
         self.store = FrameStore(renderer: renderer)
-        self.layerIndex = 1 // start on Line
-        addFrame()
+        self.screenFormat = screenFormat
+        try? install(project, images: [:])
+        isDirty = false
+    }
+
+    static func defaultProject(name: String = "Untitled") -> Project {
+        Project(name: name,
+                canvas: CanvasSize(width: 512, height: 512),
+                fps: 12,
+                clips: [defaultClip()])
+    }
+
+    static func defaultClip() -> Clip {
+        Clip(id: "idle", name: "Idle",
+             layers: [Layer(id: "color", name: "Color"),
+                      Layer(id: "line", name: "Line")],
+             frames: [])
     }
 
     // MARK: - Accessors
@@ -69,6 +84,103 @@ final class EditorState: ObservableObject {
         return store.texture(clip: clip.id, frame: f.id, layer: l.id)
     }
 
+    // MARK: - Document
+
+    static var documentsDirectory: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    }
+
+    private static func packageURL(named name: String) -> URL {
+        documentsDirectory
+            .appendingPathComponent(name)
+            .appendingPathExtension(ProjectDocument.fileExtension)
+    }
+
+    /// Blank project; forgets the current file. The UI confirms unsaved changes first.
+    func newProject() {
+        stop()
+        try? install(Self.defaultProject(), images: [:])
+        documentURL = nil
+        isDirty = false
+    }
+
+    /// Loads a `.calco` package (from Files, the document picker or `onOpenURL`).
+    func open(_ url: URL) {
+        stop()
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let loaded = try ProjectDocument.load(from: url)
+            let images = ProjectDocument.loadLayerImages(from: url, project: loaded)
+            try install(loaded, images: images)
+            documentURL = url
+            isDirty = false
+        } catch {
+            lastError = "Couldn't open \(url.lastPathComponent).\n\(error.localizedDescription)"
+        }
+    }
+
+    /// Saves where the project was opened from, or to Documents/<name>.calco the first time.
+    func save() {
+        save(to: documentURL ?? Self.packageURL(named: project.name))
+    }
+
+    /// Renames the project and writes it as a new package in Documents.
+    func saveAs(name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "/", with: "-")
+        guard !trimmed.isEmpty else { return }
+        project.name = trimmed
+        save(to: Self.packageURL(named: trimmed))
+    }
+
+    /// Writes the current project if it already has a file. Used when the app goes to the background.
+    func saveIfNeeded() {
+        guard isDirty, let url = documentURL else { return }
+        save(to: url)
+    }
+
+    /// Writes the package to `url` and makes it the current document.
+    func save(to url: URL) {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        do {
+            try ProjectDocument.save(project, to: url) { key in
+                store.image(clip: key.clip, frame: key.frame, layer: key.layer)
+            }
+            documentURL = url
+            isDirty = false
+        } catch {
+            lastError = "Couldn't save \(url.lastPathComponent).\n\(error.localizedDescription)"
+        }
+    }
+
+    /// Swaps in a project and its pixels, recreating the renderer if the canvas size changed.
+    private func install(_ newProject: Project, images: [LayerKey: CGImage]) throws {
+        let size = SIMD2<Int>(newProject.canvas.width, newProject.canvas.height)
+        if size != renderer.canvasSize {
+            guard let r = CanvasRenderer(device: renderer.device, canvasSize: size, screenFormat: screenFormat) else {
+                throw ProjectDocument.Error.invalidCanvas(newProject.canvas)
+            }
+            renderer = r
+        }
+        store = FrameStore(renderer: renderer)
+        thumbnails = [:]
+
+        project = newProject
+        if project.clips.isEmpty { project.clips = [Self.defaultClip()] }
+        clipIndex = 0
+        frameIndex = 0
+        layerIndex = max(0, layers.count - 1)
+
+        for (key, image) in images {
+            store.load(image, clip: key.clip, frame: key.frame, layer: key.layer)
+        }
+        nextFrameNumber = (project.clips.flatMap(\.frames).compactMap { Int($0.id) }.max() ?? -1) + 1
+        if frames.isEmpty { addFrame() }
+        for f in frames { refreshThumbnail(for: f.id) }
+    }
+
     // MARK: - Frames
 
     private func newFrameID() -> String {
@@ -81,6 +193,7 @@ final class EditorState: ObservableObject {
         let at = frames.isEmpty ? 0 : frameIndex + 1
         clip.frames.insert(f, at: at)
         frameIndex = at
+        isDirty = true
     }
 
     func duplicateFrame() {
@@ -89,6 +202,7 @@ final class EditorState: ObservableObject {
         clip.frames.insert(f, at: frameIndex + 1)
         store.duplicate(clip: clip.id, from: src.id, to: f.id, layers: layers.map(\.id))
         frameIndex += 1
+        isDirty = true
         refreshThumbnail(for: f.id)
     }
 
@@ -98,6 +212,7 @@ final class EditorState: ObservableObject {
         store.remove(clip: clip.id, frame: f.id, layers: layers.map(\.id))
         thumbnails.removeValue(forKey: f.id)
         frameIndex = min(frameIndex, frames.count - 1)
+        isDirty = true
     }
 
     func moveFrame(by offset: Int) {
@@ -105,16 +220,19 @@ final class EditorState: ObservableObject {
         guard frames.indices.contains(to) else { return }
         clip.frames.swapAt(frameIndex, to)
         frameIndex = to
+        isDirty = true
     }
 
     func setHold(_ hold: Int) {
         guard currentFrame != nil else { return }
         clip.frames[frameIndex].hold = max(1, hold)
+        isDirty = true
     }
 
     func clearCurrentLayer() {
         guard let f = currentFrame, let l = currentLayer else { return }
         store.clear(clip: clip.id, frame: f.id, layer: l.id)
+        isDirty = true
         refreshThumbnail(for: f.id)
     }
 
@@ -123,6 +241,7 @@ final class EditorState: ObservableObject {
     func toggleLayerVisibility(_ index: Int) {
         guard layers.indices.contains(index) else { return }
         clip.layers[index].visible.toggle()
+        isDirty = true
     }
 
     // MARK: - Playback
@@ -206,6 +325,7 @@ final class EditorState: ObservableObject {
     }
 
     func strokeEnded() {
+        isDirty = true
         if let f = currentFrame { refreshThumbnail(for: f.id) }
     }
 }

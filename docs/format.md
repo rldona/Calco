@@ -27,6 +27,7 @@ Hero.calco/
 - One folder per clip, one folder per frame (zero-padded index), one PNG per layer.
 - PNGs are RGBA, premultiplied alpha, canvas-sized. Empty layers may be omitted.
 - The manifest is the source of truth for order, holds, layers and pivots. Folder contents alone are not enough to reconstruct the animation.
+- Calco rewrites the whole package on every save and drops folders the manifest no longer refers to, so don't keep your own files inside `clips/`. `references/` is left alone.
 
 ## `project.json`
 
