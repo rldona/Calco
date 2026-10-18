@@ -4,9 +4,79 @@ enum FloodFill {
 
     /// Pixels 4-connected to `seed` whose colour is within `tolerance` (0–255, per channel,
     /// alpha included) of the seed pixel's. Returns one flag per pixel; empty if the seed is outside.
-    static func region(in rgba: [UInt8], width: Int, height: Int, seed: (x: Int, y: Int), tolerance: Int) -> [Bool] {
+    ///
+    /// `closingGaps` > 0 stops the fill escaping through breaks in a line up to about twice that
+    /// many pixels wide: lines are thickened by that much, the fill runs inside the thickened
+    /// shape, then grows back out the same distance through fillable pixels only, so it still
+    /// meets the real line. If the seed sits inside a thickened line, it fills without closing.
+    static func region(in rgba: [UInt8], width: Int, height: Int, seed: (x: Int, y: Int), tolerance: Int,
+                       closingGaps radius: Int = 0) -> [Bool] {
         guard width > 0, height > 0, rgba.count == width * height * 4,
               (0..<width).contains(seed.x), (0..<height).contains(seed.y) else { return [] }
+        guard radius > 0 else { return plainRegion(in: rgba, width: width, height: height, seed: seed, tolerance: tolerance) }
+
+        let fillable = similar(rgba, width: width, height: height, to: seed, tolerance: tolerance)
+        let walls = grow(fillable.map { !$0 }, width: width, height: height, by: radius)
+        guard !walls[seed.y * width + seed.x] else {
+            return plainRegion(in: rgba, width: width, height: height, seed: seed, tolerance: tolerance)
+        }
+        let inner = connected(from: seed, width: width, height: height) { !walls[$0] }
+        return expand(inner, within: fillable, width: width, height: height, by: radius)
+    }
+
+    /// Fillable pixels: colour within `tolerance` of the seed's.
+    private static func similar(_ rgba: [UInt8], width: Int, height: Int, to seed: (x: Int, y: Int),
+                                tolerance: Int) -> [Bool] {
+        let s = (seed.y * width + seed.x) * 4
+        let t = (Int(rgba[s]), Int(rgba[s + 1]), Int(rgba[s + 2]), Int(rgba[s + 3]))
+        return (0..<(width * height)).map { i in
+            let p = i * 4
+            return abs(Int(rgba[p]) - t.0) <= tolerance && abs(Int(rgba[p + 1]) - t.1) <= tolerance
+                && abs(Int(rgba[p + 2]) - t.2) <= tolerance && abs(Int(rgba[p + 3]) - t.3) <= tolerance
+        }
+    }
+
+    /// 4-connected flood from `seed` over pixels where `open` is true.
+    private static func connected(from seed: (x: Int, y: Int), width: Int, height: Int,
+                                  open: (Int) -> Bool) -> [Bool] {
+        var mask = [Bool](repeating: false, count: width * height)
+        var stack = [seed.y * width + seed.x]
+        mask[stack[0]] = true
+        while let i = stack.popLast() {
+            let x = i % width, y = i / width
+            for (nx, ny) in [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)]
+            where nx >= 0 && ny >= 0 && nx < width && ny < height {
+                let n = ny * width + nx
+                if !mask[n] && open(n) { mask[n] = true; stack.append(n) }
+            }
+        }
+        return mask
+    }
+
+    /// Grows `mask` up to `steps` pixels, only through `within`: the fill reaches back out to
+    /// the line but can't travel far through a closed gap. 8-connected, matching the square used
+    /// to thicken the walls, so it gets back into corners in the same number of steps.
+    private static func expand(_ mask: [Bool], within: [Bool], width: Int, height: Int, by steps: Int) -> [Bool] {
+        var out = mask
+        var frontier = (0..<mask.count).filter { mask[$0] }
+        for _ in 0..<steps where !frontier.isEmpty {
+            var next: [Int] = []
+            for i in frontier {
+                let x = i % width, y = i / width
+                for (nx, ny) in [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1),
+                                 (x - 1, y - 1), (x + 1, y - 1), (x - 1, y + 1), (x + 1, y + 1)]
+                where nx >= 0 && ny >= 0 && nx < width && ny < height {
+                    let n = ny * width + nx
+                    if !out[n] && within[n] { out[n] = true; next.append(n) }
+                }
+            }
+            frontier = next
+        }
+        return out
+    }
+
+    private static func plainRegion(in rgba: [UInt8], width: Int, height: Int, seed: (x: Int, y: Int),
+                                    tolerance: Int) -> [Bool] {
         let s = (seed.y * width + seed.x) * 4
         let target = (Int(rgba[s]), Int(rgba[s + 1]), Int(rgba[s + 2]), Int(rgba[s + 3]))
 

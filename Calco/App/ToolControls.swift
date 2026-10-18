@@ -9,15 +9,21 @@ struct ToolRail: View {
     @ObservedObject var state: EditorState
     @State private var editingSize = false
     @State private var editingColor = false
+    @State private var editingFill = false
 
     var body: some View {
         VStack(spacing: 6) {
             RailButton(icon: "pencil.tip", label: "Brush", active: state.tool == .brush) { state.tool = .brush }
             RailButton(icon: "eraser", label: "Eraser", active: state.tool == .eraser) { state.tool = .eraser }
-            RailButton(icon: "drop.halffull", label: "Fill", active: state.tool == .fill) { state.tool = .fill }
+            // Tap once to pick the bucket, again for its options.
+            RailButton(icon: "drop.halffull", label: "Fill", active: state.tool == .fill) {
+                if state.tool == .fill { editingFill = true } else { state.tool = .fill }
+            }
+            .popover(isPresented: $editingFill, arrowEdge: .leading) { FillOptions(state: state) }
             RailButton(icon: "eyedropper", label: "Eyedropper", active: state.tool == .eyedropper) {
                 state.tool = .eyedropper
             }
+            RailButton(icon: "lasso", label: "Lasso", active: state.tool == .lasso) { state.tool = .lasso }
 
             Divider().overlay(Theme.hairline).padding(.horizontal, 8).padding(.vertical, 4)
 
@@ -100,6 +106,27 @@ private struct VerticalSizeSlider: View {
         .accessibilityAdjustableAction { direction in
             state.stepToolSize(direction == .increment ? 1 : -1)
         }
+    }
+}
+
+/// The bucket's options: how big a gap in a line it bridges.
+struct FillOptions: View {
+    @ObservedObject var state: EditorState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Fill").font(.headline)
+            Text("Close gaps").font(.subheadline).foregroundStyle(.secondary)
+            Picker("Close gaps", selection: $state.fillGaps) {
+                ForEach(EditorState.FillGaps.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            Text("Bridges small breaks in a line so the paint doesn't leak out. Uses every visible layer as the outline.")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(20)
+        .frame(width: 300)
     }
 }
 

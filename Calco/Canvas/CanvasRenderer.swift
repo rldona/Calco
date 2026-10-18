@@ -39,7 +39,7 @@ final class CanvasRenderer {
     }
 
     /// Fill and eyedropper never reach `paint`; they act on a tap (see CanvasUIView).
-    enum Tool { case brush, eraser, fill, eyedropper }
+    enum Tool { case brush, eraser, fill, eyedropper, lasso }
 
     let device: MTLDevice
     let canvasSize: SIMD2<Int>

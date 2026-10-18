@@ -14,8 +14,10 @@ final class CanvasUIView: UIView {
     private let mtkView = MTKView()
     private var builder = StrokeBuilder()
     private var activeTouch: UITouch?
-    /// The active touch is a tap for fill / eyedropper, acted on when it lifts.
-    private var activeIsTap = false
+    /// What the active touch is doing: painting, a tap for fill / eyedropper (acted on when it
+    /// lifts), or drawing a lasso.
+    private enum Mode { case stroke, tap, lasso }
+    private var mode = Mode.stroke
     private var strokeTarget: MTLTexture?
 
     weak var state: EditorState?
@@ -52,47 +54,75 @@ final class CanvasUIView: UIView {
 
     // MARK: - Touch handling
 
+    private func canvasPoint(_ t: UITouch, in state: EditorState) -> CGPoint {
+        let p = state.renderer.canvasPoint(fromViewPoint: t.location(in: self), viewSize: bounds.size,
+                                           transform: state.canvasTransform)
+        return CGPoint(x: CGFloat(p.x), y: CGFloat(p.y))
+    }
+
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard activeTouch == nil, let t = touches.first, let state, !state.isPlaying else { return }
-        if state.tool == .fill || state.tool == .eyedropper {
+        switch state.tool {
+        case .fill, .eyedropper:
             // Wait for the lift: if it turns into a pinch or two-finger tap, touchesCancelled drops it.
             activeTouch = t
-            activeIsTap = true
-            return
+            mode = .tap
+        case .lasso:
+            // Touching the canvas outside a floating selection drops it and starts a new lasso.
+            state.commitSelection()
+            activeTouch = t
+            mode = .lasso
+            state.lassoPoints = [canvasPoint(t, in: state)]
+        case .brush, .eraser:
+            guard let target = state.beginStroke() else { return }
+            activeTouch = t
+            mode = .stroke
+            strokeTarget = target
+            builder.begin()
+            feed(touch: t, event: event)
         }
-        guard let target = state.beginStroke() else { return }
-        activeTouch = t
-        strokeTarget = target
-        builder.begin()
-        feed(touch: t, event: event)
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let t = activeTouch, touches.contains(t), !activeIsTap else { return }
-        feed(touch: t, event: event)
+        guard let t = activeTouch, touches.contains(t), let state else { return }
+        switch mode {
+        case .stroke: feed(touch: t, event: event)
+        case .lasso:
+            for s in event?.coalescedTouches(for: t) ?? [t] {
+                let p = canvasPoint(s, in: state)
+                if let last = state.lassoPoints.last, hypot(p.x - last.x, p.y - last.y) < 1.5 { continue }
+                state.lassoPoints.append(p)
+            }
+        case .tap: break
+        }
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let t = activeTouch, touches.contains(t) else { return }
-        if activeIsTap {
-            activeTouch = nil
-            activeIsTap = false
-            guard let state else { return }
-            let p = state.renderer.canvasPoint(fromViewPoint: t.location(in: self), viewSize: bounds.size,
-                                               transform: state.canvasTransform)
-            if state.tool == .fill { state.fill(at: p) } else { state.pickColor(at: p) }
-            return
+        guard let t = activeTouch, touches.contains(t), let state else { return }
+        activeTouch = nil
+        switch mode {
+        case .tap:
+            let p = canvasPoint(t, in: state)
+            let point = SIMD2<Float>(Float(p.x), Float(p.y))
+            if state.tool == .fill { state.fill(at: point) } else { state.pickColor(at: point) }
+        case .lasso:
+            state.liftSelection(state.lassoPoints)
+        case .stroke:
+            feed(touch: t, event: event)
+            endStroke()
         }
-        feed(touch: t, event: event)
-        endStroke()
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard activeTouch != nil else { return }
         activeTouch = nil
-        if activeIsTap { activeIsTap = false; return }
-        strokeTarget = nil
-        state?.cancelStroke()
+        switch mode {
+        case .tap: break
+        case .lasso: state?.lassoPoints = []
+        case .stroke:
+            strokeTarget = nil
+            state?.cancelStroke()
+        }
     }
 
     private func endStroke() {

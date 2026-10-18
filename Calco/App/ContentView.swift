@@ -43,6 +43,7 @@ struct ContentView: View {
             .overlay {
                 if state.showPivot { PivotOverlay(state: state) }
             }
+            .overlay { SelectionOverlay(state: state) }
             .overlay(alignment: .top) {
                 if state.isZen { ZenBar(state: state).padding(.top, 6) }
             }

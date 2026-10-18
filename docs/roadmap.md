@@ -45,7 +45,8 @@ What RoughAnimator users reach for most, done the Calco way (from its tutorial c
 
 - [x] Fill bucket (G): fills the region under the finger using all visible layers as the outline, slides under anti-aliased edges; undoable
 - [x] Eyedropper (I): picks the colour from what's on screen, then hands you back the tool you had
-- [ ] Lasso select + transform (move / scale / rotate) with an anchor you can move by finger
+- [x] Close gaps for the fill (Off / Small / Medium / Large, scaled to the canvas; tap the bucket again), remembered
+- [x] Lasso (L): lift, move, scale (corner), rotate (knob), flip, with an anchor you drag by finger without moving the drawing; one undo step; ✓ / Return applies, ✕ / Esc cancels, tapping outside applies
 - [ ] Stroke smoothing (stabiliser) and a pressure on/off switch
 - [ ] Brush opacity (needs strokes rendered to their own buffer first, so overlaps don't build up)
 - [ ] Resize the canvas after creating the project

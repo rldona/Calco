@@ -17,16 +17,21 @@ final class EditorState: ObservableObject {
 
     @Published var project: Project
     @Published var clipIndex = 0
-    @Published var frameIndex = 0
-    @Published var layerIndex = 0
+    @Published var frameIndex = 0 { didSet { if frameIndex != oldValue { commitSelection() } } }
+    @Published var layerIndex = 0 { didSet { if layerIndex != oldValue { commitSelection() } } }
     @Published var tool: CanvasRenderer.Tool = .brush {
-        didSet { if tool == .eyedropper && oldValue != .eyedropper { toolBeforeEyedropper = oldValue } }
+        didSet {
+            if tool == .eyedropper && oldValue != .eyedropper { toolBeforeEyedropper = oldValue }
+            if tool != .lasso { commitSelection() }
+        }
     }
     /// The eyedropper is one-shot: after a pick you're back on this.
     private var toolBeforeEyedropper: CanvasRenderer.Tool = .brush
     /// Radii in canvas pixels at full pressure, one per tool. Remembered across launches.
     @Published var brushSize: Float = 6 { didSet { saveToolSettings() } }
     @Published var eraserSize: Float = 18 { didSet { saveToolSettings() } }
+    /// How big a break in a line the fill bucket bridges. Remembered across launches.
+    @Published var fillGaps: FillGaps = .small { didSet { saveToolSettings() } }
     /// Brush colour, straight RGBA. Always opaque for now: overlapping stamps would build up any translucency.
     @Published var color = SIMD4<Float>(0, 0, 0, 1) { didSet { saveToolSettings() } }
     static let sizeRange: ClosedRange<Float> = 1...64
@@ -36,6 +41,14 @@ final class EditorState: ObservableObject {
     @Published var showPivot = false
     /// The project gallery is showing instead of the editor. The app starts there.
     @Published var isInGallery = true
+    /// The lasso being drawn, in canvas pixels. Empty when not drawing one.
+    @Published var lassoPoints: [CGPoint] = []
+    /// What the lasso lifted, while it's being transformed. Nil when nothing is selected.
+    @Published private(set) var selection: FloatingSelection?
+    /// The layer's pixels from before the lift: one undo step covers lift, transform and drop.
+    private var selectionBefore: MTLTexture?
+    /// The selection drawn at its current transform, composited above its layer.
+    private var selectionPreview: MTLTexture?
     /// Zen mode: only the canvas and a small floating bar. View state only.
     @Published var isZen = false
     /// Zoom / pan / rotation of the canvas on screen. View state only: not saved, not undoable.
@@ -236,6 +249,7 @@ final class EditorState: ObservableObject {
 
     /// Writes the package to `url` and makes it the current document.
     func save(to url: URL) {
+        commitSelection()
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         do {
@@ -251,6 +265,7 @@ final class EditorState: ObservableObject {
 
     /// Swaps in a project and its pixels, recreating the renderer if the canvas size changed.
     private func install(_ newProject: Project, images: [LayerKey: CGImage]) throws {
+        selection = nil; selectionBefore = nil; selectionPreview = nil; lassoPoints = []
         let size = SIMD2<Int>(newProject.canvas.width, newProject.canvas.height)
         if size != renderer.canvasSize {
             guard let r = CanvasRenderer(device: renderer.device, canvasSize: size, screenFormat: screenFormat) else {
@@ -335,6 +350,7 @@ final class EditorState: ObservableObject {
 
     func selectClip(_ index: Int) {
         guard project.clips.indices.contains(index) else { return }
+        commitSelection()
         stop()
         clipIndex = index
         frameIndex = 0
@@ -606,6 +622,7 @@ final class EditorState: ObservableObject {
     // MARK: - Playback
 
     func togglePlayback() {
+        commitSelection()
         isPlaying ? stop() : play()
     }
 
@@ -663,7 +680,15 @@ final class EditorState: ObservableObject {
             }
         }
         if let f = currentFrame {
-            out += frameLayers(f.id, opacity: 1, tint: nil)
+            for layer in clip.layers where layer.visible {
+                if let t = store.existingTexture(clip: clip.id, frame: f.id, layer: layer.id) {
+                    out.append(.init(texture: t, opacity: Float(layer.opacity), tint: .zero, tintAmount: 0))
+                }
+                // A floating selection shows right above its own layer, where it'll land.
+                if let sel = selection, sel.key.frame == f.id, sel.key.layer == layer.id, let preview = selectionPreview {
+                    out.append(.init(texture: preview, opacity: Float(layer.opacity), tint: .zero, tintAmount: 0))
+                }
+            }
         }
         return out
     }
@@ -727,6 +752,23 @@ final class EditorState: ObservableObject {
 
     // MARK: - Fill and eyedropper
 
+    enum FillGaps: Int, CaseIterable, Identifiable {
+        case off, small, medium, large
+        var id: Int { rawValue }
+        var title: String { ["Off", "Small", "Medium", "Large"][rawValue] }
+
+        /// Thickening radius in canvas pixels, proportional to the canvas so "small" means the
+        /// same on a 64 px sprite and a 1024 px one.
+        func radius(forCanvasSide side: Int) -> Int {
+            switch self {
+            case .off: 0
+            case .small: max(1, side / 256)
+            case .medium: max(2, side / 128)
+            case .large: max(3, side / 64)
+            }
+        }
+    }
+
     /// How different a pixel may be from the one tapped and still be filled (0–255 per channel).
     static let fillTolerance = 40
     /// Extra pixels the fill grows by, so it tucks under anti-aliased line edges.
@@ -740,7 +782,8 @@ final class EditorState: ObservableObject {
         let seed = (x: Int(point.x.rounded(.down)), y: Int(point.y.rounded(.down)))
         guard (0..<w).contains(seed.x), (0..<h).contains(seed.y),
               let seen = renderer.flattenBytes(frameLayers(f.id, opacity: 1, tint: nil)) else { return }
-        let region = FloodFill.region(in: seen, width: w, height: h, seed: seed, tolerance: Self.fillTolerance)
+        let region = FloodFill.region(in: seen, width: w, height: h, seed: seed, tolerance: Self.fillTolerance,
+                                      closingGaps: fillGaps.radius(forCanvasSide: max(w, h)))
         guard !region.isEmpty else { return }
         let mask = FloodFill.grow(region, width: w, height: h, by: Self.fillGrow)
 
@@ -768,6 +811,81 @@ final class EditorState: ObservableObject {
         return true
     }
 
+    // MARK: - Lasso
+
+    /// Lifts what's inside the closed lasso off the current layer into a floating selection.
+    /// Nothing happens on a locked layer, or if the lasso holds no pixels.
+    func liftSelection(_ polygon: [CGPoint]) {
+        lassoPoints = []
+        commitSelection()
+        guard !isPlaying, polygon.count >= 3, let f = currentFrame, let l = currentLayer, !l.locked else { return }
+        let key = LayerKey(clip: clip.id, frame: f.id, layer: l.id)
+        guard let target = store.existingTexture(clip: key.clip, frame: key.frame, layer: key.layer),
+              let pixels = renderer.readbackBytes(target) else { return }
+        let w = renderer.canvasSize.x, h = renderer.canvasSize.y
+        let (lifted, remaining) = SelectionPixels.split(pixels, mask: SelectionPixels.rasterize(polygon, width: w, height: h))
+        guard !SelectionPixels.isEmpty(lifted) else { return }
+
+        let bounds = Self.boundingBox(polygon).intersection(CGRect(x: 0, y: 0, width: w, height: h))
+        selectionBefore = store.copy(of: key)
+        renderer.upload(bytes: remaining, into: target)
+        selectionPreview = selectionPreview ?? renderer.makeLayerTexture()
+        selection = FloatingSelection(key: key, lifted: lifted, outline: polygon, bounds: bounds,
+                                      anchor: CGPoint(x: bounds.midX, y: bounds.midY))
+        renderSelectionPreview()
+    }
+
+    /// Changes the floating selection's transform (move, scale, rotate, flip, anchor).
+    func updateSelection(_ change: (inout FloatingSelection) -> Void) {
+        guard var sel = selection else { return }
+        change(&sel)
+        sel.scale = min(max(sel.scale, FloatingSelection.scaleRange.lowerBound), FloatingSelection.scaleRange.upperBound)
+        selection = sel
+        renderSelectionPreview()
+    }
+
+    /// Drops the selection where it is, as one undo step with the lift.
+    func commitSelection() {
+        guard let sel = selection else { return }
+        selection = nil
+        lassoPoints = []
+        guard let target = store.texture(clip: sel.key.clip, frame: sel.key.frame, layer: sel.key.layer),
+              let base = renderer.readbackBytes(target) else { return }
+        let w = renderer.canvasSize.x, h = renderer.canvasSize.y
+        let placed = SelectionPixels.render(sel.lifted, width: w, height: h, transform: sel.transform)
+        renderer.upload(bytes: SelectionPixels.composite(placed, over: base), into: target)
+        var before: [LayerKey: MTLTexture?] = [:]
+        before.updateValue(selectionBefore, forKey: sel.key)
+        coalesceTag = nil
+        push(snapshot(before))
+        selectionBefore = nil
+        isDirty = true
+        refreshThumbnail(for: sel.key.frame)
+    }
+
+    /// Puts the lifted pixels back untouched, as if the lasso never happened.
+    func cancelSelection() {
+        guard let sel = selection else { return }
+        selection = nil
+        lassoPoints = []
+        if let before = selectionBefore { store.set(before, for: sel.key) }
+        selectionBefore = nil
+        refreshThumbnail(for: sel.key.frame)
+    }
+
+    private func renderSelectionPreview() {
+        guard let sel = selection, let preview = selectionPreview else { return }
+        let w = renderer.canvasSize.x, h = renderer.canvasSize.y
+        renderer.upload(bytes: SelectionPixels.render(sel.lifted, width: w, height: h, transform: sel.transform),
+                        into: preview)
+    }
+
+    private static func boundingBox(_ points: [CGPoint]) -> CGRect {
+        let xs = points.map(\.x), ys = points.map(\.y)
+        guard let minX = xs.min(), let maxX = xs.max(), let minY = ys.min(), let maxY = ys.max() else { return .null }
+        return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+    }
+
     // MARK: - Tool settings
 
     /// Size of whichever tool is active.
@@ -789,6 +907,7 @@ final class EditorState: ObservableObject {
         static let brushSize = "tool.brushSize"
         static let eraserSize = "tool.eraserSize"
         static let color = "tool.color"
+        static let fillGaps = "tool.fillGaps"
     }
 
     private var loadingToolSettings = false
@@ -805,6 +924,7 @@ final class EditorState: ObservableObject {
            c.allSatisfy({ (0...1).contains($0) }) {
             color = SIMD4<Float>(c[0], c[1], c[2], 1)
         }
+        if let raw = defaults.object(forKey: ToolKey.fillGaps) as? Int, let g = FillGaps(rawValue: raw) { fillGaps = g }
     }
 
     private func saveToolSettings() {
@@ -812,6 +932,7 @@ final class EditorState: ObservableObject {
         defaults.set(brushSize, forKey: ToolKey.brushSize)
         defaults.set(eraserSize, forKey: ToolKey.eraserSize)
         defaults.set([color.x, color.y, color.z], forKey: ToolKey.color)
+        defaults.set(fillGaps.rawValue, forKey: ToolKey.fillGaps)
     }
 
     func setColor(_ c: SIMD4<Float>) {
@@ -848,6 +969,7 @@ final class EditorState: ObservableObject {
     /// `copyPixels` when it changes them in place (strokes, clear). Edits sharing a `coalescing` tag
     /// in a row (a drag, a stepper) become one undo step.
     private func recordUndo(textures keys: [LayerKey] = [], copyPixels: Bool = false, coalescing tag: String? = nil) {
+        commitSelection()
         if let tag, tag == coalesceTag, !undoStack.isEmpty { return }
         coalesceTag = tag
         var saved: [LayerKey: MTLTexture?] = [:]
@@ -868,6 +990,8 @@ final class EditorState: ObservableObject {
 
     func undo() {
         cancelStroke()
+        // With a selection floating, undo means "never mind": put it back where it was.
+        if selection != nil { cancelSelection(); return }
         guard let s = undoStack.popLast() else { return }
         redoStack.append(snapshot(currentTextures(s)))
         apply(s)
@@ -875,6 +999,7 @@ final class EditorState: ObservableObject {
 
     func redo() {
         cancelStroke()
+        commitSelection()
         guard let s = redoStack.popLast() else { return }
         undoStack.append(snapshot(currentTextures(s)))
         apply(s)
