@@ -1,0 +1,49 @@
+# Builds the app and runs the tests on every push to main and every pull request.
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['manual/**', '**.md']
+  pull_request:
+    paths-ignore: ['manual/**', '**.md']
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - name: Generate the Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen
+      - name: Test
+        run: |
+          set -o pipefail
+          SIM="$(scripts/ci/pick-simulator.sh)"
+          echo "Testing on $(xcrun simctl list devices | grep "$SIM")"
+          xcodebuild test \
+            -project Calco.xcodeproj -scheme Calco \
+            -destination "id=$SIM" \
+            -derivedDataPath build/dd \
+            -resultBundlePath build/Tests.xcresult \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee build/test.log | grep -E "error:|warning: |Test Suite 'All tests'|Executed [0-9]+ tests" || true
+          grep -q "Test Suite 'All tests' passed" build/test.log
+      - name: Keep the test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            build/Tests.xcresult
+            build/test.log

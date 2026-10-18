@@ -1,3 +1,5 @@
+<p align="center"><img src="Assets/cover.png" alt="Calco: hand-drawn sprite animation for iPad and Apple Pencil, built for game engines" width="100%"></p>
+
 # Calco
 
 **Hand-drawn sprite animation for iPad, built for game engines.**
@@ -8,7 +10,7 @@ Think *Procreate's Animation Assist* simplicity with the structure of a real ani
 
 > Status: **pre-alpha**. Nothing to download yet. Follow the repo to watch it grow.
 
-📖 **User manual**, in English and Spanish: <https://rldona.github.io/Calco/> (source in [`manual/`](manual/)).
+📖 **User manual**, in English and Spanish: <https://rldona.github.io/Calco/> (source in [`manual/`](manual/)). Changes are in [CHANGELOG.md](CHANGELOG.md); how releases are built is in [docs/releasing.md](docs/releasing.md).
 
 ## Why
 
