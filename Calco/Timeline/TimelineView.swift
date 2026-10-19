@@ -608,9 +608,10 @@ private struct HoldControl: View {
         }
         .labelStyle(.titleAndIcon)
         .foregroundStyle(hold > 1 ? Theme.accentText : Theme.text)
-        .padding(.leading, 12).padding(.trailing, 4).padding(.vertical, 3)
-        .background(hold > 1 ? Theme.accentWash : Color.white.opacity(0.06), in: Capsule())
-        .overlay(Capsule().strokeBorder(hold > 1 ? Theme.accent.opacity(0.6) : Theme.hairline))
+        // Corners concentric with the − + buttons' (8 + 4), so they sit inside the border.
+        .padding(.leading, 12).padding(.trailing, 4).padding(.vertical, 4)
+        .background(hold > 1 ? Theme.accentWash : Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(hold > 1 ? Theme.accent.opacity(0.6) : Theme.hairline))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Frame length")
         .accessibilityValue(hold == 1 ? "1 frame" : "\(hold) frames")
@@ -628,7 +629,7 @@ private struct HoldControl: View {
             Image(systemName: icon)
                 .font(.system(size: 15, weight: .semibold))
                 .frame(width: 40, height: 32)
-                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 7))
+                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
                 .contentShape(Rectangle())
         }
     }
