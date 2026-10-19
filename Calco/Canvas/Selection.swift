@@ -49,6 +49,25 @@ struct FloatingSelection: Equatable {
     }
 
     var isIdentity: Bool { offset == .zero && scale == 1 && rotation == 0 && !flipped }
+
+    // Snapping: near where it started, it clicks back into place, so you can always return to it.
+
+    /// Within 4° of upright or of a quarter turn, exactly that.
+    static func snappedRotation(_ r: CGFloat) -> CGFloat? {
+        let quarter = CGFloat.pi / 2
+        let nearest = (r / quarter).rounded() * quarter
+        return abs(r - nearest) < 4 * .pi / 180 ? nearest : nil
+    }
+
+    /// Within `tolerance` canvas pixels of where it was lifted, back there.
+    static func snappedOffset(_ o: CGVector, tolerance: CGFloat) -> CGVector? {
+        hypot(o.dx, o.dy) < tolerance ? .zero : nil
+    }
+
+    /// Within 4 % of its own size, its own size.
+    static func snappedScale(_ s: CGFloat) -> CGFloat? {
+        abs(s - 1) < 0.04 ? 1 : nil
+    }
 }
 
 /// The pixel work behind the lasso, on CPU buffers (RGBA8 premultiplied, row 0 at the top).
@@ -91,6 +110,56 @@ enum SelectionPixels {
 
     static func isEmpty(_ rgba: [UInt8]) -> Bool {
         stride(from: 3, to: rgba.count, by: 4).allSatisfy { rgba[$0] == 0 }
+    }
+
+    /// The smallest pixel rectangle holding everything with any opacity; nil when it's all clear.
+    static func contentBounds(_ rgba: [UInt8], width: Int, height: Int) -> CGRect? {
+        var minX = width, minY = height, maxX = -1, maxY = -1
+        for y in 0..<height {
+            let row = y * width
+            for x in 0..<width where rgba[(row + x) * 4 + 3] != 0 {
+                if x < minX { minX = x }
+                if x > maxX { maxX = x }
+                if y < minY { minY = y }
+                if y > maxY { maxY = y }
+            }
+        }
+        guard maxX >= 0 else { return nil }
+        return CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1)
+    }
+
+    /// The shape under a tap, as a mask: every painted pixel connected to it (diagonals count).
+    /// A tap that misses a thin line by up to `reach` pixels still picks it. Nil if there's no paint there.
+    static func connectedShape(_ rgba: [UInt8], width: Int, height: Int, at point: (x: Int, y: Int),
+                               reach: Int = 8) -> [UInt8]? {
+        guard rgba.count == width * height * 4 else { return nil }
+        func painted(_ x: Int, _ y: Int) -> Bool { rgba[(y * width + x) * 4 + 3] != 0 }
+        // The nearest painted pixel within reach of the tap.
+        var seed: (Int, Int)?
+        var best = Int.max
+        for dy in -reach...reach {
+            for dx in -reach...reach {
+                let x = point.x + dx, y = point.y + dy
+                guard x >= 0, y >= 0, x < width, y < height, painted(x, y) else { continue }
+                let d = dx * dx + dy * dy
+                if d < best && d <= reach * reach { best = d; seed = (x, y) }
+            }
+        }
+        guard let (sx, sy) = seed else { return nil }
+        var mask = [UInt8](repeating: 0, count: width * height)
+        var stack = [(sx, sy)]
+        mask[sy * width + sx] = 255
+        while let (x, y) = stack.popLast() {
+            for dy in -1...1 {
+                for dx in -1...1 where dx != 0 || dy != 0 {
+                    let nx = x + dx, ny = y + dy
+                    guard nx >= 0, ny >= 0, nx < width, ny < height else { continue }
+                    let i = ny * width + nx
+                    if mask[i] == 0 && painted(nx, ny) { mask[i] = 255; stack.append((nx, ny)) }
+                }
+            }
+        }
+        return mask
     }
 
     /// `rgba` drawn through a canvas-space affine transform: high-quality resampling, or (`hard`)

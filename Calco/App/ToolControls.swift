@@ -34,6 +34,10 @@ struct ToolRail: View {
                 if state.tool == .lasso { editingLasso = true } else { state.tool = .lasso }
             }
             .popover(isPresented: $editingLasso, arrowEdge: .leading) { LassoOptions(state: state) { editingLasso = false } }
+            // Picks up the whole drawing; tap a shape on the canvas to move just that one.
+            RailButton(icon: "arrow.up.and.down.and.arrow.left.and.right", label: "Move", active: state.tool == .move) {
+                if state.tool == .move { state.liftForMove() } else { state.tool = .move }
+            }
 
             Divider().overlay(Theme.hairline).padding(.horizontal, 8).padding(.vertical, 4)
 

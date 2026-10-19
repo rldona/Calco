@@ -51,6 +51,12 @@ struct ContentView: View {
                 if state.showPivot { PivotOverlay(state: state) }
             }
             .overlay { SelectionOverlay(state: state) }
+            .overlay(alignment: .bottom) {
+                if state.tool == .move, let id = state.moveBlockedLayer,
+                   let layer = state.layers.first(where: { $0.id == id }) {
+                    MoveLockedHint(state: state, layerName: layer.name).padding(.bottom, 14)
+                }
+            }
             .overlay(alignment: .top) {
                 if state.isZen { ZenBar(state: state).padding(.top, 6) }
             }
@@ -108,7 +114,32 @@ struct TopBar: View {
     }
 }
 
-/// Zen mode's only chrome: undo, brush, eraser, colour, and the way back.
+/// Move on a locked layer (an imported image, say): one tap unlocks it for this move.
+struct MoveLockedHint: View {
+    @ObservedObject var state: EditorState
+    let layerName: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Label("\(layerName) is locked", systemImage: "lock.fill")
+                .font(.subheadline)
+                .foregroundStyle(Theme.text)
+            Button { state.unlockAndMove() } label: {
+                Text("Unlock and move")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.onAccent)
+                    .padding(.horizontal, 14).padding(.vertical, 7)
+                    .background(Theme.accent, in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.leading, 16).padding(.trailing, 6).padding(.vertical, 6)
+        .background(Theme.panel, in: Capsule())
+        .overlay(Capsule().strokeBorder(Theme.hairline))
+    }
+}
+
+/// Zen mode's only chrome: undo / redo, every tool, the colour, and the way back.
 struct ZenBar: View {
     @ObservedObject var state: EditorState
     @State private var editingColor = false
@@ -117,8 +148,17 @@ struct ZenBar: View {
         HStack(spacing: 4) {
             RailButton(icon: "arrow.uturn.backward", label: "Undo", size: 34) { state.undo() }
                 .opacity(state.canUndo ? 1 : 0.35)
+            RailButton(icon: "arrow.uturn.forward", label: "Redo", size: 34) { state.redo() }
+                .opacity(state.canRedo ? 1 : 0.35)
+            Divider().overlay(Theme.hairline).frame(height: 20).padding(.horizontal, 2)
             RailButton(icon: "pencil.tip", label: "Brush", active: state.tool == .brush, size: 34) { state.tool = .brush }
             RailButton(icon: "eraser", label: "Eraser", active: state.tool == .eraser, size: 34) { state.tool = .eraser }
+            RailButton(icon: "drop.halffull", label: "Fill", active: state.tool == .fill, size: 34) { state.tool = .fill }
+            RailButton(icon: "eyedropper", label: "Eyedropper", active: state.tool == .eyedropper, size: 34) { state.tool = .eyedropper }
+            RailButton(icon: "lasso", label: "Lasso", active: state.tool == .lasso, size: 34) { state.tool = .lasso }
+            RailButton(icon: "arrow.up.and.down.and.arrow.left.and.right", label: "Move", active: state.tool == .move, size: 34) {
+                if state.tool == .move { state.liftForMove() } else { state.tool = .move }
+            }
             ColorSwatch(state: state, editing: $editingColor, diameter: 20)
             Divider().overlay(Theme.hairline).frame(height: 20).padding(.horizontal, 2)
             RailButton(icon: "arrow.down.right.and.arrow.up.left.circle", label: "Leave Zen mode", size: 34) {

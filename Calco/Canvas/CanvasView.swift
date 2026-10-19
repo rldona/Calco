@@ -68,7 +68,7 @@ final class CanvasUIView: UIView {
         // Pencil only: a finger on the canvas is for gestures, never a mark.
         if state.pencilOnly && t.type != .pencil { return }
         switch state.tool {
-        case .fill, .eyedropper:
+        case .fill, .eyedropper, .move:
             // Wait for the lift: if it turns into a pinch or two-finger tap, touchesCancelled drops it.
             activeTouch = t
             mode = .tap
@@ -109,7 +109,11 @@ final class CanvasUIView: UIView {
         case .tap:
             let p = canvasPoint(t, in: state)
             let point = SIMD2<Float>(Float(p.x), Float(p.y))
-            if state.tool == .fill { state.fill(at: point) } else { state.pickColor(at: point) }
+            switch state.tool {
+            case .fill: state.fill(at: point)
+            case .move: state.liftForMove(at: p)     // the shape under the tap, or all of it on a blank spot
+            default: state.pickColor(at: point)
+            }
         case .lasso:
             state.liftSelection(state.lassoPoints)
         case .stroke:

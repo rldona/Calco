@@ -317,4 +317,7 @@ ES = {
 "Repeat drawings…": "Repetir dibujos…",
 "Show drawing latency": "Mostrar la latencia del trazo",
 "Show pivot": "Mostrar el pivote",
+"%@ is locked": "%@ está bloqueada",
+"Move": "Mover",
+"Unlock and move": "Desbloquear y mover",
 }

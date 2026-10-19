@@ -11,8 +11,14 @@ A release is made by pushing a tag `vX.Y.Z`: the release workflow tests and buil
 - **Resizable timeline**: drag the grip above it to make the layer grid taller (rows grow up to 36 pt); the height is remembered, and a double tap returns to the automatic height.
 - **Import an image as a layer** (New layer → Image from Photos / Files): it goes under every layer, fitted to the canvas and held through the whole clip, at 40 %, locked and marked as a **guide**, which is shown in the editor but never exported and isn't an outline for the fill. Any layer can be made a guide, or a guide part of the sprite, from its menu.
 
+- **Move tool** (V): picks up the current layer's whole drawing, boxed tight, to move, scale or rotate; tap a shape (an eye, a hand) to move just that one. On a locked layer, such as an imported image, **Unlock and move** unlocks it for the move and locks it again after. Moving, rotating or scaling **clicks back** into its starting place, upright (or a quarter turn) and its own size, and the pivot clicks back to the middle, with a light haptic tap.
+
 ### Changed
 
+- **Animation rail** on the right: a big **New**, Duplicate, Hold, Delete and **More** (label, split, repeat, frame actions), the onion skin, and **Layer | All**, which replaces Sync layers. In portrait it sits above the timeline.
+- The timeline is cleaner: a bigger Play, one **clip settings** button (fps, loop, pivot), taller rows, a **+** over the layer names and a **+** cell after the last drawing.
+- **Zen mode**'s bar has every tool now (fill, eyedropper, lasso, move) and redo.
+- The latency readout is off unless you turn it on in Preferences.
 - Releases are built **unsigned**, with no Apple Developer Program: the GitHub release has `Calco-X.Y.Z-unsigned.ipa` and the Unity package. TestFlight is gone.
 
 ## [0.7.0] - 2026-10-18

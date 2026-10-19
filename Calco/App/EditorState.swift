@@ -19,13 +19,15 @@ final class EditorState: ObservableObject {
 
     @Published var project: Project
     @Published var clipIndex = 0
-    @Published var frameIndex = 0 { didSet { if frameIndex != oldValue { commitSelection() } } }
-    @Published var layerIndex = 0 { didSet { if layerIndex != oldValue { commitSelection() } } }
+    @Published var frameIndex = 0 { didSet { if frameIndex != oldValue { selectionTargetChanged() } } }
+    @Published var layerIndex = 0 { didSet { if layerIndex != oldValue { selectionTargetChanged() } } }
     @Published var tool: CanvasRenderer.Tool = .brush {
         didSet {
             if tool == .eyedropper && oldValue != .eyedropper { toolBeforeEyedropper = oldValue }
             if tool != oldValue { previousTool = oldValue }
-            if tool != .lasso { commitSelection() }
+            if tool != .lasso && !(tool == .move && oldValue == .move) { commitSelection() }
+            if tool != .move { moveBlockedLayer = nil }
+            if tool == .move && oldValue != .move { liftForMove() }
         }
     }
     /// The eyedropper is one-shot: after a pick you're back on this.
@@ -69,6 +71,12 @@ final class EditorState: ObservableObject {
     @Published private(set) var selection: FloatingSelection?
     /// The layer's pixels from before the lift: one undo step covers lift, transform and drop.
     private var selectionBefore: MTLTexture?
+    /// The selection was lifted off the layer (lasso or Move), not pasted: left where it was, it's no change.
+    private var selectionIsLift = false
+    /// With Move: the current layer is locked, so nothing was lifted. The editor offers to unlock it.
+    @Published private(set) var moveBlockedLayer: String?
+    /// A layer Move unlocked for a moment; it's locked again when the move is dropped.
+    private var relockAfterMove: String?
     /// The selection drawn at its current transform, composited above its layer.
     private var selectionPreview: MTLTexture?
     /// Zen mode: only the canvas and a small floating bar. View state only.
@@ -1480,16 +1488,69 @@ final class EditorState: ObservableObject {
         guard let target = store.existingTexture(clip: key.clip, frame: key.frame, layer: key.layer),
               let pixels = renderer.readbackBytes(target) else { return }
         let w = renderer.canvasSize.x, h = renderer.canvasSize.y
-        let (lifted, remaining) = SelectionPixels.split(pixels, mask: SelectionPixels.rasterize(polygon, width: w, height: h, hard: project.pixelArt))
-        guard !SelectionPixels.isEmpty(lifted) else { return }
-
         let bounds = Self.boundingBox(polygon).intersection(CGRect(x: 0, y: 0, width: w, height: h))
+        lift(pixels, mask: SelectionPixels.rasterize(polygon, width: w, height: h, hard: project.pixelArt),
+             outline: polygon, bounds: bounds, key: key, target: target)
+    }
+
+    /// Splits `mask` off the layer's pixels into a floating selection; nothing if it holds no paint.
+    private func lift(_ pixels: [UInt8], mask: [UInt8], outline: [CGPoint], bounds: CGRect, key: LayerKey, target: MTLTexture) {
+        let (lifted, remaining) = SelectionPixels.split(pixels, mask: mask)
+        guard !SelectionPixels.isEmpty(lifted) else { return }
         selectionBefore = store.copy(of: key)
+        selectionIsLift = true
         renderer.upload(bytes: remaining, into: target)
         selectionPreview = selectionPreview ?? renderer.makeLayerTexture()
-        selection = FloatingSelection(key: key, lifted: lifted, outline: polygon, bounds: bounds,
+        selection = FloatingSelection(key: key, lifted: lifted, outline: outline, bounds: bounds,
                                       anchor: CGPoint(x: bounds.midX, y: bounds.midY))
         renderSelectionPreview()
+    }
+
+    // MARK: - Move
+
+    /// Move: lifts the current layer's drawing at the playhead, all of it or (with `point`) just the
+    /// shape under it, boxed tight around the paint. A locked layer lifts nothing and sets
+    /// `moveBlockedLayer`, so the editor can offer to unlock it.
+    func liftForMove(at point: CGPoint? = nil) {
+        lassoPoints = []
+        commitSelection()
+        moveBlockedLayer = nil
+        guard !isPlaying, let layer = currentLayer, let key = currentDrawingKey else { return }
+        if layer.locked { moveBlockedLayer = layer.id; return }
+        guard let target = store.existingTexture(clip: key.clip, frame: key.frame, layer: key.layer),
+              let pixels = renderer.readbackBytes(target) else { return }
+        let w = renderer.canvasSize.x, h = renderer.canvasSize.y
+        let mask = point.flatMap {
+            SelectionPixels.connectedShape(pixels, width: w, height: h, at: (Int($0.x.rounded(.down)), Int($0.y.rounded(.down))))
+        } ?? [UInt8](repeating: 255, count: w * h)
+        var shape = pixels
+        for i in 0..<(w * h) where mask[i] == 0 { shape[i * 4 + 3] = 0 }
+        guard let content = SelectionPixels.contentBounds(shape, width: w, height: h) else { return }
+        let box = content.insetBy(dx: -2, dy: -2).intersection(CGRect(x: 0, y: 0, width: w, height: h))
+        let outline = [CGPoint(x: box.minX, y: box.minY), CGPoint(x: box.maxX, y: box.minY),
+                       CGPoint(x: box.maxX, y: box.maxY), CGPoint(x: box.minX, y: box.maxY)]
+        lift(pixels, mask: mask, outline: outline, bounds: box, key: key, target: target)
+    }
+
+    /// "Unlock and move": unlocks the blocked layer until the move is dropped, then lifts it.
+    func unlockAndMove() {
+        guard let id = moveBlockedLayer, let i = layers.firstIndex(where: { $0.id == id }) else { return }
+        clip.layers[i].locked = false
+        relockAfterMove = id
+        liftForMove()
+    }
+
+    /// Frame or layer changed: drop what's floating; with Move, pick up the drawing that's now current.
+    private func selectionTargetChanged() {
+        commitSelection()
+        moveBlockedLayer = nil
+        if tool == .move && !isPlaying { liftForMove() }
+    }
+
+    private func relockIfNeeded() {
+        guard let id = relockAfterMove else { return }
+        relockAfterMove = nil
+        if let i = layers.firstIndex(where: { $0.id == id }) { clip.layers[i].locked = true }
     }
 
     /// Changes the floating selection's transform (move, scale, rotate, flip, anchor).
@@ -1504,6 +1565,9 @@ final class EditorState: ObservableObject {
     /// Drops the selection where it is, as one undo step with the lift.
     func commitSelection() {
         guard let sel = selection else { return }
+        // Lifted and put back where it was: no change, no undo step.
+        if selectionIsLift && sel.isIdentity { cancelSelection(); return }
+        relockIfNeeded()
         selection = nil
         lassoPoints = []
         guard let target = store.texture(clip: sel.key.clip, frame: sel.key.frame, layer: sel.key.layer),
@@ -1527,6 +1591,7 @@ final class EditorState: ObservableObject {
         lassoPoints = []
         if let before = selectionBefore { store.set(before, for: sel.key) }
         selectionBefore = nil
+        relockIfNeeded()
         refreshThumbnails(showing: sel.key)
     }
 
@@ -1572,6 +1637,7 @@ final class EditorState: ObservableObject {
     /// Throws the floating selection away, leaving the hole it was lifted from. One undo step.
     func deleteSelection() {
         guard let sel = selection else { return }
+        relockIfNeeded()
         selection = nil
         lassoPoints = []
         var before: [LayerKey: MTLTexture?] = [:]
@@ -1593,6 +1659,7 @@ final class EditorState: ObservableObject {
         let w = CGFloat(renderer.canvasSize.x), h = CGFloat(renderer.canvasSize.y)
         let bounds = Self.boundingBox(clip.outline).intersection(CGRect(x: 0, y: 0, width: w, height: h))
         selectionBefore = store.copy(of: key)
+        selectionIsLift = false
         selectionPreview = selectionPreview ?? renderer.makeLayerTexture()
         selection = FloatingSelection(key: key, lifted: clip.pixels, outline: clip.outline, bounds: bounds,
                                       anchor: CGPoint(x: bounds.midX, y: bounds.midY))

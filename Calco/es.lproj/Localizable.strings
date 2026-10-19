@@ -3,6 +3,7 @@
 "%@ color" = "%@ color";
 "%@ copy" = "%@ copia";
 "%@ doesn't include any clip of %@." = "%@ no incluye ningún clip de %@.";
+"%@ is locked" = "%@ está bloqueada";
 "%@ opacity" = "Opacidad de %@";
 "%@ · %lld / %lld" = "%@ · %lld / %lld";
 "%@, %@" = "%@, %@";
@@ -179,6 +180,7 @@
 "Milliseconds from the Pencil to the screen, in the top bar. For checking performance." = "Milisegundos del Pencil a la pantalla, en la barra superior. Para comprobar el rendimiento.";
 "More" = "Más";
 "More drawing actions" = "Más acciones del dibujo";
+"Move" = "Mover";
 "Move Frame Earlier" = "Mover fotograma antes";
 "Move Frame Later" = "Mover fotograma después";
 "Move down" = "Bajar";
@@ -301,6 +303,7 @@
 "Unity" = "Unity";
 "Unlink" = "Desenlazar";
 "Unlink (keep a copy)" = "Desenlazar (quedarse una copia)";
+"Unlock and move" = "Desbloquear y mover";
 "Use project fps" = "Usar los fps del proyecto";
 "Very smooth" = "Muy fluido";
 "W" = "An";

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Draws the lasso while it's being drawn, then the floating selection with its handles:
 /// drag inside to move, the corner to scale, the knob above to rotate, the dot to move the
@@ -7,9 +8,13 @@ import SwiftUI
 struct SelectionOverlay: View {
     @ObservedObject var state: EditorState
     @State private var start: FloatingSelection?
+    /// Whether the drag in progress is clicked into place; a light tap of haptics when it gets there.
+    @State private var snapped = false
+    private let haptics = UIImpactFeedbackGenerator(style: .light)
 
     private let handle: CGFloat = 26
     private let rotateReach: CGFloat = 34
+    private static let fingerSize: CGFloat = 72
 
     var body: some View {
         GeometryReader { geo in
@@ -39,18 +44,32 @@ struct SelectionOverlay: View {
         let topMid = CGPoint(x: b.midX, y: b.minY).applying(place)
         let centre = CGPoint(x: b.midX, y: b.midY).applying(place)
         let rotateKnob = Self.extend(from: centre, through: topMid, by: rotateReach)
+        let xs = corners.map(\.x), ys = corners.map(\.y)
+        let box = CGRect(x: xs.min()!, y: ys.min()!, width: xs.max()! - xs.min()!, height: ys.max()! - ys.min()!)
+        // A small shape (an eye, a button) is hard to hit and the anchor would cover it: grab it
+        // anywhere in a finger-sized square around it, and leave the anchor out.
+        let small = min(box.width, box.height) < Self.fingerSize
+        let grab = box.insetBy(dx: -max(0, (Self.fingerSize - box.width) / 2), dy: -max(0, (Self.fingerSize - box.height) / 2))
 
         // Body: drag to move.
         Path { p in p.addLines(outline); p.closeSubpath() }
             .fill(Theme.accent.opacity(0.08))
             .overlay(Path { p in p.addLines(outline); p.closeSubpath() }
                 .stroke(Theme.accent, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])))
-            .contentShape(Path { p in p.addLines(outline); p.closeSubpath() })
+            .contentShape(small ? Path(grab) : Path { p in p.addLines(outline); p.closeSubpath() })
             .gesture(DragGesture(minimumDistance: 1).onChanged { g in
                 let s = begin(sel)
                 let a = g.startLocation.applying(toCanvas), c = g.location.applying(toCanvas)
-                state.updateSelection { $0.offset = CGVector(dx: s.offset.dx + c.x - a.x, dy: s.offset.dy + c.y - a.y) }
-            }.onEnded { _ in start = nil })
+                let moved = CGVector(dx: s.offset.dx + c.x - a.x, dy: s.offset.dy + c.y - a.y)
+                // 12 points on screen, whatever the zoom.
+                let snap = FloatingSelection.snappedOffset(moved, tolerance: Self.snapPoints / Self.zoom(toView))
+                click(snap != nil)
+                state.updateSelection { $0.offset = snap ?? moved }
+            }.onEnded { _ in start = nil; snapped = false })
+            // With Move, a tap (not a drag) on a shape inside the box picks just that shape.
+            .onTapGesture { p in
+                if state.tool == .move { state.liftForMove(at: p.applying(toCanvas)) }
+            }
             .accessibilityLabel("Selection")
 
         // Bounding box.
@@ -67,8 +86,11 @@ struct SelectionOverlay: View {
                 let s = begin(sel)
                 let d0 = Self.distance(g.startLocation, anchor), d1 = Self.distance(g.location, anchor)
                 guard d0 > 1 else { return }
-                state.updateSelection { $0.scale = s.scale * d1 / d0 }
-            }.onEnded { _ in start = nil })
+                let scale = s.scale * d1 / d0
+                let snap = FloatingSelection.snappedScale(scale)
+                click(snap != nil)
+                state.updateSelection { $0.scale = snap ?? scale }
+            }.onEnded { _ in start = nil; snapped = false })
             .accessibilityLabel("Scale selection")
 
         // Rotate: the knob above the top edge, around the anchor.
@@ -78,11 +100,15 @@ struct SelectionOverlay: View {
                 let a0 = atan2(g.startLocation.y - anchor.y, g.startLocation.x - anchor.x)
                 let a1 = atan2(g.location.y - anchor.y, g.location.x - anchor.x)
                 // The view may be rotated too; canvas rotation is the same angle either way.
-                state.updateSelection { $0.rotation = s.rotation + (a1 - a0) }
-            }.onEnded { _ in start = nil })
+                let rotation = s.rotation + (a1 - a0)
+                let snap = FloatingSelection.snappedRotation(rotation)
+                click(snap != nil)
+                state.updateSelection { $0.rotation = snap ?? rotation }
+            }.onEnded { _ in start = nil; snapped = false })
             .accessibilityLabel("Rotate selection")
 
-        // Anchor: drag it anywhere; the drawing stays put.
+        // Anchor: drag it anywhere; the drawing stays put. Near the middle it clicks back to it.
+        if !small {
         Circle()
             .fill(Theme.background)
             .overlay(Circle().strokeBorder(Theme.accent, lineWidth: 2.5))
@@ -91,13 +117,16 @@ struct SelectionOverlay: View {
             .contentShape(Circle().scale(2.4))
             .position(anchor)
             .gesture(DragGesture(minimumDistance: 0).onChanged { g in
-                state.updateSelection { $0.moveAnchor(to: g.location.applying(toCanvas)) }
-            })
+                let middle = Self.distance(g.location, centre) < Self.snapPoints
+                click(middle)
+                state.updateSelection { $0.moveAnchor(to: (middle ? centre : g.location).applying(toCanvas)) }
+            }.onEnded { _ in snapped = false })
             .accessibilityLabel("Selection anchor")
+        }
 
+        // Above the rotate knob, or under the box when there's no room above.
         SelectionBar(state: state)
-            .position(x: (corners.map(\.x).min()! + corners.map(\.x).max()!) / 2,
-                      y: max(28, corners.map(\.y).min()! - 56))
+            .position(x: box.midX, y: box.minY - 82 >= 28 ? box.minY - 82 : box.maxY + 52)
     }
 
     private func knob(systemImage: String, at point: CGPoint) -> some View {
@@ -109,6 +138,19 @@ struct SelectionOverlay: View {
             .overlay(Circle().strokeBorder(Theme.background, lineWidth: 2))
             .contentShape(Circle().scale(1.6))
             .position(point)
+    }
+
+    /// A haptic tap when a drag clicks into place (not while it stays there).
+    private func click(_ now: Bool) {
+        if now && !snapped { haptics.impactOccurred() }
+        snapped = now
+    }
+
+    private static let snapPoints: CGFloat = 12
+
+    /// Screen points per canvas pixel.
+    private static func zoom(_ toView: CGAffineTransform) -> CGFloat {
+        max(hypot(toView.a, toView.b), 0.0001)
     }
 
     /// The selection as it was when the current drag began.
@@ -142,7 +184,9 @@ private struct SelectionBar: View {
             RailButton(icon: "xmark", label: "Cancel selection", size: 32) { state.cancelSelection() }
             RailButton(icon: "checkmark", label: "Apply selection", active: true, size: 32) { state.commitSelection() }
         }
-        .padding(3)
-        .background(Theme.panel, in: Capsule())
+        // Corners concentric with the buttons' (9 + 4), so the lit ✓ sits inside the bar.
+        .padding(4)
+        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 13))
+        .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(Theme.hairline))
     }
 }
