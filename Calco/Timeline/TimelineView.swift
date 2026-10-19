@@ -13,16 +13,18 @@ struct TimelineView: View {
     @State private var labelText = ""
 
     /// Width of one tick (one `hold` unit).
-    private let tick: CGFloat = 40
+    private let tick: CGFloat = 58
     private let labelWidth: CGFloat = 168
 
     /// Height of the layer grid set with the grip, remembered; 0 = automatic (up to 6 rows).
     @AppStorage("timeline.gridHeight") private var gridHeight: Double = 0
+    /// Pushed all the way down: only a slim bar with the grip, so the canvas gets the screen.
+    @AppStorage("timeline.collapsed") private var collapsed = false
     @State private var dragStartHeight: CGFloat?
 
-    private static let minRow: CGFloat = 40, maxRow: CGFloat = 52, rowGap: CGFloat = 3, rulerHeight: CGFloat = 28
+    private static let minRow: CGFloat = 56, maxRow: CGFloat = 72, rowGap: CGFloat = 3, rulerHeight: CGFloat = 28
     /// Tall enough for 5 big rows or 6 small ones, and leaves the canvas room on an 11" iPad in landscape.
-    private static let maxGridHeight: CGFloat = 300
+    private static let maxGridHeight: CGFloat = 340
 
     /// Rows grow (up to `maxRow`) to fill a grid stretched taller than the layers need.
     private var rowHeight: CGFloat {
@@ -35,10 +37,16 @@ struct TimelineView: View {
         Self.rulerHeight + CGFloat(min(state.layers.count, 4)) * (Self.minRow + Self.rowGap)
     }
 
-    private var gridMaxHeight: CGFloat { gridHeight > 0 ? min(CGFloat(gridHeight), Self.maxGridHeight) : automaticGridHeight }
+    /// A height saved with smaller rows never cuts a row in half: at least two whole rows.
+    private var gridMaxHeight: CGFloat {
+        guard gridHeight > 0 else { return automaticGridHeight }
+        let least = Self.rulerHeight + CGFloat(min(state.layers.count, 2)) * (Self.minRow + Self.rowGap)
+        return min(max(CGFloat(gridHeight), least), Self.maxGridHeight)
+    }
 
     /// Drag up to make the grid taller (the canvas gives up the space), down to make it shorter.
-    /// It never grows past what the layers can fill at the largest row height. Double tap: automatic.
+    /// It never grows past what the layers can fill at the largest row height. Pushing on past the
+    /// smallest height hides the timeline. Double tap: automatic.
     private var grip: some View {
         Capsule()
             .fill(gridHeight > 0 ? Theme.accent : Theme.textFaint)
@@ -52,15 +60,69 @@ struct TimelineView: View {
                     if dragStartHeight == nil { dragStartHeight = start }
                     let most = Self.rulerHeight + CGFloat(max(state.layers.count, 1)) * (Self.maxRow + Self.rowGap)
                     let least = Self.rulerHeight + 2 * (Self.minRow + Self.rowGap)
-                    gridHeight = Double(min(max(start - g.translation.height, least), max(most, least), Self.maxGridHeight))
+                    let wanted = start - g.translation.height
+                    gridHeight = Double(min(max(wanted, least), max(most, least), Self.maxGridHeight))
                 }
-                .onEnded { _ in dragStartHeight = nil })
+                .onEnded { g in
+                    // Pushed on past the smallest height: hide it, once the finger lifts (hiding
+                    // mid-drag would hand the rest of the drag to the canvas).
+                    let least = Self.rulerHeight + 2 * (Self.minRow + Self.rowGap)
+                    if let start = dragStartHeight, start - g.translation.height < least - Self.collapseOvershoot {
+                        withAnimation(.easeInOut(duration: 0.22)) { collapsed = true }
+                    }
+                    dragStartHeight = nil
+                })
             .onTapGesture(count: 2) { withAnimation(.easeOut(duration: 0.2)) { gridHeight = 0 } }
             .accessibilityLabel("Timeline height")
             .accessibilityHint("Drag up or down to resize. Double tap for the automatic height.")
     }
 
+    private static let collapseOvershoot: CGFloat = 50
+
+    /// The hidden timeline: a slim bar; drag it up or tap it to bring the timeline back.
+    private var collapsedBar: some View {
+        HStack(spacing: 10) {
+            Button { state.togglePlayback() } label: {
+                Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.accent)
+                    .frame(width: 36, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(state.isPlaying ? "Pause" : "Play")
+            Text("\(state.frameIndex + 1) / \(state.frames.count)")
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(Theme.textDim)
+            Capsule().fill(Theme.textFaint).frame(width: 46, height: 5)
+            Image(systemName: "chevron.up").font(.caption.weight(.semibold)).foregroundStyle(Theme.textDim)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 4)
+        .background(Theme.panel, in: Capsule())
+        .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
+        .onTapGesture { withAnimation(.easeInOut(duration: 0.22)) { collapsed = false } }
+        .gesture(DragGesture(minimumDistance: 4).onEnded { g in
+            if g.translation.height < -20 { withAnimation(.easeInOut(duration: 0.22)) { collapsed = false } }
+        })
+        .accessibilityLabel("Show the timeline")
+        .accessibilityAddTraits(.isButton)
+    }
+
     var body: some View {
+        Group {
+            if collapsed {
+                collapsedBar
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else {
+                expanded
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: collapsed)
+    }
+
+    private var expanded: some View {
         VStack(alignment: .leading, spacing: 6) {
             grip
                 .padding(.top, -6)
@@ -229,19 +291,33 @@ struct TimelineView: View {
         let clip = state.clip
         let isCurrentLayer = layer.id == state.currentLayer?.id
         let currentRun = clip.cellStart(layer: layer.id, at: state.frameIndex)
+        let runs = clip.runs(of: layer.id)
+        let runIndex = Dictionary(uniqueKeysWithValues: runs.enumerated().map { ($1.start, $0) })
         return HStack(spacing: 0) {
-            ForEach(Array(clip.runs(of: layer.id).enumerated()), id: \.offset) { n, run in
+            ForEach(Array(runs.enumerated()), id: \.offset) { n, run in
                 let span = clip.frames[run.start..<(run.start + run.count)]
                 let w = span.reduce(0) { $0 + width($1) }
                 let selected = isCurrentLayer && run.start == currentRun
-                let drawn = state.drawingKey(layer: layer.id, at: run.start)
-                    .flatMap { state.store.existingTexture(clip: $0.clip, frame: $0.frame, layer: $0.layer) } != nil
+                let key = state.drawingKey(layer: layer.id, at: run.start)
+                let drawn = key.flatMap { state.store.existingTexture(clip: $0.clip, frame: $0.frame, layer: $0.layer) } != nil
                 let linkedTo = clip.isLinked(layer: layer.id, at: run.start)
-                    ? clip.runs(of: layer.id).firstIndex { $0.start == clip.sourceIndex(layer: layer.id, at: run.start) }
+                    ? runIndex[clip.sourceIndex(layer: layer.id, at: run.start)]
                     : nil
+                let preview = key.flatMap { state.drawingThumbnails[$0] }
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 4)
                         .fill(selected ? Theme.accentWash : (drawn ? Theme.raised : Color.clear))
+                    if drawn, let preview {
+                        // What the drawing looks like, on white paper.
+                        Image(decorative: preview, scale: 2)
+                            .resizable().interpolation(.medium).scaledToFit()
+                            .background(Color.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
+                            .padding(3)
+                            .frame(maxWidth: max(4, w - 2), maxHeight: rowHeight, alignment: .leading)
+                            // Only a picture: taps go to the cell (an Image would swallow them).
+                            .allowsHitTesting(false)
+                    }
                     RoundedRectangle(cornerRadius: 4)
                         .strokeBorder(selected ? Theme.accent : Theme.hairline,
                                       style: StrokeStyle(lineWidth: selected ? 1.5 : 0.75, dash: drawn ? [] : [3, 3]))
@@ -260,8 +336,14 @@ struct TimelineView: View {
                             Image(systemName: "arrow.right").font(.system(size: 8, weight: .semibold))
                         }
                     }
-                    .foregroundStyle(selected ? Theme.accentText : Theme.textFaint)
-                    .padding(.leading, 5)
+                    .foregroundStyle(drawn && preview != nil ? Theme.text : (selected ? Theme.accentText : Theme.textFaint))
+                    .padding(.horizontal, drawn && preview != nil ? 4 : 0)
+                    .background(drawn && preview != nil ? Theme.background.opacity(0.75) : .clear, in: Capsule())
+                    .scaleEffect(drawn && preview != nil ? 0.8 : 1, anchor: .bottomLeading)
+                    .frame(maxHeight: .infinity, alignment: drawn && preview != nil ? .bottomLeading : .center)
+                    .padding(.leading, drawn && preview != nil ? 2 : 5)
+                    .padding(.bottom, drawn && preview != nil ? 2 : 0)
+                    .allowsHitTesting(false)
                 }
                 .frame(width: max(4, w - 2), height: rowHeight)
                 .padding(.trailing, 2)

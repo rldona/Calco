@@ -18,7 +18,7 @@ Mantén pulsado el nombre para **Renombrar…**, **Opacidad…**, **Enmascarar c
 
 El icono de la pila sobre los nombres de las capas abre el panel completo: arrastra el tirador para reordenar, un control de opacidad para la capa seleccionada y botones para añadir, renombrar, vaciar, enmascarar y eliminar.
 
-![Panel de capas](/crops/es/layers-panel.jpg)
+![Panel de capas](/screens/es/layers-panel.jpg)
 
 ## Nueva capa
 

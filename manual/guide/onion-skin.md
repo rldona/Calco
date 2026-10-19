@@ -21,7 +21,7 @@ The onion skin counts **drawings, not frames**: a drawing held for several frame
 
 Tapping the numbers under **Onion** opens the full settings:
 
-![Onion skin settings](/crops/en/onion-popover.jpg)
+![Onion skin settings](/screens/en/onion-popover.jpg)
 
 - **Drawings before / after** with their **colours**.
 - **Strength**: how visible the ghosts are.

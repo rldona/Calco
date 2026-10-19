@@ -1,52 +1,91 @@
 import SwiftUI
 import Metal
 
-/// Estudio layout: tools on the left, animation on the right (above the timeline in portrait), the
-/// timeline at the bottom, and the canvas in whatever space is left (so panels never cover the
-/// drawing). Zen mode hides all of it except a small floating bar.
+/// Estudio layout: the canvas fills the whole screen and the panels float over it, Procreate
+/// style: tools on the left and animation on the right, both centred, and a narrower timeline at
+/// the bottom (the animation rail lies above it in portrait). The drawing fits in the space the
+/// panels leave free. Zen mode hides all of it except a small floating bar.
 struct ContentView: View {
     @ObservedObject var state: EditorState
     @State private var latencyMs: Double = 0
+    /// Where each floating panel is, to keep the drawing out from under them.
+    @State private var panels: [PanelSlot: CGRect] = [:]
+
+    @AppStorage("timeline.collapsed") private var timelineCollapsed = false
 
     var body: some View {
         GeometryReader { geo in
             let portrait = geo.size.height > geo.size.width
-            VStack(spacing: Theme.gap) {
+            ZStack {
+                canvas
                 if !state.isZen {
                     TopBar(state: state, latencyMs: latencyMs)
+                        .reportFrame(.top)
+                        .padding(.horizontal, Theme.gap).padding(.top, Theme.gap)
+                        .frame(maxHeight: .infinity, alignment: .top)
                         .transition(.move(edge: .top).combined(with: .opacity))
-                }
-                HStack(spacing: Theme.gap) {
-                    if !state.isZen {
-                        ToolRail(state: state)
-                            .transition(.move(edge: .leading).combined(with: .opacity))
-                    }
-                    canvas
-                    if !state.isZen && !portrait {
+                    // The rails float centred on each side, whatever the timeline does.
+                    ToolRail(state: state)
+                        .reportFrame(.left)
+                        .padding(.leading, Theme.gap)
+                        .padding(.vertical, Self.topBarRoom)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                    if !portrait {
                         AnimationRail(state: state, axis: .vertical)
+                            .reportFrame(.right)
+                            .padding(.trailing, Theme.gap)
+                            .padding(.vertical, Self.topBarRoom)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
                             .transition(.move(edge: .trailing).combined(with: .opacity))
                     }
-                }
-                if !state.isZen {
-                    if portrait {
-                        AnimationRail(state: state, axis: .horizontal)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    VStack(spacing: Theme.gap) {
+                        if portrait { AnimationRail(state: state, axis: .horizontal) }
+                        TimelineView(state: state)
                     }
-                    TimelineView(state: state)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .frame(maxWidth: portrait ? geo.size.width - 2 * Theme.gap : Self.timelineWidth)
+                    .reportFrame(.bottom)
+                    .padding(.bottom, Theme.gap)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
+            .coordinateSpace(name: Self.space)
+            .onPreferenceChange(PanelFramesKey.self) { panels = $0 }
+            .onChange(of: panels) { _, _ in updateInsets(size: geo.size, portrait: portrait) }
+            .onChange(of: geo.size) { _, size in updateInsets(size: size, portrait: size.height > size.width) }
+            .onChange(of: state.isZen) { _, _ in updateInsets(size: geo.size, portrait: portrait) }
         }
-        .padding(Theme.gap)
         .background(Theme.background.ignoresSafeArea())
         .animation(.easeInOut(duration: 0.22), value: state.isZen)
+        .animation(.easeInOut(duration: 0.22), value: timelineCollapsed)
         .tint(Theme.accent)
         .preferredColorScheme(.dark)
     }
 
+    static let space = "editor"
+    /// Room the rails leave above and below them: the top bar's height, and the same below.
+    private static let topBarRoom: CGFloat = 52
+    /// The timeline floats narrower than the screen, centred under the canvas.
+    private static let timelineWidth: CGFloat = 820
+
+    /// The canvas fits in what the panels leave free, with a gap.
+    private func updateInsets(size: CGSize, portrait: Bool) {
+        var insets = CanvasTransform.Insets()
+        if !state.isZen {
+            let g = Theme.gap * 2
+            if let r = panels[.top] { insets.top = r.maxY + g }
+            if let r = panels[.left] { insets.left = r.maxX + g }
+            if let r = panels[.right] { insets.right = size.width - r.minX + g }
+            if let r = panels[.bottom] { insets.bottom = size.height - r.minY + g }
+            if portrait { insets.right = insets.left }
+        }
+        if state.canvasTransform.insets != insets { state.canvasTransform.insets = insets }
+    }
+
     private var canvas: some View {
         CanvasView(state: state, latencyMs: $latencyMs)
-            .clipShape(RoundedRectangle(cornerRadius: state.isZen ? 0 : Theme.corner))
+            .ignoresSafeArea()
             .overlay {
                 if state.showPivot { PivotOverlay(state: state) }
             }
@@ -54,9 +93,11 @@ struct ContentView: View {
             .overlay(alignment: .bottom) {
                 if state.tool == .move, let id = state.moveBlockedLayer,
                    let layer = state.layers.first(where: { $0.id == id }) {
-                    MoveLockedHint(state: state, layerName: layer.name).padding(.bottom, 14)
+                    MoveLockedHint(state: state, layerName: layer.name)
+                        .padding(.bottom, state.canvasTransform.insets.bottom + 6)
                 } else if state.tool == .move && state.selection != nil {
-                    MoveStrokesHint(state: state).padding(.bottom, 14)
+                    MoveStrokesHint(state: state)
+                        .padding(.bottom, state.canvasTransform.insets.bottom + 6)
                 }
             }
             .overlay(alignment: .top) {
@@ -193,7 +234,7 @@ struct ZenBar: View {
             RailButton(icon: "arrow.uturn.forward", label: "Redo", size: 34) { state.redo() }
                 .opacity(state.canRedo ? 1 : 0.35)
             Divider().overlay(Theme.hairline).frame(height: 20).padding(.horizontal, 2)
-            RailButton(icon: "pencil.tip", label: "Brush", active: state.tool == .brush, size: 34) { state.tool = .brush }
+            RailButton(icon: state.brush.icon, label: "Brush", active: state.tool == .brush, size: 34) { state.tool = .brush }
             RailButton(icon: "eraser", label: "Eraser", active: state.tool == .eraser, size: 34) { state.tool = .eraser }
             RailButton(icon: "drop.halffull", label: "Fill", active: state.tool == .fill, size: 34) { state.tool = .fill }
             RailButton(icon: "eyedropper", label: "Eyedropper", active: state.tool == .eyedropper, size: 34) { state.tool = .eyedropper }
@@ -441,4 +482,23 @@ struct PivotOverlay: View {
 
 #Preview {
     ContentView(state: EditorState.make())
+}
+
+/// The floating panels the canvas keeps clear of.
+enum PanelSlot: Hashable { case top, left, right, bottom }
+
+struct PanelFramesKey: PreferenceKey {
+    static let defaultValue: [PanelSlot: CGRect] = [:]
+    static func reduce(value: inout [PanelSlot: CGRect], nextValue: () -> [PanelSlot: CGRect]) {
+        value.merge(nextValue()) { $1 }
+    }
+}
+
+extension View {
+    /// Reports this panel's frame in the editor, so the canvas fits around it.
+    func reportFrame(_ slot: PanelSlot) -> some View {
+        background(GeometryReader { g in
+            Color.clear.preference(key: PanelFramesKey.self, value: [slot: g.frame(in: .named(ContentView.space))])
+        })
+    }
 }

@@ -18,7 +18,7 @@ Long-press the name for **Rename…**, **Opacity…**, **Mask to layer below**, 
 
 The stack icon over the layer names opens the full panel: drag the handle to reorder, an opacity slider for the selected layer, and buttons to add, rename, clear, mask and delete.
 
-![Layers panel](/crops/en/layers-panel.jpg)
+![Layers panel](/screens/en/layers-panel.jpg)
 
 ## New layer
 

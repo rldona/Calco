@@ -6,15 +6,15 @@ Calco is an iPad app for drawing sprite animations by hand: a character's idle, 
 
 ## What you see
 
-The editor has five areas:
+The canvas fills the whole screen, on a faint grid, and the panels float over it: the drawing always fits in the space they leave free. The editor has five areas:
 
 | Area | What it does |
 |---|---|
-| **Tool rail** (left) | Brush, eraser, fill, eyedropper, lasso, move, colour, size, undo and redo. See [Drawing tools](./drawing). |
+| **Tool rail** (left, centred) | Brush, eraser, fill, eyedropper, lasso, move, colour, size, undo and redo. See [Drawing tools](./drawing). |
 | **Canvas** (centre) | Where you draw. Pinch to zoom, two fingers to pan and rotate. |
-| **Animation rail** (right) | New drawing, duplicate, hold, delete, more, the onion skin, and whether they act on the layer or every layer. See [Timeline and drawings](./timeline). |
+| **Animation rail** (right, centred) | New drawing, duplicate, hold, delete, more, the onion skin, and whether they act on the layer or every layer. See [Timeline and drawings](./timeline). |
 | **Top bar** | The file menu on the left; flip view and Zen mode on the right. |
-| **Timeline** (bottom) | Playback, clips, the frame length, and the layers with their drawings. See [Timeline and drawings](./timeline). |
+| **Timeline** (bottom, centred) | Playback, clips, the frame length, and the layers with their drawings. See [Timeline and drawings](./timeline). |
 
 ## Your first animation in five steps
 

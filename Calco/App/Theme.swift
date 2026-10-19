@@ -27,6 +27,8 @@ extension View {
     func calcoPanel(padding: CGFloat = 8) -> some View {
         self.padding(padding)
             .background(Theme.panel, in: RoundedRectangle(cornerRadius: Theme.corner))
+            // Floating over the canvas.
+            .shadow(color: .black.opacity(0.35), radius: 10, y: 3)
     }
 }
 

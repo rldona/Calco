@@ -17,8 +17,8 @@ struct AnimationRail: View {
             if axis == .vertical {
                 // Captions while there's room; icons only when the timeline is stretched tall.
                 ViewThatFits(in: .vertical) {
-                    column(compact: false)
-                    column(compact: true)
+                    column(compact: false).fixedSize(horizontal: false, vertical: true)
+                    column(compact: true).fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(width: 64)
             } else {

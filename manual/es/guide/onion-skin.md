@@ -21,7 +21,7 @@ El papel cebolla cuenta **dibujos, no fotogramas**: un dibujo que se mantiene va
 
 Al tocar los números de debajo de **Cebolla** se abren todos los ajustes:
 
-![Ajustes del papel cebolla](/crops/es/onion-popover.jpg)
+![Ajustes del papel cebolla](/screens/es/onion-popover.jpg)
 
 - **Dibujos antes / después** con sus **colores**.
 - **Intensidad**: cuánto se ven los fantasmas.

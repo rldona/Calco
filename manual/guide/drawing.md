@@ -20,6 +20,26 @@ From top to bottom:
 
 ## Brush
 
+Tap the brush again to open the **brush library**: every brush with a sample of how it paints.
+
+![Brush library](/crops/en/brush-library.jpg)
+
+| Brush | What it's for |
+|---|---|
+| **Inker** | Clean line art: thins with light pressure. |
+| **Ballpoint** | Fine, steady lines and small details. |
+| **Marker** | Bold and even, at 70 %: it doesn't get darker where the stroke crosses itself. |
+| **Pencil** | Sketching on paper grain; light pressure is lighter, and tilting the Pencil shades with the side of the lead. |
+| **Blue pencil** | The same pencil, always light blue, for roughing out motion under the clean line. |
+| **Charcoal** | Rough and grainy, for quick masses. |
+| **Paintbrush** | Soft edge and a tip that tapers in. |
+| **Airbrush** | Very soft; builds up as you go over it, for gradients and glows. |
+| **Flat** | A hard, even fill with no pressure: colouring. |
+
+Each brush remembers **its own size and opacity**: the size slider on the rail shows the current brush's, and **Opacity** sits under the library. The rail's brush icon changes to the brush you chose.
+
+The **Settings** tab has the options for every brush:
+
 ![Brush options](/crops/en/brush-options.jpg)
 
 - **Draws**: where the paint goes on the layer.
@@ -33,7 +53,7 @@ From top to bottom:
 
 ## Eraser
 
-The eraser has its own size, remembered separately from the brush. In pixel art mode it erases whole pixels.
+The eraser has its own size, remembered separately from the brushes. Tap it again to choose its **tip**: any brush's edge, like a soft airbrush or a grainy pencil. In pixel art mode it erases whole pixels.
 
 ## Fill
 

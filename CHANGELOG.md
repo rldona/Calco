@@ -11,6 +11,12 @@ A release is made by pushing a tag `vX.Y.Z`: the release workflow tests and buil
 - **Resizable timeline**: drag the grip above it to make the layer grid taller (rows grow up to 36 pt); the height is remembered, and a double tap returns to the automatic height.
 - **Import an image as a layer** (New layer → Image from Photos / Files): it goes under every layer, fitted to the canvas and held through the whole clip, at 40 %, locked and marked as a **guide**, which is shown in the editor but never exported and isn't an outline for the fill. Any layer can be made a guide, or a guide part of the sprite, from its menu.
 
+- **Floating panels**: the canvas and its grid fill the whole screen; the tool and animation rails float centred on each side and a narrower timeline floats at the bottom. The drawing fits in the space they leave free and glides into place when a panel hides or comes back.
+- **Hide the timeline** by pushing its grip all the way down: the canvas gets the screen and the rails sit centred; a slim bar brings it back.
+- **Previews in the timeline**: each cell shows its drawing, on white paper, and the cells are bigger.
+- A faint **grid around the canvas**, which can be turned off in Preferences.
+- The **status bar is hidden**: the whole screen is the studio.
+- **Brush library**: Inker, Ballpoint, Marker, Pencil, Blue pencil, Charcoal, Paintbrush, Airbrush and Flat, each with a sample stroke. Pressure can change size or opacity, the pencils have paper grain and shade when you tilt the Pencil, the marker stays even where it crosses itself, the airbrush builds up. Each brush remembers its size and opacity; the eraser can use any brush's tip.
 - **Strokes you can pick one by one**: each drawing remembers its pencil strokes. With Move, a tap picks the exact stroke under it even where it crosses others; tap the same spot again for the one underneath, and **Add strokes** to pick several. Dragging a stroke moves it straight away. The eraser trims strokes; a fill or the lasso merges a drawing into shapes. Saved in the project as optional `<layer>.strokes` files.
 - **Move tool** (V): picks up the current layer's whole drawing, boxed tight, to move, scale or rotate; tap a shape (an eye, a hand) to move just that one. On a locked layer, such as an imported image, **Unlock and move** unlocks it for the move and locks it again after. Moving, rotating or scaling **clicks back** into its starting place, upright (or a quarter turn) and its own size, and the pivot clicks back to the middle, with a light haptic tap.
 

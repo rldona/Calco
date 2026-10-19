@@ -18,6 +18,26 @@ final class CanvasRenderer {
         var canvasSize: SIMD2<Float>
         var color: SIMD4<Float>
         var hard: Float = 0
+        var hardness: Float = 1
+        var grain: Float = 0
+        var grainScale: Float = 2
+    }
+
+    /// The tip of a brush, as the stamp shader sees it.
+    struct BrushTip {
+        var hardness: Float = 1
+        var grain: Float = 0
+        var grainScale: Float = 2
+        /// Stamps add up (over); otherwise the stroke keeps the strongest stamp at each pixel (max).
+        var buildsUp = false
+
+        init(hardness: Float = 1, grain: Float = 0, grainScale: Float = 2, buildsUp: Bool = false) {
+            self.hardness = hardness; self.grain = grain; self.grainScale = grainScale; self.buildsUp = buildsUp
+        }
+
+        init(_ brush: Brush) {
+            self.init(hardness: brush.hardness, grain: brush.grain, grainScale: brush.grainScale, buildsUp: brush.buildsUp)
+        }
     }
 
     /// One layer to composite, bottom to top.
@@ -67,8 +87,18 @@ final class CanvasRenderer {
     private let brushBehindPipeline: MTLRenderPipelineState
     private let brushInsidePipeline: MTLRenderPipelineState
     private let eraserPipeline: MTLRenderPipelineState
+    /// Stamps into a stroke's own texture: adding up, or keeping the strongest.
+    private let strokeMaxPipeline: MTLRenderPipelineState
+    /// A finished-so-far stroke onto its layer: in front, behind, inside, or erasing.
+    private let strokeFrontPipeline: MTLRenderPipelineState
+    private let strokeBehindPipeline: MTLRenderPipelineState
+    private let strokeInsidePipeline: MTLRenderPipelineState
+    private let strokeErasePipeline: MTLRenderPipelineState
     private let screenCompositePipeline: MTLRenderPipelineState
     private let screenCheckerPipeline: MTLRenderPipelineState
+    private let workspacePipeline: MTLRenderPipelineState
+    /// The grid behind the canvas (Preferences).
+    var showsWorkspaceGrid = true
     private let thumbCompositePipeline: MTLRenderPipelineState
     private let thumbCheckerPipeline: MTLRenderPipelineState
 
@@ -131,13 +161,44 @@ final class CanvasRenderer {
             return d
         }
 
+        let strokeMax = MTLRenderPipelineDescriptor()
+        strokeMax.vertexFunction = brush.vertexFunction
+        strokeMax.fragmentFunction = brush.fragmentFunction
+        premultipliedOver(strokeMax, format: Self.layerFormat)
+        for a in [strokeMax.colorAttachments[0]!] {
+            a.rgbBlendOperation = .max; a.alphaBlendOperation = .max
+            a.sourceRGBBlendFactor = .one; a.sourceAlphaBlendFactor = .one
+            a.destinationRGBBlendFactor = .one; a.destinationAlphaBlendFactor = .one
+        }
+
+        /// The stroke texture drawn over a layer, with the same blending as the brush modes.
+        func strokeComposite(_ shape: (MTLRenderPipelineColorAttachmentDescriptor) -> Void) -> MTLRenderPipelineDescriptor {
+            let d = composite("composite_fragment", format: Self.layerFormat)
+            shape(d.colorAttachments[0])
+            return d
+        }
+
         do {
+            strokeMaxPipeline = try device.makeRenderPipelineState(descriptor: strokeMax)
+            strokeFrontPipeline = try device.makeRenderPipelineState(descriptor: strokeComposite { _ in })
+            strokeBehindPipeline = try device.makeRenderPipelineState(descriptor: strokeComposite {
+                $0.sourceRGBBlendFactor = .oneMinusDestinationAlpha; $0.sourceAlphaBlendFactor = .oneMinusDestinationAlpha
+                $0.destinationRGBBlendFactor = .one; $0.destinationAlphaBlendFactor = .one
+            })
+            strokeInsidePipeline = try device.makeRenderPipelineState(descriptor: strokeComposite {
+                $0.sourceRGBBlendFactor = .destinationAlpha; $0.sourceAlphaBlendFactor = .zero
+                $0.destinationAlphaBlendFactor = .one
+            })
+            strokeErasePipeline = try device.makeRenderPipelineState(descriptor: strokeComposite {
+                $0.sourceRGBBlendFactor = .zero; $0.sourceAlphaBlendFactor = .zero
+            })
             brushPipeline = try device.makeRenderPipelineState(descriptor: brush)
             brushBehindPipeline = try device.makeRenderPipelineState(descriptor: behind)
             brushInsidePipeline = try device.makeRenderPipelineState(descriptor: inside)
             eraserPipeline = try device.makeRenderPipelineState(descriptor: eraser)
             screenCompositePipeline = try device.makeRenderPipelineState(descriptor: composite("composite_fragment", format: screenFormat))
             screenCheckerPipeline = try device.makeRenderPipelineState(descriptor: composite("checker_fragment", format: screenFormat))
+            workspacePipeline = try device.makeRenderPipelineState(descriptor: composite("workspace_fragment", format: screenFormat))
             thumbCompositePipeline = try device.makeRenderPipelineState(descriptor: composite("composite_fragment", format: Self.layerFormat))
             thumbCheckerPipeline = try device.makeRenderPipelineState(descriptor: composite("checker_fragment", format: Self.layerFormat))
         } catch {
@@ -211,6 +272,63 @@ final class CanvasRenderer {
         cmd.commit()
     }
 
+    /// Stamps into a stroke's own texture (cleared when the stroke began), in `color` at full
+    /// strength: the stroke's opacity is applied when it's composited onto the layer.
+    func paintStroke(_ stamps: [Stamp], into stroke: MTLTexture, color: SIMD3<Float>, tip: BrushTip, hard: Bool) {
+        guard !stamps.isEmpty, let cmd = queue.makeCommandBuffer() else { return }
+        let stamps = hard ? stamps.map(Self.snappedToPixel) : stamps
+        guard let buffer = stamps.withUnsafeBytes({ src in
+            device.makeBuffer(bytes: src.baseAddress!, length: src.count, options: .storageModeShared)
+        }) else { return }
+        var uniforms = StampUniforms(canvasSize: SIMD2<Float>(Float(canvasSize.x), Float(canvasSize.y)),
+                                     color: SIMD4(color, 1), hard: hard ? 1 : 0,
+                                     hardness: hard ? 1 : tip.hardness, grain: hard ? 0 : tip.grain,
+                                     grainScale: max(tip.grainScale, 0.5))
+        let pass = MTLRenderPassDescriptor()
+        pass.colorAttachments[0].texture = stroke
+        pass.colorAttachments[0].loadAction = .load
+        pass.colorAttachments[0].storeAction = .store
+        guard let enc = cmd.makeRenderCommandEncoder(descriptor: pass) else { return }
+        enc.setRenderPipelineState(tip.buildsUp ? brushPipeline : strokeMaxPipeline)
+        enc.setVertexBuffer(buffer, offset: 0, index: 0)
+        enc.setVertexBytes(&uniforms, length: MemoryLayout<StampUniforms>.stride, index: 1)
+        enc.setFragmentBytes(&uniforms, length: MemoryLayout<StampUniforms>.stride, index: 1)
+        enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: stamps.count)
+        enc.endEncoding()
+        cmd.commit()
+    }
+
+    /// The layer as it was before the stroke (`base`, nil = blank) with the stroke so far on top,
+    /// at `opacity`, in front / behind / inside, or rubbed out of it with the eraser.
+    func compositeStroke(_ stroke: MTLTexture, base: MTLTexture?, into target: MTLTexture,
+                         opacity: Float, mode: PaintMode, erase: Bool) {
+        guard let cmd = queue.makeCommandBuffer() else { return }
+        if let base, let blit = cmd.makeBlitCommandEncoder() {
+            blit.copy(from: base, to: target)
+            blit.endEncoding()
+        }
+        let pass = MTLRenderPassDescriptor()
+        pass.colorAttachments[0].texture = target
+        pass.colorAttachments[0].loadAction = base == nil ? .clear : .load
+        pass.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
+        pass.colorAttachments[0].storeAction = .store
+        guard let enc = cmd.makeRenderCommandEncoder(descriptor: pass) else { return }
+        let rect = Quad.fullScreen
+        var u = CompositeUniforms(origin: rect.origin, axisX: rect.axisX, axisY: rect.axisY, tint: .zero,
+                                  opacity: opacity, tintAmount: 0,
+                                  canvasSize: SIMD2<Float>(Float(canvasSize.x), Float(canvasSize.y)))
+        enc.setRenderPipelineState(erase ? strokeErasePipeline
+                                   : mode == .behind ? strokeBehindPipeline
+                                   : mode == .inside ? strokeInsidePipeline : strokeFrontPipeline)
+        enc.setVertexBytes(&u, length: MemoryLayout<CompositeUniforms>.stride, index: 0)
+        enc.setFragmentBytes(&u, length: MemoryLayout<CompositeUniforms>.stride, index: 0)
+        enc.setFragmentTexture(stroke, index: 0)
+        enc.setFragmentTexture(stroke, index: 1)
+        enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
+        enc.endEncoding()
+        cmd.commit()
+    }
+
     /// A pixel-art stamp: centred on the pixel under it, and the brush size read as a width in
     /// pixels (size 1 is one pixel, 3 a 3×3 block) instead of a radius.
     static func snappedToPixel(_ s: Stamp) -> Stamp {
@@ -250,6 +368,14 @@ final class CanvasRenderer {
         pass.colorAttachments[0].clearColor = MTLClearColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1)
         pass.colorAttachments[0].storeAction = .store
         guard let enc = cmd.makeRenderCommandEncoder(descriptor: pass) else { return }
+        // 24 points per cell, so it looks the same on every iPad.
+        var w = CompositeUniforms(origin: Quad.fullScreen.origin, axisX: Quad.fullScreen.axisX, axisY: Quad.fullScreen.axisY,
+                                  tint: .zero, opacity: 1, tintAmount: 0,
+                                  canvasSize: SIMD2(Float(24 * unitsPerPoint), showsWorkspaceGrid ? 1 : 0))
+        enc.setRenderPipelineState(workspacePipeline)
+        enc.setVertexBytes(&w, length: MemoryLayout<CompositeUniforms>.stride, index: 0)
+        enc.setFragmentBytes(&w, length: MemoryLayout<CompositeUniforms>.stride, index: 0)
+        enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
         encodeComposite(enc, layers: layers, rect: rect,
                         checker: screenCheckerPipeline, composite: screenCompositePipeline)
         enc.endEncoding()
@@ -258,7 +384,8 @@ final class CanvasRenderer {
     }
 
     /// Render a small preview of `layers` and hand back a CGImage on a background queue.
-    func thumbnail(_ layers: [CompositeLayer], maxSide: Int = 160, completion: @escaping (CGImage?) -> Void) {
+    func thumbnail(_ layers: [CompositeLayer], maxSide: Int = 160, checker: Bool = true,
+                   completion: @escaping (CGImage?) -> Void) {
         let aspect = Double(canvasSize.x) / Double(canvasSize.y)
         let w = aspect >= 1 ? maxSide : Int(Double(maxSide) * aspect)
         let h = aspect >= 1 ? Int(Double(maxSide) / aspect) : maxSide
@@ -276,7 +403,7 @@ final class CanvasRenderer {
         pass.colorAttachments[0].storeAction = .store
         guard let enc = cmd.makeRenderCommandEncoder(descriptor: pass) else { completion(nil); return }
         encodeComposite(enc, layers: layers, rect: .fullScreen,
-                        checker: thumbCheckerPipeline, composite: thumbCompositePipeline)
+                        checker: checker ? thumbCheckerPipeline : nil, composite: thumbCompositePipeline)
         enc.endEncoding()
 
         cmd.addCompletedHandler { _ in

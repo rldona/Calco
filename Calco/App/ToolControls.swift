@@ -11,14 +11,15 @@ struct ToolRail: View {
     @State private var editingColor = false
     @State private var editingFill = false
     @State private var editingBrush = false
+    @State private var editingEraser = false
     @State private var editingLasso = false
 
     var body: some View {
         // Full size while there's room; tighter when the timeline is tall (or many layers) so the
         // canvas, not the timeline, gives up the space.
         ViewThatFits(in: .vertical) {
-            tools(compact: false)
-            tools(compact: true)
+            tools(compact: false).fixedSize(horizontal: false, vertical: true)
+            tools(compact: true).fixedSize(horizontal: false, vertical: true)
         }
         .frame(width: 40)
         .calcoPanel(padding: 5)
@@ -28,11 +29,15 @@ struct ToolRail: View {
     private func tools(compact: Bool) -> some View {
         VStack(spacing: compact ? 1 : 6) {
             // Like the bucket: tap once to pick the brush, again for its options.
-            RailButton(icon: "pencil.tip", label: "Brush", active: state.tool == .brush, size: compact ? 32 : 36) {
+            RailButton(icon: state.brush.icon, label: "Brush", active: state.tool == .brush, size: compact ? 32 : 36) {
                 if state.tool == .brush { editingBrush = true } else { state.tool = .brush }
             }
-            .popover(isPresented: $editingBrush, arrowEdge: .leading) { BrushOptions(state: state) }
-            RailButton(icon: "eraser", label: "Eraser", active: state.tool == .eraser, size: compact ? 32 : 36) { state.tool = .eraser }
+            .popover(isPresented: $editingBrush, arrowEdge: .leading) { BrushPanel(state: state) }
+            // Tap once for the eraser, again for its tip.
+            RailButton(icon: "eraser", label: "Eraser", active: state.tool == .eraser, size: compact ? 32 : 36) {
+                if state.tool == .eraser { editingEraser = true } else { state.tool = .eraser }
+            }
+            .popover(isPresented: $editingEraser, arrowEdge: .leading) { EraserPanel(state: state) }
             // Tap once to pick the bucket, again for its options.
             RailButton(icon: "drop.halffull", label: "Fill", active: state.tool == .fill, size: compact ? 32 : 36) {
                 if state.tool == .fill { editingFill = true } else { state.tool = .fill }
@@ -140,7 +145,7 @@ struct BrushOptions: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Brush").font(.headline)
+            Text(state.brush.name).font(.headline)
             PaintModePicker(state: state)
             Divider()
             HStack {

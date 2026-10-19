@@ -32,9 +32,40 @@ final class EditorState: ObservableObject {
     }
     /// The eyedropper is one-shot: after a pick you're back on this.
     private var toolBeforeEyedropper: CanvasRenderer.Tool = .brush
-    /// Radii in canvas pixels at full pressure, one per tool. Remembered across launches.
-    @Published var brushSize: Float = 6 { didSet { saveToolSettings() } }
+    /// The brush the brush tool paints with, and the one whose tip the eraser rubs out with.
+    @Published var brushID = Brush.inker.id { didSet { saveToolSettings() } }
+    @Published var eraserBrushID = Brush.inker.id { didSet { saveToolSettings() } }
+    /// Each brush's own size (radius in canvas pixels at full pressure) and opacity, once changed.
+    @Published private var brushSizes: [String: Float] = [:] { didSet { saveToolSettings() } }
+    @Published private var brushOpacities: [String: Float] = [:] { didSet { saveToolSettings() } }
     @Published var eraserSize: Float = 18 { didSet { saveToolSettings() } }
+    /// The faint grid around the canvas (Preferences).
+    @Published var workspaceGrid = true { didSet { saveToolSettings() } }
+
+    var brush: Brush { Brush.named(brushID) }
+    var eraserBrush: Brush { Brush.named(eraserBrushID) }
+    /// What the current tool lays down with.
+    var activeBrush: Brush { tool == .eraser ? eraserBrush : brush }
+
+    /// The current brush's size.
+    var brushSize: Float {
+        get { size(of: brush) }
+        set { brushSizes[brushID] = newValue }
+    }
+
+    func size(of brush: Brush) -> Float { brushSizes[brush.id] ?? brush.defaultSize }
+
+    /// The current brush's opacity, 0.05–1.
+    var brushOpacity: Float {
+        get { opacity(of: brush) }
+        set { brushOpacities[brushID] = min(max(newValue, 0.05), 1) }
+    }
+
+    func opacity(of brush: Brush) -> Float { brushOpacities[brush.id] ?? brush.defaultOpacity }
+
+    /// The stroke in progress on its own, composited onto the layer as it grows.
+    private var strokeTexture: MTLTexture?
+    private var strokeBase: MTLTexture?
     /// Brush stabiliser 0–1 and whether the Pencil's pressure changes the size. Remembered.
     @Published var smoothing: Float = 0.3 { didSet { saveToolSettings() } }
     @Published var usePressure = true { didSet { saveToolSettings() } }
@@ -85,8 +116,13 @@ final class EditorState: ObservableObject {
     @Published var canvasTransform = CanvasTransform.identity
 
     /// Back to the fitted, upright canvas; a flipped view stays flipped.
-    func fitCanvas() { canvasTransform = CanvasTransform(flipped: canvasTransform.flipped) }
-    @Published private(set) var thumbnails: [String: CGImage] = [:]
+    func fitCanvas() { canvasTransform = CanvasTransform(flipped: canvasTransform.flipped, insets: canvasTransform.insets) }
+    /// Each drawing on its own over white paper, for the timeline's cells.
+    @Published private(set) var drawingThumbnails: [LayerKey: CGImage] = [:]
+    /// Which texture each preview was made from, to skip the ones that haven't changed.
+    private var drawingThumbnailSource: [LayerKey: ObjectIdentifier] = [:]
+    private var pendingThumbnails: [LayerKey: CGImage?] = [:]
+    private var thumbnailFlushScheduled = false
 
     /// Where the project lives on disk. Nil until the first save.
     @Published private(set) var documentURL: URL?
@@ -136,8 +172,6 @@ final class EditorState: ObservableObject {
     private var movingPieces: (key: LayerKey, indices: [Int])?
     /// Where the last tap picked, so tapping the same spot again goes to the piece underneath.
     private var lastPick: (key: LayerKey, point: CGPoint, index: Int)?
-    /// Scratch texture for painting a stroke on its own.
-    private var scratch: MTLTexture?
     /// Move: taps add pieces to (or take them out of) what's floating instead of replacing it.
     @Published var addingStrokes = false
     /// What Move picked with the last tap, for the hint under the canvas.
@@ -366,7 +400,7 @@ final class EditorState: ObservableObject {
     private func install(_ newProject: Project, images: [LayerKey: CGImage],
                          strokes loadedStrokes: [LayerKey: [StrokePiece]] = [:]) throws {
         selection = nil; selectionBefore = nil; selectionPreview = nil; lassoPoints = []
-        strokes = loadedStrokes; movingPieces = nil; lastPick = nil; moveHint = nil; scratch = nil
+        strokes = loadedStrokes; movingPieces = nil; lastPick = nil; moveHint = nil; strokeTexture = nil; strokeBase = nil
         playRange = nil
         let size = SIMD2<Int>(newProject.canvas.width, newProject.canvas.height)
         if size != renderer.canvasSize {
@@ -376,7 +410,9 @@ final class EditorState: ObservableObject {
             renderer = r
         }
         store = FrameStore(renderer: renderer)
-        thumbnails = [:]
+        drawingThumbnails = [:]
+        drawingThumbnailSource = [:]
+        pendingThumbnails = [:]
 
         project = newProject
         if project.clips.isEmpty { project.clips = [Self.defaultClip()] }
@@ -394,7 +430,7 @@ final class EditorState: ObservableObject {
         redoStack = []
         coalesceTag = nil
         pendingStroke = nil
-        canvasTransform = .identity
+        canvasTransform = CanvasTransform(insets: canvasTransform.insets)
     }
 
     // MARK: - Clips
@@ -443,7 +479,6 @@ final class EditorState: ObservableObject {
         recordUndo(textures: doomed.frames.flatMap { layerKeys(doomed, frame: $0.id) })
         for f in doomed.frames {
             store.remove(clip: doomed.id, frame: f.id, layers: doomed.layers.map(\.id))
-            thumbnails.removeValue(forKey: f.id)
         }
         project.clips.remove(at: clipIndex)
         selectClip(min(clipIndex, project.clips.count - 1))
@@ -458,7 +493,7 @@ final class EditorState: ObservableObject {
         clipIndex = index
         frameIndex = 0
         layerIndex = min(layerIndex, max(0, layers.count - 1))
-        for f in frames where thumbnails[f.id] == nil { refreshThumbnail(for: f.id) }
+        for f in frames { refreshThumbnail(for: f.id) }
     }
 
     /// Normalized, origin bottom-left. Clamped to the canvas.
@@ -662,7 +697,6 @@ final class EditorState: ObservableObject {
         let at = frameIndex
         keepingPicture { clip.frames.remove(at: at) }
         store.remove(clip: clip.id, frame: f.id, layers: layers.map(\.id))
-        thumbnails.removeValue(forKey: f.id)
         frameIndex = min(frameIndex, frames.count - 1)
         isDirty = true
         refreshClipThumbnails()
@@ -779,7 +813,6 @@ final class EditorState: ObservableObject {
                     excess -= cut
                 } else if end > start, layers.allSatisfy({ clip.frames[end].held.contains($0.id) }) {
                     excess -= clip.frames[end].hold
-                    thumbnails.removeValue(forKey: frames[end].id)
                     clip.frames.remove(at: end)
                     end -= 1
                 } else {
@@ -1016,7 +1049,6 @@ final class EditorState: ObservableObject {
         if src > 0 {
             clip.frames[src].held.append(l.id)
             if layers.allSatisfy({ clip.frames[src].held.contains($0.id) }) {
-                thumbnails.removeValue(forKey: frames[src].id)
                 clip.frames.remove(at: src)
                 if frameIndex >= src { frameIndex -= 1 }
             }
@@ -1402,18 +1434,48 @@ final class EditorState: ObservableObject {
     /// Refreshes every frame of the current clip that shows drawing `key` (its own frame and the
     /// frames holding it).
     func refreshThumbnails(showing key: LayerKey) {
-        for i in frames.indices where drawingKey(layer: key.layer, at: i) == key {
-            refreshThumbnail(for: frames[i].id)
+        // Its pixels changed in place: the texture is the same object, so say so.
+        drawingThumbnailSource[key] = nil
+        refreshThumbnail(for: key.frame)
+    }
+
+    /// Re-renders the cell previews of frame `frameID`'s own drawings that changed: a drawing
+    /// whose texture is the same object as last time (and wasn't painted since) is skipped, so
+    /// adding or moving frames doesn't redraw every preview.
+    func refreshThumbnail(for frameID: String) {
+        for layer in clip.layers {
+            let key = LayerKey(clip: clip.id, frame: frameID, layer: layer.id)
+            guard let texture = store.existingTexture(clip: key.clip, frame: key.frame, layer: key.layer) else {
+                if drawingThumbnails[key] != nil { pendingThumbnails[key] = .some(nil); scheduleThumbnailFlush() }
+                drawingThumbnailSource[key] = nil
+                continue
+            }
+            let id = ObjectIdentifier(texture)
+            if drawingThumbnailSource[key] == id, drawingThumbnails[key] != nil { continue }
+            drawingThumbnailSource[key] = id
+            renderer.thumbnail([.init(texture: texture, opacity: 1, tint: .zero, tintAmount: 0, mask: nil)],
+                               maxSide: 96, checker: false) { [weak self] image in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.pendingThumbnails[key] = .some(image)
+                    self.scheduleThumbnailFlush()
+                }
+            }
         }
     }
 
-    func refreshThumbnail(for frameID: String) {
-        let layersToDraw = frameLayers(frameID, opacity: 1, tint: nil)
-        renderer.thumbnail(layersToDraw) { [weak self] image in
-            DispatchQueue.main.async {
-                guard let self, let image else { return }
-                self.thumbnails[frameID] = image
-            }
+    /// Previews arrive one by one from the GPU; they're published together, once per run-loop
+    /// turn, so the editor redraws once instead of once per preview.
+    private func scheduleThumbnailFlush() {
+        guard !thumbnailFlushScheduled else { return }
+        thumbnailFlushScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.thumbnailFlushScheduled = false
+            var next = self.drawingThumbnails
+            for (k, v) in self.pendingThumbnails { next[k] = v }
+            self.pendingThumbnails = [:]
+            self.drawingThumbnails = next
         }
     }
 
@@ -1425,13 +1487,34 @@ final class EditorState: ObservableObject {
         saved.updateValue(store.copy(of: key), forKey: key)
         pendingStroke = snapshot(saved)
         pendingStamps = []
+        strokeBase = saved[key] ?? nil
+        strokeTexture = strokeTexture ?? renderer.makeLayerTexture()
+        if let strokeTexture { renderer.clear(strokeTexture) }
         return paintTarget
     }
 
-    /// Paints part of the stroke in progress with the current tool, and keeps its stamps.
+    /// Paints part of the stroke in progress with the current tool and brush, and keeps its stamps.
+    /// The stroke builds up on its own texture, then the layer is redrawn as it was plus the
+    /// stroke, at the brush's opacity: so a marker stays even where it crosses itself.
     func paintStroke(_ stamps: [CanvasRenderer.Stamp], into target: MTLTexture) {
-        renderer.paint(stamps, into: target, color: color, tool: tool, hard: project.pixelArt, mode: paintMode)
         pendingStamps += stamps
+        guard let strokeTexture else {
+            renderer.paint(stamps, into: target, color: color, tool: tool, hard: project.pixelArt, mode: paintMode)
+            return
+        }
+        let b = activeBrush
+        renderer.paintStroke(stamps, into: strokeTexture, color: b.fixedColor ?? SIMD3(color.x, color.y, color.z),
+                             tip: .init(b), hard: project.pixelArt)
+        renderer.compositeStroke(strokeTexture, base: strokeBase, into: target,
+                                 opacity: tool == .eraser ? 1 : brushOpacity, mode: paintMode, erase: tool == .eraser)
+    }
+
+    /// The stroke that just ended on its own, as the layer got it (at the brush's opacity).
+    private func strokeAlone() -> [UInt8]? {
+        guard let strokeTexture, var px = renderer.readbackBytes(strokeTexture) else { return nil }
+        let o = tool == .eraser ? 1 : brushOpacity
+        if o < 1 { for i in px.indices { px[i] = UInt8(Float(px[i]) * o + 0.5) } }
+        return px
     }
 
     func strokeEnded() {
@@ -1468,26 +1551,17 @@ final class EditorState: ObservableObject {
         case .brush where paintMode == .front:
             var pieces = strokes[key] ?? before.flatMap { renderer.readbackBytes($0) }
                 .map { StrokePieces.shapes(of: $0, width: w, height: h) } ?? []
-            if let alone = paintedAlone(stamps, color: color), let piece = StrokePiece(canvas: alone, width: w, height: h) {
+            if let alone = strokeAlone(), let piece = StrokePiece(canvas: alone, width: w, height: h) {
                 pieces.append(piece)
             }
             strokes[key] = pieces
         case .eraser:
-            guard let pieces = strokes[key], let cover = paintedAlone(stamps, color: SIMD4(1, 1, 1, 1)) else { return }
+            guard let pieces = strokes[key], let cover = strokeAlone() else { return }
             let coverage = stride(from: 3, to: cover.count, by: 4).map { cover[$0] }
             strokes[key] = pieces.compactMap { $0.erased(by: coverage, canvasWidth: w) }
         default:
             strokes[key] = nil
         }
-    }
-
-    /// The stamps painted on their own, in front, into a clear canvas.
-    private func paintedAlone(_ stamps: [CanvasRenderer.Stamp], color: SIMD4<Float>) -> [UInt8]? {
-        scratch = scratch ?? renderer.makeLayerTexture()
-        guard let scratch else { return nil }
-        renderer.clear(scratch)
-        renderer.paint(stamps, into: scratch, color: color, tool: .brush, hard: project.pixelArt, mode: .front)
-        return renderer.readbackBytes(scratch)
     }
 
     /// The drawing's pieces, checked against its pixels: if they no longer add up (it was filled,
@@ -1852,6 +1926,11 @@ final class EditorState: ObservableObject {
 
     private enum ToolKey {
         static let brushSize = "tool.brushSize"
+        static let brush = "tool.brush"
+        static let workspaceGrid = "view.workspaceGrid"
+        static let eraserBrush = "tool.eraserBrush"
+        static let brushSizes = "tool.brushSizes"
+        static let brushOpacities = "tool.brushOpacities"
         static let eraserSize = "tool.eraserSize"
         static let color = "tool.color"
         static let fillGaps = "tool.fillGaps"
@@ -1870,7 +1949,17 @@ final class EditorState: ObservableObject {
         loadingToolSettings = true
         defer { loadingToolSettings = false }
         let range = Self.sizeRange
-        if let v = defaults.object(forKey: ToolKey.brushSize) as? Float, range.contains(v) { brushSize = v }
+        if let id = defaults.string(forKey: ToolKey.brush), Brush.all.contains(where: { $0.id == id }) { brushID = id }
+        if let id = defaults.string(forKey: ToolKey.eraserBrush), Brush.all.contains(where: { $0.id == id }) { eraserBrushID = id }
+        if let d = defaults.dictionary(forKey: ToolKey.brushSizes) as? [String: Float] {
+            brushSizes = d.filter { range.contains($0.value) }
+        } else if let v = defaults.object(forKey: ToolKey.brushSize) as? Float, range.contains(v) {
+            brushSizes[Brush.inker.id] = v                       // the one brush before there were several
+        }
+        if let v = defaults.object(forKey: ToolKey.workspaceGrid) as? Bool { workspaceGrid = v }
+        if let d = defaults.dictionary(forKey: ToolKey.brushOpacities) as? [String: Float] {
+            brushOpacities = d.filter { (0.05...1).contains($0.value) }
+        }
         if let v = defaults.object(forKey: ToolKey.eraserSize) as? Float, range.contains(v) { eraserSize = v }
         if let c = defaults.array(forKey: ToolKey.color) as? [Float], c.count == 3,
            c.allSatisfy({ (0...1).contains($0) }) {
@@ -1886,7 +1975,11 @@ final class EditorState: ObservableObject {
 
     private func saveToolSettings() {
         guard let defaults, !loadingToolSettings else { return }
-        defaults.set(brushSize, forKey: ToolKey.brushSize)
+        defaults.set(brushID, forKey: ToolKey.brush)
+        defaults.set(eraserBrushID, forKey: ToolKey.eraserBrush)
+        defaults.set(brushSizes, forKey: ToolKey.brushSizes)
+        defaults.set(brushOpacities, forKey: ToolKey.brushOpacities)
+        defaults.set(workspaceGrid, forKey: ToolKey.workspaceGrid)
         defaults.set(eraserSize, forKey: ToolKey.eraserSize)
         defaults.set([color.x, color.y, color.z], forKey: ToolKey.color)
         defaults.set(fillGaps.rawValue, forKey: ToolKey.fillGaps)

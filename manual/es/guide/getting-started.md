@@ -6,15 +6,15 @@ Calco es una app de iPad para dibujar a mano animaciones de sprites: el reposo, 
 
 ## Lo que ves
 
-El editor tiene cinco zonas:
+El lienzo ocupa toda la pantalla, sobre una cuadrícula suave, y los paneles flotan encima: el dibujo siempre se encaja en el hueco que dejan libre. El editor tiene cinco zonas:
 
 | Zona | Para qué sirve |
 |---|---|
-| **Barra de herramientas** (izquierda) | Pincel, goma, relleno, cuentagotas, lazo, mover, color, tamaño, deshacer y rehacer. Ver [Herramientas de dibujo](./drawing). |
+| **Barra de herramientas** (izquierda, centrada) | Pincel, goma, relleno, cuentagotas, lazo, mover, color, tamaño, deshacer y rehacer. Ver [Herramientas de dibujo](./drawing). |
 | **Lienzo** (centro) | Donde dibujas. Pellizca para ampliar y usa dos dedos para desplazar y girar. |
-| **Riel de animación** (derecha) | Nuevo dibujo, duplicar, mantener, eliminar, más, el papel cebolla y si actúan sobre la capa o sobre todas. Ver [Línea de tiempo y dibujos](./timeline). |
+| **Riel de animación** (derecha, centrado) | Nuevo dibujo, duplicar, mantener, eliminar, más, el papel cebolla y si actúan sobre la capa o sobre todas. Ver [Línea de tiempo y dibujos](./timeline). |
 | **Barra superior** | El menú de archivo a la izquierda; voltear la vista y modo Zen a la derecha. |
-| **Línea de tiempo** (abajo) | La reproducción, los clips, la duración del fotograma y las capas con sus dibujos. Ver [Línea de tiempo y dibujos](./timeline). |
+| **Línea de tiempo** (abajo, centrada) | La reproducción, los clips, la duración del fotograma y las capas con sus dibujos. Ver [Línea de tiempo y dibujos](./timeline). |
 
 ## Tu primera animación en cinco pasos
 

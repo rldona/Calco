@@ -54,6 +54,7 @@ Over the layer names, **+** adds a layer and the stack icon opens the layers pan
 Each layer row is a strip of **cells**. A cell is one drawing, and its width is how long it lasts.
 
 - Tap a cell to go there and draw on that layer.
+- Each cell shows a **preview** of its drawing, with its number (or label) in the corner.
 - A dashed cell has nothing drawn yet.
 - An arrow → means the drawing keeps showing in the following frames (a hold).
 - A label (for example *step*) replaces the number when the drawing has one.
@@ -74,3 +75,7 @@ Long-press a cell for its menu:
 ### Make it taller
 
 Drag the **grip** at the top of the timeline (the short bar in the middle) upwards to make room for more layers: the rows grow and the canvas gets smaller. Calco remembers the height. **Double-tap** the grip to go back to the automatic height.
+
+Keep pushing the grip down past the smallest height and the timeline **hides**: the canvas gets the whole height, the rails sit centred beside it, and a slim bar with play and the frame counter stays at the bottom. Tap it, or drag it up, to bring the timeline back. Both ways it slides, and the drawing glides to its new place.
+
+![The timeline hidden](/screens/en/timeline-hidden.jpg)

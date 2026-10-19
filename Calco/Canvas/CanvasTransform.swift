@@ -12,13 +12,35 @@ struct CanvasTransform: Equatable {
     /// Mirrored left to right on screen only (the drawing isn't touched), to catch mistakes with
     /// fresh eyes. Survives fitting the canvas.
     var flipped = false
+    /// The parts of the view covered by floating panels, in points: the canvas fits (and zooms and
+    /// rotates around the middle of) what's left. Not part of the view's state: equality ignores it.
+    var insets = Insets()
+
+    struct Insets: Equatable {
+        var top: CGFloat = 0, left: CGFloat = 0, bottom: CGFloat = 0, right: CGFloat = 0
+    }
 
     static let identity = CanvasTransform()
+
+    static func == (a: CanvasTransform, b: CanvasTransform) -> Bool {
+        a.scale == b.scale && a.rotation == b.rotation && a.offset == b.offset && a.flipped == b.flipped
+            && a.insets == b.insets
+    }
+
+    /// The free area of a view this size (in the same units), where the canvas sits.
+    func freeRect(_ viewSize: CGSize, unitsPerPoint: CGFloat = 1) -> CGRect {
+        let u = unitsPerPoint
+        let r = CGRect(x: insets.left * u, y: insets.top * u,
+                       width: viewSize.width - (insets.left + insets.right) * u,
+                       height: viewSize.height - (insets.top + insets.bottom) * u)
+        return r.width > 20 && r.height > 20 ? r : CGRect(origin: .zero, size: viewSize)
+    }
     static let scaleRange: ClosedRange<CGFloat> = 0.25...16
 
     /// Canvas pixels (origin top-left) → view coordinates (origin top-left).
     func canvasToView(canvas: SIMD2<Int>, viewSize: CGSize, unitsPerPoint: CGFloat = 1) -> CGAffineTransform {
-        let fit = CanvasRenderer.fitRect(canvas: canvas, in: viewSize)
+        let free = freeRect(viewSize, unitsPerPoint: unitsPerPoint)
+        let fit = CanvasRenderer.fitRect(canvas: canvas, in: free.size).offsetBy(dx: free.minX, dy: free.minY)
         let base = fit.width / CGFloat(canvas.x)
         return CGAffineTransform(translationX: -CGFloat(canvas.x) / 2, y: -CGFloat(canvas.y) / 2)
             .concatenating(CGAffineTransform(scaleX: (flipped ? -1 : 1) * base * scale, y: base * scale))
@@ -37,19 +59,21 @@ struct CanvasTransform: Equatable {
     mutating func zoom(by factor: CGFloat, around anchor: CGPoint, viewSize: CGSize) {
         let newScale = min(max(scale * factor, Self.scaleRange.lowerBound), Self.scaleRange.upperBound)
         let f = newScale / scale
-        let center = CGPoint(x: viewSize.width / 2 + offset.width, y: viewSize.height / 2 + offset.height)
+        let mid = freeRect(viewSize)
+        let center = CGPoint(x: mid.midX + offset.width, y: mid.midY + offset.height)
         let moved = CGPoint(x: anchor.x + (center.x - anchor.x) * f, y: anchor.y + (center.y - anchor.y) * f)
-        offset = CGSize(width: moved.x - viewSize.width / 2, height: moved.y - viewSize.height / 2)
+        offset = CGSize(width: moved.x - mid.midX, height: moved.y - mid.midY)
         scale = newScale
     }
 
     /// Rotates by `angle` radians around `anchor`.
     mutating func rotate(by angle: CGFloat, around anchor: CGPoint, viewSize: CGSize) {
-        let center = CGPoint(x: viewSize.width / 2 + offset.width, y: viewSize.height / 2 + offset.height)
+        let mid = freeRect(viewSize)
+        let center = CGPoint(x: mid.midX + offset.width, y: mid.midY + offset.height)
         let d = CGPoint(x: center.x - anchor.x, y: center.y - anchor.y)
         let c = cos(angle), s = sin(angle)
         let moved = CGPoint(x: anchor.x + d.x * c - d.y * s, y: anchor.y + d.x * s + d.y * c)
-        offset = CGSize(width: moved.x - viewSize.width / 2, height: moved.y - viewSize.height / 2)
+        offset = CGSize(width: moved.x - mid.midX, height: moved.y - mid.midY)
         rotation += angle
     }
 

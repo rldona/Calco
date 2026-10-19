@@ -20,6 +20,26 @@ De arriba abajo:
 
 ## Pincel
 
+Toca otra vez el pincel para abrir la **biblioteca de pinceles**: todos los pinceles con una muestra de cómo pintan.
+
+![Biblioteca de pinceles](/crops/es/brush-library.jpg)
+
+| Pincel | Para qué sirve |
+|---|---|
+| **Entintador** | Línea limpia: afina con poca presión. |
+| **Bolígrafo** | Líneas finas y constantes, y detalles pequeños. |
+| **Rotulador** | Grueso y uniforme, al 70 %: no se oscurece donde el trazo se cruza consigo mismo. |
+| **Lápiz** | Bocetar con grano de papel; con poca presión es más claro, e inclinar el Pencil sombrea con el lateral de la mina. |
+| **Lápiz azul** | El mismo lápiz, siempre azul claro, para encajar el movimiento bajo la línea limpia. |
+| **Carboncillo** | Áspero y con grano, para manchar rápido. |
+| **Pincel** | Borde suave y una punta que afina al empezar. |
+| **Aerógrafo** | Muy suave; se acumula al repasar, para degradados y brillos. |
+| **Plano** | Un relleno duro y uniforme, sin presión: para colorear. |
+
+Cada pincel recuerda **su propio tamaño y opacidad**: la barra de tamaño del riel muestra los del pincel actual, y **Opacidad** está bajo la biblioteca. El icono del pincel en el riel cambia al pincel que eliges.
+
+La pestaña **Ajustes** tiene las opciones comunes a todos:
+
 ![Opciones del pincel](/crops/es/brush-options.jpg)
 
 - **Pinta**: dónde va la pintura en la capa.
@@ -33,7 +53,7 @@ De arriba abajo:
 
 ## Goma
 
-La goma tiene su propio tamaño, que se recuerda aparte del pincel. En modo pixel art borra píxeles enteros.
+La goma tiene su propio tamaño, que se recuerda aparte de los pinceles. Tócala otra vez para elegir su **punta**: el borde de cualquier pincel, como un aerógrafo suave o un lápiz con grano. En modo pixel art borra píxeles enteros.
 
 ## Relleno
 

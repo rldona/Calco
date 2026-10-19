@@ -44,6 +44,31 @@ final class CanvasUIView: UIView {
     private var gesturesLive: Set<ObjectIdentifier> = [] { didSet { live = (touchLive ? 1 : 0) + gesturesLive.count } }
     /// Touches and gestures in progress that need the canvas redrawn every frame.
     private var live = 0 { didSet { updateLoop() } }
+    /// The panels' insets as drawn: they glide to the editor's over a moment when a panel opens or
+    /// hides, so the drawing slides into its new place instead of jumping.
+    private var shownInsets: CanvasTransform.Insets?
+    private var insetsFrom = CanvasTransform.Insets()
+    private var insetsTarget = CanvasTransform.Insets()
+    private var insetsStart: CFTimeInterval = 0
+    private var gliding = false { didSet { if gliding != oldValue { live += gliding ? 1 : -1 } } }
+    private static let glide: CFTimeInterval = 0.25
+
+    /// The insets for this frame, easing toward `target`.
+    fileprivate func insets(toward target: CanvasTransform.Insets) -> CanvasTransform.Insets {
+        guard let shown = shownInsets else { shownInsets = target; insetsTarget = target; return target }
+        if target != insetsTarget {
+            insetsFrom = shown; insetsTarget = target; insetsStart = CACurrentMediaTime(); gliding = true
+        }
+        guard gliding else { return target }
+        let t = min(1, (CACurrentMediaTime() - insetsStart) / Self.glide)
+        let e = CGFloat(t < 0.5 ? 2 * t * t : 1 - pow(-2 * t + 2, 2) / 2)      // ease in-out
+        func mix(_ a: CGFloat, _ b: CGFloat) -> CGFloat { a + (b - a) * e }
+        let now = CanvasTransform.Insets(top: mix(insetsFrom.top, target.top), left: mix(insetsFrom.left, target.left),
+                                         bottom: mix(insetsFrom.bottom, target.bottom), right: mix(insetsFrom.right, target.right))
+        shownInsets = now
+        if t >= 1 { gliding = false; shownInsets = target }
+        return now
+    }
     var onLatencySample: ((Double) -> Void)?
 
     static let screenFormat: MTLPixelFormat = .bgra8Unorm
@@ -78,8 +103,15 @@ final class CanvasUIView: UIView {
 
     required init?(coder: NSCoder) { fatalError() }
 
+    /// A new size (timeline resized or hidden, rotation): draw again at the new size, or the old
+    /// picture is stretched to fit.
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        redraw()
+    }
+
     /// One more frame, on the next display refresh.
-    private func redraw() {
+    fileprivate func redraw() {
         if mtkView.isPaused { mtkView.setNeedsDisplay() }
     }
 
@@ -206,6 +238,7 @@ final class CanvasUIView: UIView {
         let samples = event?.coalescedTouches(for: touch) ?? [touch]
 
         builder.baseRadius = state.toolSize
+        builder.use(state.activeBrush)
         builder.smoothing = state.tool == .eraser ? 0 : state.smoothing
         var stamps: [CanvasRenderer.Stamp] = []
         for s in samples {
@@ -215,7 +248,9 @@ final class CanvasUIView: UIView {
             let force: Float = !state.usePressure ? 1
                 : s.type == .pencil ? Float(s.force / max(s.maximumPossibleForce, 1))
                 : 0.5
-            stamps += builder.add(.init(position: canvasPos, force: force))
+            // 0 upright, 1 flat on the glass; fingers don't lean.
+            let tilt: Float = s.type == .pencil ? Float(1 - s.altitudeAngle / (.pi / 2)) : 0
+            stamps += builder.add(.init(position: canvasPos, force: force, tilt: tilt))
         }
         state.paintStroke(stamps, into: target)
 
@@ -227,14 +262,17 @@ final class CanvasUIView: UIView {
 }
 
 extension CanvasUIView: MTKViewDelegate {
-    func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
+    func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) { redraw() }
 
     func draw(in view: MTKView) {
         // MTKView calls this on the main thread.
         MainActor.assumeIsolated {
             guard let state, let drawable = view.currentDrawable else { return }
+            state.renderer.showsWorkspaceGrid = state.workspaceGrid
+            var transform = state.canvasTransform
+            transform.insets = insets(toward: transform.insets)
             state.renderer.present(state.visibleLayers(), to: drawable, viewSize: view.drawableSize,
-                                   transform: state.canvasTransform, unitsPerPoint: view.contentScaleFactor)
+                                   transform: transform, unitsPerPoint: view.contentScaleFactor)
         }
     }
 }

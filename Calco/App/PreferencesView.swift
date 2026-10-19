@@ -21,6 +21,11 @@ struct PreferencesView: View {
                     Text("Calco is in English unless you choose otherwise. Your projects, layer and clip names don't change.")
                 }
                 Section {
+                    Toggle("Grid around the canvas", isOn: $state.workspaceGrid)
+                } footer: {
+                    Text("A faint grid behind the canvas, like a cutting mat.")
+                }
+                Section {
                     Toggle("Show drawing latency", isOn: $showLatency)
                 } footer: {
                     Text("Milliseconds from the Pencil to the screen, in the top bar. For checking performance.")

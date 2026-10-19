@@ -6,7 +6,7 @@ Un proyecto contiene un personaje; cada **clip** es una de sus animaciones. En u
 
 Toca el nombre de un clip en la línea de tiempo para cambiar. El botón **…** junto a los clips abre su menú:
 
-![Menú del clip](/crops/es/clip-menu.jpg)
+![Menú del clip](/screens/es/clip-menu.jpg)
 
 - **Nuevo clip…**: empieza con un fotograma vacío y las mismas capas que el clip actual.
 - **Renombrar…** y **Eliminar**.

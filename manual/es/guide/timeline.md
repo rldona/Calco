@@ -54,6 +54,7 @@ Sobre los nombres de las capas, **+** añade una capa y el icono de la pila abre
 Cada fila de capa es una tira de **celdas**. Una celda es un dibujo, y su ancho es lo que dura.
 
 - Toca una celda para ir ahí y dibujar en esa capa.
+- Cada celda muestra una **vista previa** de su dibujo, con su número (o etiqueta) en la esquina.
 - Una celda discontinua todavía no tiene nada dibujado.
 - Una flecha → significa que el dibujo se sigue viendo en los fotogramas siguientes (se mantiene).
 - Una etiqueta (por ejemplo *step*) sustituye al número cuando el dibujo tiene una.
@@ -74,3 +75,7 @@ Mantén pulsada una celda para ver su menú:
 ### Hacerla más alta
 
 Arrastra hacia arriba el **agarre** de la parte superior de la línea de tiempo (la barrita del centro) para hacer sitio a más capas: las filas crecen y el lienzo se hace más pequeño. Calco recuerda la altura. Toca **dos veces** el agarre para volver a la altura automática.
+
+Si sigues empujando el agarre hacia abajo pasada la altura mínima, la línea de tiempo **se oculta**: el lienzo ocupa toda la altura, los rieles quedan centrados a los lados y abajo queda una barra fina con reproducir y el contador de fotogramas. Tócala, o arrástrala hacia arriba, para volver a mostrar la línea de tiempo. En los dos sentidos se desliza, y el dibujo se recoloca con suavidad.
+
+![La línea de tiempo oculta](/screens/es/timeline-hidden.jpg)

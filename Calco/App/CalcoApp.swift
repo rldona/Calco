@@ -22,6 +22,9 @@ struct CalcoApp: App {
             .environment(\.locale, state.language.locale)
             // Tapping a .calco package in Files.
             .onOpenURL { url in state.open(url) }
+            // The whole screen is the studio: no clock or battery over it, like Procreate.
+            .statusBarHidden(true)
+            .persistentSystemOverlays(.hidden)
         }
         .commands { CalcoCommands(state: state) }
         .onChange(of: scenePhase) { _, phase in

@@ -6,7 +6,7 @@ A project holds one character; each **clip** is one of its animations. In a game
 
 Tap a clip's name in the timeline to switch. The **…** button next to the clips opens their menu:
 
-![Clip menu](/crops/en/clip-menu.jpg)
+![Clip menu](/screens/en/clip-menu.jpg)
 
 - **New clip…**: starts with one blank frame and the same layers as the current clip.
 - **Rename…** and **Delete**.
