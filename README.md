@@ -57,7 +57,7 @@ open Calco.xcodeproj
 
 To run it on your iPad you don't need the paid Apple Developer Program: in Xcode → **Settings** → **Accounts**, add your Apple ID; in the Calco target → **Signing & Capabilities**, pick your *Personal Team* (and change the bundle ID if it's taken); plug in the iPad and press **Run**. The first time, trust the developer on the iPad in **Settings** → **General** → **VPN & Device Management**. With a free account the app stops opening after 7 days: run it again from Xcode to renew it.
 
-Or from a terminal, with the iPad plugged in (it builds, installs and opens Calco; run it again to renew the 7 days):
+Or from a terminal, with the iPad plugged in (it builds an optimised Release, installs and opens Calco; run it again to renew the 7 days):
 
 ```sh
 scripts/install-ipad.sh

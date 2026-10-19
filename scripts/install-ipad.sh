@@ -41,14 +41,14 @@ mkdir -p build
 
 VERSION="$(sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([^"]*\)"\{0,1\}/\1/p' project.yml | head -1)"
 echo "Building Calco $VERSION for ${UDID}…"
-xcodebuild build -project Calco.xcodeproj -scheme Calco -configuration Debug \
+xcodebuild build -project Calco.xcodeproj -scheme Calco -configuration Release \
   -destination "id=$UDID" -derivedDataPath "$DERIVED" \
   -allowProvisioningUpdates DEVELOPMENT_TEAM="$TEAM" \
   2>&1 | tee build/install-ipad.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
 grep -q "BUILD SUCCEEDED" build/install-ipad.log || { echo "The build failed: see build/install-ipad.log" >&2; exit 1; }
 
 echo "Installing…"
-xcrun devicectl device install app --device "$UDID" "$DERIVED/Build/Products/Debug-iphoneos/Calco.app" >/dev/null
+xcrun devicectl device install app --device "$UDID" "$DERIVED/Build/Products/Release-iphoneos/Calco.app" >/dev/null
 echo "Opening…"
 xcrun devicectl device process launch --device "$UDID" "$BUNDLE_ID" >/dev/null 2>&1 \
   || echo "Installed. If it doesn't open, unlock the iPad, or trust the developer in Settings → General → VPN & Device Management."

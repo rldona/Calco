@@ -1,10 +1,13 @@
 import UIKit
 import MetalKit
 import SwiftUI
+import Combine
 
 /// UIKit view that owns the MTKView and handles Apple Pencil input.
 /// Paints into whatever `EditorState.beginStroke()` hands out, and composites
-/// `EditorState.visibleLayers()` every display refresh.
+/// `EditorState.visibleLayers()`: every display refresh while something moves (a stroke, a
+/// gesture, playback), otherwise only when the editor changes, so the main thread stays free
+/// for the buttons.
 ///
 /// Finger gestures (Pencil never triggers them): two-finger tap undo, three-finger tap redo,
 /// pinch / two-finger drag / twist to zoom, pan and rotate. A finger stroke that turns into
@@ -29,7 +32,18 @@ final class CanvasUIView: UIView {
     private var moveStart: (canvas: CGPoint, view: CGPoint)?
     private var strokeTarget: MTLTexture?
 
-    weak var state: EditorState?
+    weak var state: EditorState? {
+        didSet {
+            changes = state?.objectWillChange.sink { [weak self] _ in self?.redraw() }
+            redraw()
+        }
+    }
+    private var changes: AnyCancellable?
+    private var touchLive = false { didSet { if touchLive != oldValue { live += touchLive ? 1 : -1 } } }
+    /// Two-finger gestures in progress (pinch, twist, drag), each counted once.
+    private var gesturesLive: Set<ObjectIdentifier> = [] { didSet { live = (touchLive ? 1 : 0) + gesturesLive.count } }
+    /// Touches and gestures in progress that need the canvas redrawn every frame.
+    private var live = 0 { didSet { updateLoop() } }
     var onLatencySample: ((Double) -> Void)?
 
     static let screenFormat: MTLPixelFormat = .bgra8Unorm
@@ -48,8 +62,8 @@ final class CanvasUIView: UIView {
         mtkView.colorPixelFormat = Self.screenFormat
         mtkView.framebufferOnly = true
         mtkView.preferredFramesPerSecond = 120
-        mtkView.isPaused = false
-        mtkView.enableSetNeedsDisplay = false
+        mtkView.isPaused = true
+        mtkView.enableSetNeedsDisplay = true
         mtkView.delegate = self
         mtkView.isUserInteractionEnabled = false
         mtkView.translatesAutoresizingMaskIntoConstraints = false
@@ -64,6 +78,21 @@ final class CanvasUIView: UIView {
 
     required init?(coder: NSCoder) { fatalError() }
 
+    /// One more frame, on the next display refresh.
+    private func redraw() {
+        if mtkView.isPaused { mtkView.setNeedsDisplay() }
+    }
+
+    /// Continuous while a touch or a gesture is going on; on demand otherwise (playback redraws
+    /// on each frame change).
+    private func updateLoop() {
+        let continuous = live > 0
+        guard continuous == mtkView.isPaused else { return }
+        mtkView.enableSetNeedsDisplay = !continuous
+        mtkView.isPaused = !continuous
+        redraw()
+    }
+
     // MARK: - Touch handling
 
     private func canvasPoint(_ t: UITouch, in state: EditorState) -> CGPoint {
@@ -74,6 +103,7 @@ final class CanvasUIView: UIView {
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard activeTouch == nil, let t = touches.first, let state, !state.isPlaying else { return }
+        touchLive = true
         // Pencil only: a finger on the canvas is for gestures, never a mark.
         if state.pencilOnly && t.type != .pencil { return }
         switch state.tool {
@@ -126,6 +156,7 @@ final class CanvasUIView: UIView {
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let t = activeTouch, touches.contains(t), let state else { return }
         activeTouch = nil
+        defer { touchLive = false }
         switch mode {
         case .moveDrag:
             moveStart = nil
@@ -149,6 +180,7 @@ final class CanvasUIView: UIView {
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard activeTouch != nil else { return }
         activeTouch = nil
+        touchLive = false
         switch mode {
         case .tap, .moveDrag: moveStart = nil
         case .lasso: state?.lassoPoints = []
@@ -245,6 +277,7 @@ extension CanvasUIView: UIGestureRecognizerDelegate {
 
     @objc private func pinched(_ g: UIPinchGestureRecognizer) {
         guard let state else { return }
+        track(g)
         if g.state == .began { scaleIntent = state.canvasTransform.scale }
         guard g.state == .changed else { snaps.remove(.scale); return }
         let range = CanvasTransform.scaleRange
@@ -261,6 +294,7 @@ extension CanvasUIView: UIGestureRecognizerDelegate {
 
     @objc private func rotated(_ g: UIRotationGestureRecognizer) {
         guard let state else { return }
+        track(g)
         if g.state == .began { rotationIntent = state.canvasTransform.rotation }
         guard g.state == .changed else { snaps.remove(.rotation); return }
         rotationIntent += g.rotation
@@ -276,6 +310,7 @@ extension CanvasUIView: UIGestureRecognizerDelegate {
 
     @objc private func panned(_ g: UIPanGestureRecognizer) {
         guard let state else { return }
+        track(g)
         if g.state == .began { offsetIntent = state.canvasTransform.offset }
         guard g.state == .changed else { snaps.remove(.offset); return }
         let t = g.translation(in: self)
@@ -287,6 +322,14 @@ extension CanvasUIView: UIGestureRecognizerDelegate {
         click(.offset, snap != nil)
         state.canvasTransform.offset = snap ?? offsetIntent
         g.setTranslation(.zero, in: self)
+    }
+
+    private func track(_ g: UIGestureRecognizer) {
+        let id = ObjectIdentifier(g)
+        switch g.state {
+        case .began, .changed: if !gesturesLive.contains(id) { gesturesLive.insert(id) }
+        default: gesturesLive.remove(id)
+        }
     }
 
     /// A haptic tap when something clicks into place (not while it stays there).
@@ -305,7 +348,14 @@ struct CanvasView: UIViewRepresentable {
     func makeUIView(context: Context) -> CanvasUIView {
         let v = CanvasUIView(frame: .zero)
         v.state = state
+        // Only when the readout is on, and at most 10 times a second: every sample would redraw
+        // the whole editor while you draw.
+        var last: CFTimeInterval = 0
         v.onLatencySample = { ms in
+            guard UserDefaults.standard.bool(forKey: "showLatency") else { return }
+            let now = CACurrentMediaTime()
+            guard now - last > 0.1 else { return }
+            last = now
             DispatchQueue.main.async { latencyMs = ms }
         }
         return v

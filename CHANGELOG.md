@@ -20,6 +20,7 @@ A release is made by pushing a tag `vX.Y.Z`: the release workflow tests and buil
 - The timeline is cleaner: a bigger Play, one **clip settings** button (fps, loop, pivot), taller rows, a **+** over the layer names and a **+** cell after the last drawing.
 - The **canvas clicks into place** while you move it with two fingers: upright and every quarter turn, its fitted size and the middle, with a light haptic tap.
 - **Zen mode**'s bar has every tool now (fill, eyedropper, lasso, move) and redo.
+- **Snappier controls**: the canvas redraws only when something changes (continuously only while you draw or move it), and the latency readout no longer redraws the editor on every Pencil sample. `scripts/install-ipad.sh` installs an optimised Release build.
 - The latency readout is off unless you turn it on in Preferences.
 - Releases are built **unsigned**, with no Apple Developer Program: the GitHub release has `Calco-X.Y.Z-unsigned.ipa` and the Unity package. TestFlight is gone.
 
