@@ -5,14 +5,12 @@ import ImageIO
 
 /// Bottom panel, an exposure sheet: one row per layer (top layer first), one column per frame,
 /// columns as wide as their hold. A drawing spans the frames that hold it, so a background held
-/// for the whole clip is a single long cell. Tap a cell to go to that frame and layer.
+/// for the whole clip is a single long cell. Tap a cell to go to that frame and layer. What you do
+/// to the drawings lives in the AnimationRail.
 struct TimelineView: View {
     @ObservedObject var state: EditorState
     @State private var labeling = false
     @State private var labelText = ""
-    @State private var pickingPhoto = false
-    @State private var photo: PhotosPickerItem?
-    @State private var importingFile = false
 
     /// Width of one tick (one `hold` unit).
     private let tick: CGFloat = 40
@@ -22,9 +20,9 @@ struct TimelineView: View {
     @AppStorage("timeline.gridHeight") private var gridHeight: Double = 0
     @State private var dragStartHeight: CGFloat?
 
-    private static let minRow: CGFloat = 26, maxRow: CGFloat = 36, rowGap: CGFloat = 3, rulerHeight: CGFloat = 16
-    /// Tall enough for 7 big rows or 10 small ones, and leaves the canvas room on an 11" iPad in landscape.
-    private static let maxGridHeight: CGFloat = 290
+    private static let minRow: CGFloat = 40, maxRow: CGFloat = 52, rowGap: CGFloat = 3, rulerHeight: CGFloat = 28
+    /// Tall enough for 5 big rows or 6 small ones, and leaves the canvas room on an 11" iPad in landscape.
+    private static let maxGridHeight: CGFloat = 300
 
     /// Rows grow (up to `maxRow`) to fill a grid stretched taller than the layers need.
     private var rowHeight: CGFloat {
@@ -34,7 +32,7 @@ struct TimelineView: View {
     }
 
     private var automaticGridHeight: CGFloat {
-        Self.rulerHeight + CGFloat(min(state.layers.count, 6)) * (Self.minRow + Self.rowGap)
+        Self.rulerHeight + CGFloat(min(state.layers.count, 4)) * (Self.minRow + Self.rowGap)
     }
 
     private var gridMaxHeight: CGFloat { gridHeight > 0 ? min(CGFloat(gridHeight), Self.maxGridHeight) : automaticGridHeight }
@@ -71,7 +69,7 @@ struct TimelineView: View {
             ScrollView(.vertical, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 6) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Color.clear.frame(height: Self.rulerHeight)
+                        layersHeader.frame(height: Self.rulerHeight)
                         ForEach(rows) { layer in LayerLabel(state: state, layerID: layer.id, height: rowHeight) }
                     }
                     .frame(width: labelWidth)
@@ -95,7 +93,6 @@ struct TimelineView: View {
             }
             .frame(maxHeight: gridMaxHeight)
             .fixedSize(horizontal: false, vertical: true)
-            footer
         }
         .calcoPanel(padding: 10)
         .alert("Label drawing", isPresented: $labeling) {
@@ -108,20 +105,6 @@ struct TimelineView: View {
     }
 
     private static let sheet = "sheet"
-
-    /// Decodes picked image data (any format ImageIO reads, with its orientation applied) and adds
-    /// it as a guide layer.
-    private func importImage(_ data: Data?, name: String?) {
-        let options = [kCGImageSourceCreateThumbnailFromImageAlways: true,
-                       kCGImageSourceCreateThumbnailWithTransform: true,
-                       kCGImageSourceThumbnailMaxPixelSize: 4096] as CFDictionary
-        guard let data, let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options) else {
-            state.lastError = String(localized: "Couldn't read that image.", bundle: AppLanguage.bundle)
-            return
-        }
-        state.importImageLayer(image, name: name)
-    }
 
     /// The frame under x (in the sheet's coordinates), clamped to the clip.
     private func frameIndex(atX x: CGFloat) -> Int {
@@ -155,86 +138,48 @@ struct TimelineView: View {
         state.frames.prefix(index).reduce(0) { $0 + width($1) }
     }
 
-    // MARK: Header: transport, clips, onion skin
+    // MARK: Header: transport, clips, clip settings, frame length
 
     private var header: some View {
         HStack(spacing: 12) {
             Button { state.togglePlayback() } label: {
                 Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 16))
-                    .foregroundStyle(Theme.accent)
-                    .frame(width: 26, height: 26)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(Theme.onAccent)
+                    .frame(width: 48, height: 36)
+                    .background(Theme.accent, in: RoundedRectangle(cornerRadius: 10))
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             .accessibilityLabel(state.isPlaying ? "Pause" : "Play")
 
             Text("\(state.frameIndex + 1) / \(state.frames.count)")
-                .font(.system(.caption, design: .monospaced))
+                .font(.system(.subheadline, design: .monospaced))
                 .foregroundStyle(Theme.textDim)
-                .frame(minWidth: 40, alignment: .leading)
+                .fixedSize()
 
             ClipTabs(state: state)
 
-            Toggle(isOn: Binding(get: { state.clip.loop }, set: { _ in state.toggleLoop() })) {
-                Image(systemName: "repeat")
-            }
-            .toggleStyle(.button)
-            .help("Loop")
-
-            HStack(spacing: 2) {
-                CompactStepper(title: "fps",
-                               value: Binding(get: { state.clipFPS }, set: { state.setClipFPS($0) }),
-                               range: 1...60, inherited: state.clip.fps == nil)
-                if state.clip.fps != nil {
-                    Button { state.setClipFPS(nil) } label: { Image(systemName: "arrow.uturn.backward") }
-                        .font(.caption)
-                        .help("Use project fps")
-                }
-            }
-
-            Toggle(isOn: $state.showPivot) { Image(systemName: "scope") }
-                .toggleStyle(.button)
-                .help("Pivot")
+            ClipSettingsButton(state: state)
 
             Spacer(minLength: 8)
 
-            onionControls
+            HoldControl(state: state)
         }
         .buttonStyle(.borderless)
         .foregroundStyle(Theme.textDim)
         .font(.body)
     }
 
-    /// Onion skin, said in words: a named switch, then (when it's on) how many drawings before and
-    /// after show through, each next to the colour it's tinted with.
-    private var onionControls: some View {
-        HStack(spacing: 8) {
-            Button { state.onion.enabled.toggle() } label: {
-                Label("Onion skin", systemImage: "circle.lefthalf.filled.righthalf.striped.horizontal")
-                    .labelStyle(.titleAndIcon).font(.caption.weight(.medium)).fixedSize()
-                    .padding(.horizontal, 10).padding(.vertical, 5)
-                    .foregroundStyle(state.onion.enabled ? Theme.onAccent : Theme.textDim)
-                    .background(state.onion.enabled ? Theme.accent : .clear, in: Capsule())
-                    .overlay(Capsule().strokeBorder(state.onion.enabled ? .clear : Theme.hairline))
-            }
-            .buttonStyle(.plain)
-            .accessibilityValue(state.onion.enabled ? "On" : "Off")
-            .help("See the drawings before and after this one, faded, to draw in between")
-            if state.onion.enabled {
-                onionCount("Before", value: $state.onion.before, tint: state.onion.beforeTint)
-                onionCount("After", value: $state.onion.after, tint: state.onion.afterTint)
-            }
+    /// Above the layer names: add a layer, or open the full layers panel.
+    private var layersHeader: some View {
+        HStack(spacing: 6) {
+            Text("Layers").font(.caption).foregroundStyle(Theme.textFaint)
+            Spacer(minLength: 2)
+            NewLayerMenu(state: state)
+            LayersButton(state: state, iconOnly: true)
         }
-    }
-
-    private func onionCount(_ title: LocalizedStringKey, value: Binding<Int>, tint: SIMD3<Float>) -> some View {
-        HStack(spacing: 5) {
-            Circle().fill(Color(rgba: SIMD4(tint, 1))).frame(width: 9, height: 9)
-            CompactStepper(title: title, value: value, range: 0...5)
-        }
-        .padding(.leading, 8).padding(.trailing, 2).padding(.vertical, 2)
-        .overlay(Capsule().strokeBorder(Theme.hairline))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text("Onion skin")) 
+        .padding(.leading, 6)
     }
 
     // MARK: Grid
@@ -248,9 +193,9 @@ struct TimelineView: View {
                     .font(.system(size: 9, design: .monospaced))
                     .foregroundStyle(i == state.frameIndex ? Theme.accentText : Theme.textFaint)
                     .padding(.leading, 3)
-                    .frame(width: width(frame), height: 16, alignment: .leading)
+                    .frame(width: width(frame), height: Self.rulerHeight, alignment: .bottomLeading)
                     .background(state.playRange != nil && range.contains(i) ? Theme.accent.opacity(0.12) : .clear)
-                    .overlay(alignment: .leading) { Rectangle().fill(Theme.hairline).frame(width: 1, height: 6) }
+                    .overlay(alignment: .bottomLeading) { Rectangle().fill(Theme.hairline).frame(width: 1, height: 8) }
                     .contentShape(Rectangle())
                     .onTapGesture { state.frameIndex = i }
                     // Hold the number, then drag: the frame (all its layers) moves along the sheet.
@@ -273,7 +218,7 @@ struct TimelineView: View {
         let w = state.currentFrame.map(width) ?? tick
         return Rectangle()
             .fill(Theme.accent.opacity(0.10))
-            .frame(width: w, height: 16 + CGFloat(state.layers.count) * (rowHeight + 3))
+            .frame(width: w, height: Self.rulerHeight + CGFloat(state.layers.count) * (rowHeight + Self.rowGap))
             .overlay(alignment: .leading) { Rectangle().fill(Theme.accent).frame(width: 2) }
             .offset(x: x)
             .allowsHitTesting(false)
@@ -304,11 +249,11 @@ struct TimelineView: View {
                         if let linkedTo {
                             Image(systemName: "link").font(.system(size: 8, weight: .semibold))
                             Text(state.drawingLabel(layer: layer.id, at: run.start) ?? "\(linkedTo + 1)")
-                                .font(.system(size: 10, weight: .medium, design: .rounded))
+                                .font(.system(size: 12, weight: .medium, design: .rounded))
                                 .lineLimit(1)
                         } else {
                         Text(clip.frames[run.start].labels[layer.id] ?? "\(n + 1)")
-                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
                             .lineLimit(1)
                         }
                         if run.count > 1 {
@@ -358,6 +303,23 @@ struct TimelineView: View {
                 .accessibilityValue(run.count > 1 ? "held \(run.count) frames" : "")
                 .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
             }
+            if isCurrentLayer && !layer.locked {
+                // After the last drawing: one more, right where you're looking.
+                Button {
+                    state.frameIndex = state.frames.count - 1
+                    state.addDrawing()
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Theme.accent)
+                        .frame(width: tick, height: rowHeight)
+                        .overlay(RoundedRectangle(cornerRadius: 4)
+                            .strokeBorder(Theme.accent.opacity(0.8), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(state.syncLayers ? "Add frame at the end" : "Add drawing at the end")
+            }
         }
     }
 
@@ -391,137 +353,6 @@ struct TimelineView: View {
         Button(role: .destructive) { select(frame: frame, layer: layer); state.clearCurrentLayer() } label: {
             Label("Clear drawing", systemImage: "eraser.line.dashed")
         }
-    }
-
-    // MARK: Footer: layer and cell actions
-
-    private var footer: some View {
-        HStack(spacing: 14) {
-            Menu {
-                Button { state.addLayerWithDefaultName() } label: { Label("Empty layer", systemImage: "square") }
-                if let name = state.currentLayer?.name {
-                    Button { state.addLayerMatchingTiming() } label: {
-                        Label("Same timing as \(name), blank", systemImage: "square.on.square.dashed")
-                    }
-                    Button { state.duplicateCurrentLayer() } label: { Label("Duplicate \(name)", systemImage: "square.on.square") }
-                }
-                Divider()
-                Button { pickingPhoto = true } label: { Label("Image from Photos…", systemImage: "photo.badge.plus") }
-                Button { importingFile = true } label: { Label("Image from Files…", systemImage: "doc.badge.plus") }
-            } label: {
-                Label("New layer", systemImage: "plus").labelStyle(.titleAndIcon).font(.caption)
-            }
-            .photosPicker(isPresented: $pickingPhoto, selection: $photo, matching: .images)
-            .onChange(of: photo) { _, item in
-                guard let item else { return }
-                photo = nil
-                Task {
-                    let data = try? await item.loadTransferable(type: Data.self)
-                    await MainActor.run { importImage(data, name: nil) }
-                }
-            }
-            .fileImporter(isPresented: $importingFile, allowedContentTypes: [.image]) { result in
-                guard case .success(let url) = result else { return }
-                let scoped = url.startAccessingSecurityScopedResource()
-                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-                importImage(try? Data(contentsOf: url), name: url.deletingPathExtension().lastPathComponent)
-            }
-            LayersButton(state: state)
-
-            Spacer(minLength: 8)
-
-            HoldControl(state: state)
-
-            drawingActions
-
-            Button { state.syncLayers.toggle() } label: {
-                Label("Sync layers", systemImage: "link")
-                    .labelStyle(.titleAndIcon).font(.caption)
-                    .padding(.horizontal, 8).padding(.vertical, 4)
-                    .foregroundStyle(state.syncLayers ? Theme.onAccent : Theme.textDim)
-                    .background(state.syncLayers ? Theme.accent : .clear, in: Capsule())
-                    .overlay(Capsule().strokeBorder(state.syncLayers ? .clear : Theme.hairline))
-            }
-            .accessibilityValue(state.syncLayers ? "On" : "Off")
-
-            FrameMenuButton(state: state)
-        }
-        .labelStyle(.iconOnly)
-        .buttonStyle(.borderless)
-        .foregroundStyle(Theme.textDim)
-    }
-
-    /// What the buttons act on, framed: the current layer's drawing, or with Sync layers every layer.
-    private var drawingActions: some View {
-        HStack(spacing: 12) {
-            Text(actionsCaption)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(Theme.accentText)
-                .lineLimit(1)
-                .fixedSize()
-
-            if !state.syncLayers {
-                // The current cell: hold the previous drawing, or give it its own.
-                if state.currentCellIsLinked {
-                    Button { state.releaseCurrentCell(copying: true) } label: {
-                        Label("Unlink", systemImage: "link").labelStyle(.titleAndIcon).font(.caption).fixedSize()
-                    }
-                } else if state.currentCellIsHeld {
-                    Button { state.releaseCurrentCell(copying: false) } label: {
-                        Label("New drawing", systemImage: "square.dashed").labelStyle(.titleAndIcon).font(.caption).fixedSize()
-                    }
-                    Button { state.releaseCurrentCell(copying: true) } label: {
-                        Label("Copy drawing", systemImage: "square.on.square").labelStyle(.titleAndIcon).font(.caption).fixedSize()
-                    }
-                } else {
-                    Button { state.holdCurrentCell() } label: {
-                        Label("Hold previous", systemImage: "arrow.right.to.line").labelStyle(.titleAndIcon).font(.caption).fixedSize()
-                    }
-                    .disabled(state.frameIndex == 0)
-                }
-
-                Button { labelText = state.currentLayer.flatMap { state.drawingLabel(layer: $0.id, at: state.frameIndex) } ?? ""
-                         labeling = true } label: { Label("Label drawing", systemImage: "tag") }
-            }
-
-            Menu {
-                Button { state.splitCurrentDrawing(copying: false) } label: {
-                    Label("Blank inbetween halfway", systemImage: "square.split.2x1")
-                }
-                Button { state.splitCurrentDrawing(copying: true) } label: {
-                    Label("Duplicate split halfway", systemImage: "square.on.square")
-                }
-            } label: {
-                Label("Split drawing halfway", systemImage: "square.split.2x1")
-            }
-            .disabled(!state.canSplitCurrentDrawing)
-            RepeatButton(state: state)
-            Button { state.duplicateDrawing() } label: {
-                Label(state.syncLayers ? "Duplicate frame" : "Duplicate drawing", systemImage: "plus.square.on.square")
-            }
-            Button(role: .destructive) { state.deleteDrawing() } label: {
-                Label(state.syncLayers ? "Delete frame" : "Delete drawing", systemImage: "trash")
-            }
-            .disabled(state.syncLayers && state.frames.count <= 1)
-            Button { state.addDrawing() } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Theme.onAccent)
-                    .frame(width: 30, height: 26)
-                    .background(Theme.accent, in: RoundedRectangle(cornerRadius: 7))
-            }
-            .accessibilityLabel(state.syncLayers ? "Add frame" : "Add drawing")
-        }
-        .padding(.leading, 10).padding(.trailing, 4).padding(.vertical, 3)
-        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.accent.opacity(0.45)))
-    }
-
-    private var actionsCaption: String {
-        if state.syncLayers { return String(localized: "All layers · frame \(state.frameIndex + 1)", bundle: AppLanguage.bundle) }
-        let name = state.currentLayer?.name ?? String(localized: "Layer", bundle: AppLanguage.bundle)
-        guard let n = state.currentDrawingNumber else { return name }
-        return state.currentCellIsLinked ? String(localized: "\(name) · repeat of drawing \(n)", bundle: AppLanguage.bundle)
-            : String(localized: "\(name) · drawing \(n)", bundle: AppLanguage.bundle)
     }
 }
 
@@ -636,11 +467,11 @@ private struct ClipTabs: View {
                 let on = i == state.clipIndex
                 Button { state.selectClip(i) } label: {
                     Text(clip.name)
-                        .font(.caption.weight(on ? .semibold : .regular))
+                        .font(.subheadline.weight(on ? .semibold : .regular))
                         .lineLimit(1)
-                        .foregroundStyle(on ? Theme.accentText : Theme.textFaint)
-                        .padding(.horizontal, 8).padding(.vertical, 3)
-                        .background(on ? Theme.accentWash : .clear, in: RoundedRectangle(cornerRadius: 6))
+                        .foregroundStyle(on ? Theme.accentText : Theme.textDim)
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(on ? Theme.accentWash : .clear, in: RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(on ? .isSelected : [])
@@ -676,66 +507,6 @@ private struct ClipTabs: View {
     }
 }
 
-/// Whole-frame actions, for every layer at once: add, duplicate, move, play range, delete.
-private struct FrameMenuButton: View {
-    @ObservedObject var state: EditorState
-    @State private var showing = false
-
-    var body: some View {
-        Button { showing = true } label: {
-            Label("Frame", systemImage: "chevron.down")
-                .labelStyle(TrailingIconLabelStyle()).font(.caption)
-                .foregroundStyle(state.playRange == nil ? Theme.textDim : Theme.accent)
-                .padding(.horizontal, 8).padding(.vertical, 8)
-                .contentShape(Rectangle())
-        }
-        .popover(isPresented: $showing) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Frame \(state.frameIndex + 1), all layers")
-                    .font(.caption).foregroundStyle(Theme.textFaint)
-                    .padding(.horizontal, 10).padding(.bottom, 4)
-                item("Add frame", "plus") { state.addBlankFrame() }
-                item("Duplicate frame", "plus.square.on.square") { state.duplicateFrame() }
-                item("Move earlier", "arrowshape.left") { state.moveFrame(by: -1) }
-                    .disabled(state.frameIndex == 0)
-                item("Move later", "arrowshape.right") { state.moveFrame(by: 1) }
-                    .disabled(state.frameIndex >= state.frames.count - 1)
-                Divider().overlay(Theme.hairline)
-                item("Play from this frame", "arrow.right.to.line") { state.setPlayRange(start: true) }
-                item("Play up to this frame", "arrow.left.to.line") { state.setPlayRange(start: false) }
-                if state.playRange != nil {
-                    item("Play whole clip", "arrow.left.and.right") { state.playRange = nil }
-                }
-                Divider().overlay(Theme.hairline)
-                item("Delete frame", "trash", role: .destructive) { state.deleteFrame(); showing = false }
-                    .disabled(state.frames.count <= 1)
-            }
-            .padding(.vertical, 10)
-            .frame(width: 240)
-            .buttonStyle(.borderless)
-            .tint(Theme.accent)
-            .preferredColorScheme(.dark)
-        }
-    }
-
-    private func item(_ title: LocalizedStringKey, _ icon: String, role: ButtonRole? = nil, action: @escaping () -> Void) -> some View {
-        Button(role: role, action: action) {
-            Label(title, systemImage: icon).labelStyle(.titleAndIcon).font(.callout)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 10).padding(.vertical, 6)
-                .contentShape(Rectangle())
-        }
-        .foregroundStyle(role == .destructive ? Color.red : Theme.text)
-    }
-}
-
-/// "Frame ⌄": title first, icon after.
-private struct TrailingIconLabelStyle: LabelStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 3) { configuration.title; configuration.icon.imageScale(.small) }
-    }
-}
-
 /// How long the frame at the playhead stays on screen (every layer). Lit up when it's held, so a
 /// long frame is easy to spot.
 private struct HoldControl: View {
@@ -747,7 +518,7 @@ private struct HoldControl: View {
         HStack(spacing: 6) {
             Image(systemName: "timer")
             Text(hold == 1 ? "Lasts 1 frame" : "Lasts \(hold) frames")
-                .font(.caption.weight(.medium))
+                .font(.subheadline.weight(.medium))
                 .monospacedDigit()
                 .fixedSize()
             step("minus", by: -1).disabled(hold <= 1)
@@ -755,7 +526,7 @@ private struct HoldControl: View {
         }
         .labelStyle(.titleAndIcon)
         .foregroundStyle(hold > 1 ? Theme.accentText : Theme.text)
-        .padding(.leading, 10).padding(.trailing, 4).padding(.vertical, 3)
+        .padding(.leading, 12).padding(.trailing, 4).padding(.vertical, 3)
         .background(hold > 1 ? Theme.accentWash : Color.white.opacity(0.06), in: Capsule())
         .overlay(Capsule().strokeBorder(hold > 1 ? Theme.accent.opacity(0.6) : Theme.hairline))
         .accessibilityElement(children: .ignore)
@@ -773,49 +544,115 @@ private struct HoldControl: View {
     private func step(_ icon: String, by delta: Int) -> some View {
         Button { state.setHold(hold + delta) } label: {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
-                .frame(width: 30, height: 26)
+                .font(.system(size: 15, weight: .semibold))
+                .frame(width: 40, height: 32)
                 .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 7))
                 .contentShape(Rectangle())
         }
     }
 }
 
-/// "Repeat": a cycle of the last few drawings, linked, right after the one at the playhead.
-private struct RepeatButton: View {
+/// "12 fps · loop ⌄": the clip's speed, looping and pivot in one popover.
+private struct ClipSettingsButton: View {
     @ObservedObject var state: EditorState
     @State private var showing = false
-    @State private var count = 2
 
     var body: some View {
-        Button { count = max(1, min(count, state.drawingsUpToPlayhead)); showing = true } label: {
-            Label("Repeat drawings", systemImage: "repeat")
+        Button { showing = true } label: {
+            HStack(spacing: 6) {
+                Text("\(state.clipFPS) fps").monospacedDigit()
+                if state.clip.loop { Image(systemName: "repeat").imageScale(.small) }
+                if state.showPivot { Image(systemName: "scope").imageScale(.small).foregroundStyle(Theme.accent) }
+                Image(systemName: "chevron.down").imageScale(.small).foregroundStyle(Theme.textFaint)
+            }
+            .font(.subheadline)
+            .foregroundStyle(Theme.textDim)
+            .padding(.horizontal, 12).frame(height: 36)
+            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+            .contentShape(Rectangle())
         }
-        .disabled(state.drawingsUpToPlayhead == 0)
+        .buttonStyle(.plain)
+        .accessibilityLabel("Clip settings")
+        .accessibilityValue("\(state.clipFPS) fps")
         .popover(isPresented: $showing) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Repeat as a cycle").font(.headline)
-                CompactStepper(title: state.syncLayers ? "Last drawings, every layer" : "Last drawings",
-                               value: $count, range: 1...max(1, state.drawingsUpToPlayhead))
-                Text(count == 1 ? "Adds this drawing again after itself, linked: change one and every repeat changes. Unlink a repeat to make it its own drawing."
-                     : "Adds the last \(count) drawings again after this one, linked: change one and every repeat changes. Unlink a repeat to make it its own drawing.")
-                    .font(.caption).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button {
-                    state.repeatDrawings(count: count)
-                    showing = false
-                } label: {
-                    Text(count == 1 ? "Repeat 1 drawing" : "Repeat \(count) drawings")
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Theme.onAccent)
-                        .frame(maxWidth: .infinity)
+            VStack(alignment: .leading, spacing: 14) {
+                Text(state.clip.name).font(.headline)
+                HStack {
+                    CompactStepper(title: "fps",
+                                   value: Binding(get: { state.clipFPS }, set: { state.setClipFPS($0) }),
+                                   range: 1...60, inherited: state.clip.fps == nil)
+                    Spacer()
+                    if state.clip.fps != nil {
+                        Button("Use project fps") { state.setClipFPS(nil) }.font(.caption)
+                    }
                 }
-                .buttonStyle(.borderedProminent)
+                Toggle("Loop", isOn: Binding(get: { state.clip.loop }, set: { _ in state.toggleLoop() }))
+                Toggle("Show pivot", isOn: $state.showPivot)
             }
             .padding(20)
-            .frame(width: 300)
+            .frame(width: 280)
             .tint(Theme.accent)
             .preferredColorScheme(.dark)
         }
+    }
+}
+
+/// "+" over the layer names: a blank layer, one with the current layer's timing, a duplicate, or
+/// an image to trace over (a guide layer).
+private struct NewLayerMenu: View {
+    @ObservedObject var state: EditorState
+    @State private var pickingPhoto = false
+    @State private var photo: PhotosPickerItem?
+    @State private var importingFile = false
+
+    var body: some View {
+        Menu {
+            Button { state.addLayerWithDefaultName() } label: { Label("Empty layer", systemImage: "square") }
+            if let name = state.currentLayer?.name {
+                Button { state.addLayerMatchingTiming() } label: {
+                    Label("Same timing as \(name), blank", systemImage: "square.on.square.dashed")
+                }
+                Button { state.duplicateCurrentLayer() } label: { Label("Duplicate \(name)", systemImage: "square.on.square") }
+            }
+            Divider()
+            Button { pickingPhoto = true } label: { Label("Image from Photos…", systemImage: "photo.badge.plus") }
+            Button { importingFile = true } label: { Label("Image from Files…", systemImage: "doc.badge.plus") }
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.text)
+                .frame(width: 32, height: 26)
+                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 7))
+        }
+        .accessibilityLabel("New layer")
+        .photosPicker(isPresented: $pickingPhoto, selection: $photo, matching: .images)
+        .onChange(of: photo) { _, item in
+            guard let item else { return }
+            photo = nil
+            Task {
+                let data = try? await item.loadTransferable(type: Data.self)
+                await MainActor.run { importImage(data, name: nil) }
+            }
+        }
+        .fileImporter(isPresented: $importingFile, allowedContentTypes: [.image]) { result in
+            guard case .success(let url) = result else { return }
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            importImage(try? Data(contentsOf: url), name: url.deletingPathExtension().lastPathComponent)
+        }
+    }
+
+    /// Decodes picked image data (any format ImageIO reads, with its orientation applied) and adds
+    /// it as a guide layer.
+    private func importImage(_ data: Data?, name: String?) {
+        let options = [kCGImageSourceCreateThumbnailFromImageAlways: true,
+                       kCGImageSourceCreateThumbnailWithTransform: true,
+                       kCGImageSourceThumbnailMaxPixelSize: 4096] as CFDictionary
+        guard let data, let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options) else {
+            state.lastError = String(localized: "Couldn't read that image.", bundle: AppLanguage.bundle)
+            return
+        }
+        state.importImageLayer(image, name: name)
     }
 }

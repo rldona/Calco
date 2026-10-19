@@ -1,29 +1,40 @@
 import SwiftUI
 import Metal
 
-/// Estudio layout: tool rail on the left, layers on the right, clip tracks at the bottom, and the
-/// canvas in whatever space is left (so panels never cover the drawing). Zen mode hides all of it
-/// except a small floating bar.
+/// Estudio layout: tools on the left, animation on the right (above the timeline in portrait), the
+/// timeline at the bottom, and the canvas in whatever space is left (so panels never cover the
+/// drawing). Zen mode hides all of it except a small floating bar.
 struct ContentView: View {
     @ObservedObject var state: EditorState
     @State private var latencyMs: Double = 0
 
     var body: some View {
-        VStack(spacing: Theme.gap) {
-            if !state.isZen {
-                TopBar(state: state, latencyMs: latencyMs)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-            HStack(spacing: Theme.gap) {
+        GeometryReader { geo in
+            let portrait = geo.size.height > geo.size.width
+            VStack(spacing: Theme.gap) {
                 if !state.isZen {
-                    ToolRail(state: state)
-                        .transition(.move(edge: .leading).combined(with: .opacity))
+                    TopBar(state: state, latencyMs: latencyMs)
+                        .transition(.move(edge: .top).combined(with: .opacity))
                 }
-                canvas
-            }
-            if !state.isZen {
-                TimelineView(state: state)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                HStack(spacing: Theme.gap) {
+                    if !state.isZen {
+                        ToolRail(state: state)
+                            .transition(.move(edge: .leading).combined(with: .opacity))
+                    }
+                    canvas
+                    if !state.isZen && !portrait {
+                        AnimationRail(state: state, axis: .vertical)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
+                }
+                if !state.isZen {
+                    if portrait {
+                        AnimationRail(state: state, axis: .horizontal)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                    TimelineView(state: state)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
         }
         .padding(Theme.gap)
@@ -54,10 +65,11 @@ struct ContentView: View {
     }
 }
 
-/// Document on the left; view toggles (fit, onion skin, Zen) on the right.
+/// Document on the left; view toggles (fit, flip, Zen) on the right.
 struct TopBar: View {
     @ObservedObject var state: EditorState
     let latencyMs: Double
+    @AppStorage("showLatency") private var showLatency = false
 
     var body: some View {
         HStack(spacing: 16) {
@@ -75,7 +87,6 @@ struct TopBar: View {
             }
             .help("Flip the view (H): see the drawing mirrored without changing it")
             .accessibilityLabel(state.canvasTransform.flipped ? "Unflip view" : "Flip view")
-            OnionSkinButton(state: state)
             Button { state.isZen = true } label: {
                 Label("Zen", systemImage: "circle.dashed.inset.filled")
                     .font(.caption.weight(.medium))
@@ -83,12 +94,12 @@ struct TopBar: View {
                     .overlay(Capsule().strokeBorder(Theme.textFaint, lineWidth: 1))
             }
             .help("Zen mode: hide everything but the canvas")
-            #if DEBUG
-            Text(String(format: "%.1f ms", latencyMs))
-                .font(.system(.caption2, design: .monospaced))
-                .foregroundStyle(Theme.textFaint)
-                .frame(width: 44, alignment: .trailing)
-            #endif
+            if showLatency {
+                Text(String(format: "%.1f ms", latencyMs))
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(Theme.textFaint)
+                    .frame(width: 44, alignment: .trailing)
+            }
         }
         .buttonStyle(.borderless)
         .foregroundStyle(Theme.textDim)
@@ -116,55 +127,6 @@ struct ZenBar: View {
         }
         .padding(.horizontal, 6).padding(.vertical, 3)
         .background(Theme.panel, in: Capsule())
-    }
-}
-
-/// Onion skin on/off, with how many frames before / after and how strong, in a popover.
-struct OnionSkinButton: View {
-    @ObservedObject var state: EditorState
-    @State private var showing = false
-
-    var body: some View {
-        Button { showing = true } label: {
-            Image(systemName: state.onion.enabled ? "circle.lefthalf.filled.righthalf.striped.horizontal"
-                                                  : "circle.dashed")
-                .foregroundStyle(state.onion.enabled ? Theme.accent : Theme.textDim)
-        }
-        .help("Onion skin")
-        .popover(isPresented: $showing) {
-            VStack(alignment: .leading, spacing: 14) {
-                Toggle("Onion skin", isOn: $state.onion.enabled).font(.headline)
-                Group {
-                    HStack {
-                        CompactStepper(title: "Drawings before", value: $state.onion.before, range: 0...5)
-                        Spacer()
-                        ColorPicker("Drawings before colour", selection: Binding(
-                            get: { Color(rgba: SIMD4(state.onion.beforeTint, 1)) },
-                            set: { let c = SIMD4<Float>($0); state.onion.beforeTint = SIMD3(c.x, c.y, c.z) }),
-                                    supportsOpacity: false)
-                            .labelsHidden()
-                    }
-                    HStack {
-                        CompactStepper(title: "Drawings after", value: $state.onion.after, range: 0...5)
-                        Spacer()
-                        ColorPicker("Drawings after colour", selection: Binding(
-                            get: { Color(rgba: SIMD4(state.onion.afterTint, 1)) },
-                            set: { let c = SIMD4<Float>($0); state.onion.afterTint = SIMD3(c.x, c.y, c.z) }),
-                                    supportsOpacity: false)
-                            .labelsHidden()
-                    }
-                    HStack {
-                        Text("Strength").font(.caption).foregroundStyle(.secondary)
-                        Slider(value: Binding(get: { Double(state.onion.opacity) },
-                                              set: { state.onion.opacity = Float($0) }), in: 0.1...0.8)
-                    }
-                    Toggle("Current layer only", isOn: $state.onion.currentLayerOnly).font(.subheadline)
-                }
-                .disabled(!state.onion.enabled)
-            }
-            .padding(20)
-            .frame(width: 300)
-        }
     }
 }
 

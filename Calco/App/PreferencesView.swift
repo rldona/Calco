@@ -1,9 +1,10 @@
 import SwiftUI
 
-/// App-wide preferences (⌘,): for now, the language. More app-wide settings go here.
+/// App-wide preferences (⌘,): the language and a performance readout.
 struct PreferencesView: View {
     @ObservedObject var state: EditorState
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("showLatency") private var showLatency = false
 
     var body: some View {
         NavigationStack {
@@ -18,6 +19,11 @@ struct PreferencesView: View {
                     Text("Language")
                 } footer: {
                     Text("Calco is in English unless you choose otherwise. Your projects, layer and clip names don't change.")
+                }
+                Section {
+                    Toggle("Show drawing latency", isOn: $showLatency)
+                } footer: {
+                    Text("Milliseconds from the Pencil to the screen, in the top bar. For checking performance.")
                 }
             }
             .navigationTitle("Preferences")

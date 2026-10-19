@@ -3,12 +3,22 @@ import SwiftUI
 /// Opens the full layers panel (drag to reorder, opacity sliders) from the exposure sheet.
 struct LayersButton: View {
     @ObservedObject var state: EditorState
+    var iconOnly = false
     @State private var showing = false
 
     var body: some View {
         Button { showing = true } label: {
-            Label("Layers", systemImage: "square.3.layers.3d").labelStyle(.titleAndIcon).font(.caption)
+            if iconOnly {
+                Image(systemName: "square.3.layers.3d")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Theme.text)
+                    .frame(width: 32, height: 26)
+                    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 7))
+            } else {
+                Label("Layers", systemImage: "square.3.layers.3d").labelStyle(.titleAndIcon).font(.caption)
+            }
         }
+        .accessibilityLabel("Layers")
         .popover(isPresented: $showing) { LayersPanel(state: state).frame(height: 360) }
     }
 }
