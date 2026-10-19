@@ -13,6 +13,7 @@ Hero.calco/
 │   ├── idle/
 │   │   ├── 000/
 │   │   │   ├── line.png
+│   │   │   ├── line.strokes
 │   │   │   └── color.png
 │   │   ├── 001/
 │   │   │   ├── line.png
@@ -26,6 +27,7 @@ Hero.calco/
 
 - One folder per clip, one folder per frame (zero-padded index), one PNG per layer.
 - PNGs are RGBA, premultiplied alpha, canvas-sized. Empty layers may be omitted.
+- `<layer>.strokes` (optional) keeps the drawing's pencil strokes apart, so the Move tool can pick them one by one. The PNG stays the truth: a reader can ignore these files, and Calco ignores one that no longer adds up to its PNG and splits the drawing into its shapes instead. Binary, little-endian: `CSTK`, `UInt32` version (1), `UInt32` piece count, then per piece, bottom to top, `UInt32` x, y, width, height, the byte count, and the piece's RGBA premultiplied pixels (cropped to its rectangle) compressed with LZFSE.
 - The manifest is the source of truth for order, holds, layers and pivots. Folder contents alone are not enough to reconstruct the animation.
 - Calco rewrites the whole package on every save and drops folders the manifest no longer refers to, so don't keep your own files inside `clips/`. `references/` is left alone.
 

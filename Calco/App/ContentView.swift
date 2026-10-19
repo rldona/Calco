@@ -55,6 +55,8 @@ struct ContentView: View {
                 if state.tool == .move, let id = state.moveBlockedLayer,
                    let layer = state.layers.first(where: { $0.id == id }) {
                     MoveLockedHint(state: state, layerName: layer.name).padding(.bottom, 14)
+                } else if state.tool == .move && state.selection != nil {
+                    MoveStrokesHint(state: state).padding(.bottom, 14)
                 }
             }
             .overlay(alignment: .top) {
@@ -136,6 +138,44 @@ struct MoveLockedHint: View {
         .padding(.leading, 16).padding(.trailing, 6).padding(.vertical, 6)
         .background(Theme.panel, in: Capsule())
         .overlay(Capsule().strokeBorder(Theme.hairline))
+    }
+}
+
+/// Under the canvas while Move holds something: which stroke of the ones under the finger it
+/// is, and the switch to pick several.
+struct MoveStrokesHint: View {
+    @ObservedObject var state: EditorState
+
+    private var caption: String {
+        guard let hint = state.moveHint else { return String(localized: "The whole drawing", bundle: AppLanguage.bundle) }
+        if hint.selected > 1 { return String(localized: "\(hint.selected) strokes", bundle: AppLanguage.bundle) }
+        if hint.here > 1 {
+            return String(localized: "Stroke \(hint.number) of \(hint.here) here · tap again for the one below", bundle: AppLanguage.bundle)
+        }
+        return String(localized: "One stroke", bundle: AppLanguage.bundle)
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(caption)
+                .font(.subheadline)
+                .foregroundStyle(Theme.text)
+                .lineLimit(1)
+            Button { state.addingStrokes.toggle() } label: {
+                Label(state.addingStrokes ? "Adding" : "Add strokes",
+                      systemImage: state.addingStrokes ? "checkmark" : "plus")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(state.addingStrokes ? Theme.onAccent : Theme.text)
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .background(state.addingStrokes ? Theme.accent : Theme.raised, in: RoundedRectangle(cornerRadius: 9))
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(state.addingStrokes ? "On" : "Off")
+            .help("Taps add strokes to what you're moving, or take them out")
+        }
+        .padding(.leading, 14).padding(.trailing, 5).padding(.vertical, 5)
+        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 13))
+        .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(Theme.hairline))
     }
 }
 

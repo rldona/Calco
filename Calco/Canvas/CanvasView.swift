@@ -16,8 +16,10 @@ final class CanvasUIView: UIView {
     private var activeTouch: UITouch?
     /// What the active touch is doing: painting, a tap for fill / eyedropper (acted on when it
     /// lifts), or drawing a lasso.
-    private enum Mode { case stroke, tap, lasso }
+    private enum Mode { case stroke, tap, lasso, moveDrag }
     private var mode = Mode.stroke
+    /// Move: where the finger came down (canvas pixels and view points), to pick and drag in one go.
+    private var moveStart: (canvas: CGPoint, view: CGPoint)?
     private var strokeTarget: MTLTexture?
 
     weak var state: EditorState?
@@ -72,6 +74,7 @@ final class CanvasUIView: UIView {
             // Wait for the lift: if it turns into a pinch or two-finger tap, touchesCancelled drops it.
             activeTouch = t
             mode = .tap
+            moveStart = (canvasPoint(t, in: state), t.location(in: self))
         case .lasso:
             // Touching the canvas outside a floating selection drops it and starts a new lasso.
             state.commitSelection()
@@ -98,7 +101,18 @@ final class CanvasUIView: UIView {
                 if let last = state.lassoPoints.last, hypot(p.x - last.x, p.y - last.y) < 1.5 { continue }
                 state.lassoPoints.append(p)
             }
-        case .tap: break
+        case .tap:
+            // Move: dragging a stroke picks it up and moves it in one gesture.
+            guard state.tool == .move, let start = moveStart,
+                  hypot(t.location(in: self).x - start.view.x, t.location(in: self).y - start.view.y) > 6 else { break }
+            state.liftForMove(at: start.canvas)
+            mode = state.selection == nil ? .tap : .moveDrag
+            if mode == .tap { moveStart = nil }
+            fallthrough
+        case .moveDrag:
+            guard mode == .moveDrag, let start = moveStart else { break }
+            let p = canvasPoint(t, in: state)
+            state.updateSelection { $0.offset = CGVector(dx: p.x - start.canvas.x, dy: p.y - start.canvas.y) }
         }
     }
 
@@ -106,7 +120,10 @@ final class CanvasUIView: UIView {
         guard let t = activeTouch, touches.contains(t), let state else { return }
         activeTouch = nil
         switch mode {
+        case .moveDrag:
+            moveStart = nil
         case .tap:
+            moveStart = nil
             let p = canvasPoint(t, in: state)
             let point = SIMD2<Float>(Float(p.x), Float(p.y))
             switch state.tool {
@@ -126,7 +143,7 @@ final class CanvasUIView: UIView {
         guard activeTouch != nil else { return }
         activeTouch = nil
         switch mode {
-        case .tap: break
+        case .tap, .moveDrag: moveStart = nil
         case .lasso: state?.lassoPoints = []
         case .stroke:
             strokeTarget = nil
@@ -137,7 +154,7 @@ final class CanvasUIView: UIView {
     private func endStroke() {
         if let state, let target = strokeTarget {
             let tail = builder.finish()
-            if !tail.isEmpty { state.renderer.paint(tail, into: target, color: state.color, tool: state.tool, hard: state.project.pixelArt, mode: state.paintMode) }
+            if !tail.isEmpty { state.paintStroke(tail, into: target) }
         }
         activeTouch = nil
         strokeTarget = nil
@@ -161,7 +178,7 @@ final class CanvasUIView: UIView {
                 : 0.5
             stamps += builder.add(.init(position: canvasPos, force: force))
         }
-        renderer.paint(stamps, into: target, color: state.color, tool: state.tool, hard: state.project.pixelArt, mode: state.paintMode)
+        state.paintStroke(stamps, into: target)
 
         if let lastSample = samples.last {
             let ms = (CACurrentMediaTime() - lastSample.timestamp) * 1000

@@ -320,4 +320,11 @@ ES = {
 "%@ is locked": "%@ está bloqueada",
 "Move": "Mover",
 "Unlock and move": "Desbloquear y mover",
+"%lld strokes": "%lld trazos",
+"Add strokes": "Añadir trazos",
+"Adding": "Añadiendo",
+"One stroke": "Un trazo",
+"Stroke %lld of %lld here · tap again for the one below": "Trazo %lld de %lld aquí · toca otra vez para el de debajo",
+"Taps add strokes to what you're moving, or take them out": "Cada toque añade un trazo a lo que mueves, o lo quita",
+"The whole drawing": "Todo el dibujo",
 }

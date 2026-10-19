@@ -26,7 +26,7 @@ final class EditorState: ObservableObject {
             if tool == .eyedropper && oldValue != .eyedropper { toolBeforeEyedropper = oldValue }
             if tool != oldValue { previousTool = oldValue }
             if tool != .lasso && !(tool == .move && oldValue == .move) { commitSelection() }
-            if tool != .move { moveBlockedLayer = nil }
+            if tool != .move { moveBlockedLayer = nil; addingStrokes = false }
             if tool == .move && oldValue != .move { liftForMove() }
         }
     }
@@ -125,6 +125,31 @@ final class EditorState: ObservableObject {
     private var coalesceTag: String?
     /// Pixels from before the stroke in progress; enters the history only when the stroke ends.
     private var pendingStroke: Snapshot?
+    /// The stamps of the stroke in progress, so it can be kept as a piece of its own.
+    private var pendingStamps: [CanvasRenderer.Stamp] = []
+
+    /// Each drawing's pieces, bottom to top: its pencil strokes, and shapes for what can't be told
+    /// apart any more. Move picks them one by one. Missing means not known: the drawing is split
+    /// into its separate shapes when Move needs it.
+    private(set) var strokes: [LayerKey: [StrokePiece]] = [:]
+    /// When Move picked pieces: which ones float, so they go back as pieces.
+    private var movingPieces: (key: LayerKey, indices: [Int])?
+    /// Where the last tap picked, so tapping the same spot again goes to the piece underneath.
+    private var lastPick: (key: LayerKey, point: CGPoint, index: Int)?
+    /// Scratch texture for painting a stroke on its own.
+    private var scratch: MTLTexture?
+    /// Move: taps add pieces to (or take them out of) what's floating instead of replacing it.
+    @Published var addingStrokes = false
+    /// What Move picked with the last tap, for the hint under the canvas.
+    @Published private(set) var moveHint: MoveHint?
+
+    struct MoveHint: Equatable {
+        /// Pieces under the tap, and which of them (1 = the bottom one) is picked.
+        var here: Int
+        var number: Int
+        /// Pieces floating in all.
+        var selected: Int
+    }
     static let historyLimit = 50
 
     init?(device: MTLDevice, screenFormat: MTLPixelFormat, defaults: UserDefaults? = nil) {
@@ -288,7 +313,8 @@ final class EditorState: ObservableObject {
         do {
             let loaded = try ProjectDocument.load(from: url)
             let images = ProjectDocument.loadLayerImages(from: url, project: loaded)
-            try install(loaded, images: images)
+            let pieces = ProjectDocument.loadLayerStrokes(from: url, project: loaded).compactMapValues(StrokePieces.decode)
+            try install(loaded, images: images, strokes: pieces)
             documentURL = url
             isDirty = false
             isInGallery = false
@@ -323,9 +349,12 @@ final class EditorState: ObservableObject {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         do {
-            try ProjectDocument.save(project, to: url) { key in
+            try ProjectDocument.save(project, to: url, layerImage: { key in
                 store.image(clip: key.clip, frame: key.frame, layer: key.layer)
-            }
+            }, layerStrokes: { key in
+                // One piece tells nothing the PNG doesn't.
+                strokes[key].flatMap { $0.count > 1 ? StrokePieces.encode($0) : nil }
+            })
             documentURL = url
             isDirty = false
         } catch {
@@ -334,8 +363,10 @@ final class EditorState: ObservableObject {
     }
 
     /// Swaps in a project and its pixels, recreating the renderer if the canvas size changed.
-    private func install(_ newProject: Project, images: [LayerKey: CGImage]) throws {
+    private func install(_ newProject: Project, images: [LayerKey: CGImage],
+                         strokes loadedStrokes: [LayerKey: [StrokePiece]] = [:]) throws {
         selection = nil; selectionBefore = nil; selectionPreview = nil; lassoPoints = []
+        strokes = loadedStrokes; movingPieces = nil; lastPick = nil; moveHint = nil; scratch = nil
         playRange = nil
         let size = SIMD2<Int>(newProject.canvas.width, newProject.canvas.height)
         if size != renderer.canvasSize {
@@ -1393,7 +1424,14 @@ final class EditorState: ObservableObject {
         var saved: [LayerKey: MTLTexture?] = [:]
         saved.updateValue(store.copy(of: key), forKey: key)
         pendingStroke = snapshot(saved)
+        pendingStamps = []
         return paintTarget
+    }
+
+    /// Paints part of the stroke in progress with the current tool, and keeps its stamps.
+    func paintStroke(_ stamps: [CanvasRenderer.Stamp], into target: MTLTexture) {
+        renderer.paint(stamps, into: target, color: color, tool: tool, hard: project.pixelArt, mode: paintMode)
+        pendingStamps += stamps
     }
 
     func strokeEnded() {
@@ -1402,6 +1440,7 @@ final class EditorState: ObservableObject {
             coalesceTag = nil
             push(s)
             pendingStroke = nil
+            if let key { recordPieces(key, before: s.textures[key] ?? nil) }
         }
         isDirty = true
         if let key { refreshThumbnails(showing: key) } else if let f = currentFrame { refreshThumbnail(for: f.id) }
@@ -1411,7 +1450,54 @@ final class EditorState: ObservableObject {
     func cancelStroke() {
         guard let s = pendingStroke else { return }
         pendingStroke = nil
+        pendingStamps = []
         for (k, t) in s.textures { store.set(t, for: k); refreshThumbnails(showing: k) }
+    }
+
+    // MARK: - Pieces
+
+    /// Keeps the stroke that just ended as a piece of its drawing. A pencil stroke drawn in front
+    /// becomes a new piece on top; the eraser trims the pieces it crosses; anything else (behind,
+    /// inside, or paint we didn't see) means the pieces are no longer known.
+    private func recordPieces(_ key: LayerKey, before: MTLTexture?) {
+        let stamps = pendingStamps
+        pendingStamps = []
+        let w = renderer.canvasSize.x, h = renderer.canvasSize.y
+        guard !stamps.isEmpty else { strokes[key] = nil; return }
+        switch tool {
+        case .brush where paintMode == .front:
+            var pieces = strokes[key] ?? before.flatMap { renderer.readbackBytes($0) }
+                .map { StrokePieces.shapes(of: $0, width: w, height: h) } ?? []
+            if let alone = paintedAlone(stamps, color: color), let piece = StrokePiece(canvas: alone, width: w, height: h) {
+                pieces.append(piece)
+            }
+            strokes[key] = pieces
+        case .eraser:
+            guard let pieces = strokes[key], let cover = paintedAlone(stamps, color: SIMD4(1, 1, 1, 1)) else { return }
+            let coverage = stride(from: 3, to: cover.count, by: 4).map { cover[$0] }
+            strokes[key] = pieces.compactMap { $0.erased(by: coverage, canvasWidth: w) }
+        default:
+            strokes[key] = nil
+        }
+    }
+
+    /// The stamps painted on their own, in front, into a clear canvas.
+    private func paintedAlone(_ stamps: [CanvasRenderer.Stamp], color: SIMD4<Float>) -> [UInt8]? {
+        scratch = scratch ?? renderer.makeLayerTexture()
+        guard let scratch else { return nil }
+        renderer.clear(scratch)
+        renderer.paint(stamps, into: scratch, color: color, tool: .brush, hard: project.pixelArt, mode: .front)
+        return renderer.readbackBytes(scratch)
+    }
+
+    /// The drawing's pieces, checked against its pixels: if they no longer add up (it was filled,
+    /// lassoed, restored…), it's split into its shapes again.
+    private func currentPieces(_ key: LayerKey, pixels: [UInt8]) -> [StrokePiece] {
+        let w = renderer.canvasSize.x, h = renderer.canvasSize.y
+        if let p = strokes[key], StrokePieces.match(StrokePieces.composite(p, width: w, height: h), pixels) { return p }
+        let p = StrokePieces.shapes(of: pixels, width: w, height: h)
+        strokes[key] = p
+        return p
     }
 
     // MARK: - Fill and eyedropper
@@ -1499,6 +1585,7 @@ final class EditorState: ObservableObject {
         guard !SelectionPixels.isEmpty(lifted) else { return }
         selectionBefore = store.copy(of: key)
         selectionIsLift = true
+        movingPieces = nil
         renderer.upload(bytes: remaining, into: target)
         selectionPreview = selectionPreview ?? renderer.makeLayerTexture()
         selection = FloatingSelection(key: key, lifted: lifted, outline: outline, bounds: bounds,
@@ -1508,28 +1595,66 @@ final class EditorState: ObservableObject {
 
     // MARK: - Move
 
-    /// Move: lifts the current layer's drawing at the playhead, all of it or (with `point`) just the
-    /// shape under it, boxed tight around the paint. A locked layer lifts nothing and sets
-    /// `moveBlockedLayer`, so the editor can offer to unlock it.
+    /// Move: lifts the current layer's drawing at the playhead, all of it or (with `point`) the
+    /// piece under it (a stroke, or a shape), boxed tight. Tapping the same spot again picks the
+    /// piece underneath; with `addingStrokes`, taps add pieces or take them out. A locked layer
+    /// lifts nothing and sets `moveBlockedLayer`, so the editor can offer to unlock it.
     func liftForMove(at point: CGPoint? = nil) {
+        let previous = movingPieces
         lassoPoints = []
         commitSelection()
         moveBlockedLayer = nil
+        moveHint = nil
         guard !isPlaying, let layer = currentLayer, let key = currentDrawingKey else { return }
         if layer.locked { moveBlockedLayer = layer.id; return }
         guard let target = store.existingTexture(clip: key.clip, frame: key.frame, layer: key.layer),
               let pixels = renderer.readbackBytes(target) else { return }
         let w = renderer.canvasSize.x, h = renderer.canvasSize.y
-        let mask = point.flatMap {
-            SelectionPixels.connectedShape(pixels, width: w, height: h, at: (Int($0.x.rounded(.down)), Int($0.y.rounded(.down))))
-        } ?? [UInt8](repeating: 255, count: w * h)
-        var shape = pixels
-        for i in 0..<(w * h) where mask[i] == 0 { shape[i * 4 + 3] = 0 }
-        guard let content = SelectionPixels.contentBounds(shape, width: w, height: h) else { return }
+        let pieces = currentPieces(key, pixels: pixels)
+        guard !pieces.isEmpty else { return }
+
+        var chosen = Array(pieces.indices)
+        if let point {
+            let px = Int(point.x.rounded(.down)), py = Int(point.y.rounded(.down))
+            let here = pieces.indices.reversed().filter { pieces[$0].hits(px, py, reach: 8) }    // top first
+            if let top = here.first {
+                var pick = top
+                if let last = lastPick, last.key == key, hypot(last.point.x - point.x, last.point.y - point.y) < 10,
+                   let at = here.firstIndex(of: last.index) {
+                    pick = here[(at + 1) % here.count]
+                }
+                lastPick = (key, point, pick)
+                if addingStrokes, let previous, previous.key == key {
+                    var set = Set(previous.indices)
+                    if set.remove(pick) == nil { set.insert(pick) }
+                    chosen = set.sorted()
+                } else {
+                    chosen = [pick]
+                }
+                moveHint = MoveHint(here: here.count, number: here.count - here.firstIndex(of: pick)!, selected: chosen.count)
+            } else {
+                lastPick = nil
+            }
+        } else {
+            lastPick = nil
+        }
+        guard !chosen.isEmpty else { return }
+
+        let picked = Set(chosen)
+        let lifted = StrokePieces.composite(chosen.map { pieces[$0] }, width: w, height: h)
+        let remaining = StrokePieces.composite(pieces.indices.filter { !picked.contains($0) }.map { pieces[$0] }, width: w, height: h)
+        let content = chosen.map { pieces[$0].rect }.reduce(CGRect.null) { $0.union($1) }
         let box = content.insetBy(dx: -2, dy: -2).intersection(CGRect(x: 0, y: 0, width: w, height: h))
         let outline = [CGPoint(x: box.minX, y: box.minY), CGPoint(x: box.maxX, y: box.minY),
                        CGPoint(x: box.maxX, y: box.maxY), CGPoint(x: box.minX, y: box.maxY)]
-        lift(pixels, mask: mask, outline: outline, bounds: box, key: key, target: target)
+        selectionBefore = store.copy(of: key)
+        selectionIsLift = true
+        renderer.upload(bytes: remaining, into: target)
+        selectionPreview = selectionPreview ?? renderer.makeLayerTexture()
+        selection = FloatingSelection(key: key, lifted: lifted, outline: outline, bounds: box,
+                                      anchor: CGPoint(x: box.midX, y: box.midY))
+        movingPieces = (key, chosen)
+        renderSelectionPreview()
     }
 
     /// "Unlock and move": unlocks the blocked layer until the move is dropped, then lifts it.
@@ -1570,15 +1695,32 @@ final class EditorState: ObservableObject {
         relockIfNeeded()
         selection = nil
         lassoPoints = []
+        moveHint = nil
+        let moving = movingPieces
+        movingPieces = nil
         guard let target = store.texture(clip: sel.key.clip, frame: sel.key.frame, layer: sel.key.layer),
               let base = renderer.readbackBytes(target) else { return }
         let w = renderer.canvasSize.x, h = renderer.canvasSize.y
-        let placed = SelectionPixels.render(sel.lifted, width: w, height: h, transform: sel.transform, hard: project.pixelArt)
-        renderer.upload(bytes: SelectionPixels.composite(placed, over: base), into: target)
         var before: [LayerKey: MTLTexture?] = [:]
         before.updateValue(selectionBefore, forKey: sel.key)
         coalesceTag = nil
-        push(snapshot(before))
+        push(snapshot(before))                  // with the pieces as they were
+        if let moving, moving.key == sel.key, var pieces = strokes[sel.key] {
+            // Each piece moves on its own and stays a piece, in its place in the stack.
+            for i in moving.indices.sorted(by: >) where pieces.indices.contains(i) {
+                if let t = pieces[i].transformed(sel.transform, canvasWidth: w, height: h, hard: project.pixelArt) {
+                    pieces[i] = t
+                } else {
+                    pieces.remove(at: i)
+                }
+            }
+            strokes[sel.key] = pieces
+            renderer.upload(bytes: StrokePieces.composite(pieces, width: w, height: h), into: target)
+        } else {
+            let placed = SelectionPixels.render(sel.lifted, width: w, height: h, transform: sel.transform, hard: project.pixelArt)
+            renderer.upload(bytes: SelectionPixels.composite(placed, over: base), into: target)
+            strokes[sel.key] = nil              // lassoed or pasted pixels: the pieces are gone
+        }
         selectionBefore = nil
         isDirty = true
         refreshThumbnails(showing: sel.key)
@@ -1589,6 +1731,8 @@ final class EditorState: ObservableObject {
         guard let sel = selection else { return }
         selection = nil
         lassoPoints = []
+        movingPieces = nil
+        moveHint = nil
         if let before = selectionBefore { store.set(before, for: sel.key) }
         selectionBefore = nil
         relockIfNeeded()
@@ -1640,10 +1784,19 @@ final class EditorState: ObservableObject {
         relockIfNeeded()
         selection = nil
         lassoPoints = []
+        moveHint = nil
+        let moving = movingPieces
+        movingPieces = nil
         var before: [LayerKey: MTLTexture?] = [:]
         before.updateValue(selectionBefore, forKey: sel.key)
         coalesceTag = nil
         push(snapshot(before))
+        if let moving, moving.key == sel.key, var pieces = strokes[sel.key] {
+            for i in moving.indices.sorted(by: >) where pieces.indices.contains(i) { pieces.remove(at: i) }
+            strokes[sel.key] = pieces
+        } else {
+            strokes[sel.key] = nil
+        }
         selectionBefore = nil
         isDirty = true
         refreshThumbnails(showing: sel.key)
@@ -1660,6 +1813,7 @@ final class EditorState: ObservableObject {
         let bounds = Self.boundingBox(clip.outline).intersection(CGRect(x: 0, y: 0, width: w, height: h))
         selectionBefore = store.copy(of: key)
         selectionIsLift = false
+        movingPieces = nil
         selectionPreview = selectionPreview ?? renderer.makeLayerTexture()
         selection = FloatingSelection(key: key, lifted: clip.pixels, outline: clip.outline, bounds: bounds,
                                       anchor: CGPoint(x: bounds.midX, y: bounds.midY))
@@ -1767,6 +1921,8 @@ final class EditorState: ObservableObject {
         var frameIndex: Int
         var layerIndex: Int
         var textures: [LayerKey: MTLTexture?]
+        /// The same drawings' pieces (nil: not known).
+        var pieces: [LayerKey: [StrokePiece]?] = [:]
     }
 
     var canUndo: Bool { !undoStack.isEmpty }
@@ -1777,8 +1933,10 @@ final class EditorState: ObservableObject {
     }
 
     private func snapshot(_ textures: [LayerKey: MTLTexture?]) -> Snapshot {
-        Snapshot(project: project, clipIndex: clipIndex, frameIndex: frameIndex,
-                 layerIndex: layerIndex, textures: textures)
+        var pieces: [LayerKey: [StrokePiece]?] = [:]
+        for k in textures.keys { pieces.updateValue(strokes[k], forKey: k) }
+        return Snapshot(project: project, clipIndex: clipIndex, frameIndex: frameIndex,
+                        layerIndex: layerIndex, textures: textures, pieces: pieces)
     }
 
     /// Call right before an edit. `textures` are the layers the edit creates, removes or paints into;
@@ -1791,6 +1949,8 @@ final class EditorState: ObservableObject {
         var saved: [LayerKey: MTLTexture?] = [:]
         for k in keys { saved.updateValue(copyPixels ? store.copy(of: k) : store.raw(k), forKey: k) }
         push(snapshot(saved))
+        // Painted over in place (fill, clear, import…): its pieces can't be told apart any more.
+        if copyPixels { for k in keys { strokes[k] = nil } }
     }
 
     private func push(_ s: Snapshot) {
@@ -1835,6 +1995,7 @@ final class EditorState: ObservableObject {
         frameIndex = min(s.frameIndex, max(0, frames.count - 1))
         layerIndex = min(s.layerIndex, max(0, layers.count - 1))
         for (k, t) in s.textures { store.set(t, for: k) }
+        for (k, p) in s.pieces { strokes[k] = p }
         isDirty = true
         for f in frames { refreshThumbnail(for: f.id) }
     }

@@ -20,6 +20,7 @@
 "%lld fps" = "%lld fps";
 "%lld frames" = "%lld fotogramas";
 "%lld pixels per unit" = "%lld píxeles por unidad";
+"%lld strokes" = "%lld trazos";
 "1 clip" = "1 clip";
 "1 clip ·" = "1 clip ·";
 "1 frame" = "1 fotograma";
@@ -31,6 +32,8 @@
 "Add drawing at the end" = "Añadir dibujo al final";
 "Add frame" = "Añadir fotograma";
 "Add frame at the end" = "Añadir fotograma al final";
+"Add strokes" = "Añadir trazos";
+"Adding" = "Añadiendo";
 "Adds the last %lld drawings again after this one, linked: change one and every repeat changes. Unlink a repeat to make it its own drawing." = "Vuelve a poner los últimos %lld dibujos después de este, enlazados: si cambias uno, cambian todas las repeticiones. Desenlaza una repetición para que sea un dibujo propio.";
 "Adds this drawing again after itself, linked: change one and every repeat changes. Unlink a repeat to make it its own drawing." = "Vuelve a poner este dibujo justo después, enlazado: si cambias uno, cambian todas las repeticiones. Desenlaza una repetición para que sea un dibujo propio.";
 "Advice only: a jump lifts the feet on purpose, for example." = "Solo son consejos: un salto levanta los pies a propósito, por ejemplo.";
@@ -209,6 +212,7 @@
 "Off" = "No";
 "On" = "Sí";
 "One GIF per clip, %lld × %lld px." = "Un GIF por clip, de %lld × %lld px.";
+"One stroke" = "Un trazo";
 "Onion" = "Cebolla";
 "Onion skin" = "Papel cebolla";
 "Onion skin options" = "Opciones del papel cebolla";
@@ -291,8 +295,11 @@
 "Steadies the line: it trails the pen a little and irons out wobble. Higher is calmer, with more lag." = "Estabiliza la línea: va un poco por detrás del lápiz y quita el temblor. Más alto es más tranquilo, con más retraso.";
 "Stop masking to layer below" = "Dejar de enmascarar con la capa de abajo";
 "Strength" = "Intensidad";
+"Stroke %lld of %lld here · tap again for the one below" = "Trazo %lld de %lld aquí · toca otra vez para el de debajo";
 "Sync Layers" = "Sincronizar capas";
+"Taps add strokes to what you're moving, or take them out" = "Cada toque añade un trazo a lo que mueves, o lo quita";
 "The usual for games" = "Lo habitual en juegos";
+"The whole drawing" = "Todo el dibujo";
 "This project: brush, eraser, fill and lasso with hard edges, every pixel fully on or off." = "Este proyecto: pincel, goma, relleno y lazo con bordes duros, cada píxel pintado o vacío del todo.";
 "Timeline height" = "Altura de la línea de tiempo";
 "Trim transparent borders" = "Recortar bordes transparentes";

@@ -46,6 +46,12 @@ enum ProjectDocument {
             .appendingPathComponent("\(key.layer).png")
     }
 
+    /// The drawing's pieces for the Move tool, next to its PNG: `clips/<clip>/<frame>/<layer>.strokes`.
+    /// Optional: without it the drawing is split into its shapes when needed.
+    static func strokesURL(in packageURL: URL, _ key: LayerKey) -> URL {
+        layerURL(in: packageURL, key).deletingPathExtension().appendingPathExtension("strokes")
+    }
+
     /// Every (clip, frame, layer) with a drawing of its own, whether or not a PNG exists for it.
     /// Held cells show an earlier frame's drawing and have no file.
     static func layerKeys(of project: Project) -> [LayerKey] {
@@ -81,6 +87,15 @@ enum ProjectDocument {
         return out
     }
 
+    /// The `.strokes` files that exist, undecoded.
+    static func loadLayerStrokes(from packageURL: URL, project: Project) -> [LayerKey: Data] {
+        var out: [LayerKey: Data] = [:]
+        for key in layerKeys(of: project) {
+            if let data = try? Data(contentsOf: strokesURL(in: packageURL, key)) { out[key] = data }
+        }
+        return out
+    }
+
     /// One layer PNG, or nil if it's missing (a blank layer).
     static func image(at url: URL) -> CGImage? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
@@ -95,7 +110,8 @@ enum ProjectDocument {
     /// halfway never leaves a half-written project behind, and frames deleted since the last save
     /// don't linger as orphan folders. `references/` is carried over untouched; Calco doesn't edit it yet.
     static func save(_ project: Project, to packageURL: URL,
-                     layerImage: (LayerKey) -> CGImage? = { _ in nil }) throws {
+                     layerImage: (LayerKey) -> CGImage? = { _ in nil },
+                     layerStrokes: (LayerKey) -> Data? = { _ in nil }) throws {
         let fm = FileManager.default
         let staging = fm.temporaryDirectory
             .appendingPathComponent("calco-save-\(UUID().uuidString)", isDirectory: true)
@@ -111,6 +127,7 @@ enum ProjectDocument {
             let url = layerURL(in: staging, key)
             try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try writePNG(image, to: url, key: key)
+            if let strokes = layerStrokes(key) { try strokes.write(to: strokesURL(in: staging, key)) }
         }
 
         let oldReferences = packageURL.appendingPathComponent(referencesFolder, isDirectory: true)
