@@ -14,6 +14,8 @@ El Apple Pencil siempre dibuja; los dedos mueven el lienzo.
 
 Un trazo con el dedo que se convierte en uno de estos gestos se cancela y no deja marca. El botón **Ajustar** de la barra superior (o ⌘0) devuelve el lienzo a su sitio.
 
+Mientras lo mueves, el lienzo **se engancha** con un toque suave que se nota: recto y en cada cuarto de vuelta (90°, 180°, 270°), a su tamaño ajustado y en el centro. Sigue girando o arrastrando para pasar de largo.
+
 ## Solo dibuja el Apple Pencil
 
 En las opciones del pincel, **Solo dibuja el Apple Pencil** impide que los dedos dibujen; siguen sirviendo para ampliar, desplazar y deshacer. Empieza igual que el ajuste del iPad «Dibujar solo con el Apple Pencil».

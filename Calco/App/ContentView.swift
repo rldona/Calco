@@ -161,6 +161,7 @@ struct MoveStrokesHint: View {
                 .font(.subheadline)
                 .foregroundStyle(Theme.text)
                 .lineLimit(1)
+                .fixedSize()
             Button { state.addingStrokes.toggle() } label: {
                 Label(state.addingStrokes ? "Adding" : "Add strokes",
                       systemImage: state.addingStrokes ? "checkmark" : "plus")
@@ -168,6 +169,7 @@ struct MoveStrokesHint: View {
                     .foregroundStyle(state.addingStrokes ? Theme.onAccent : Theme.text)
                     .padding(.horizontal, 12).padding(.vertical, 7)
                     .background(state.addingStrokes ? Theme.accent : Theme.raised, in: RoundedRectangle(cornerRadius: 9))
+                    .fixedSize()
             }
             .buttonStyle(.plain)
             .accessibilityValue(state.addingStrokes ? "On" : "Off")

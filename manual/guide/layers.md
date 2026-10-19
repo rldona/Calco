@@ -16,13 +16,13 @@ Long-press the name for **Rename…**, **Opacity…**, **Mask to layer below**, 
 
 ## The layers panel
 
-**Layers** in the bottom bar opens the full panel: drag the handle to reorder, an opacity slider for the selected layer, and buttons to add, rename, clear, mask and delete.
+The stack icon over the layer names opens the full panel: drag the handle to reorder, an opacity slider for the selected layer, and buttons to add, rename, clear, mask and delete.
 
 ![Layers panel](/crops/en/layers-panel.jpg)
 
 ## New layer
 
-**New layer** in the bottom bar offers three kinds of layer, and two ways to bring in an image:
+The **+** over the layer names (**New layer**) offers three kinds of layer, and two ways to bring in an image:
 
 ![New layer menu](/crops/en/new-layer-menu.jpg)
 

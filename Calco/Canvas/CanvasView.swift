@@ -17,6 +17,13 @@ final class CanvasUIView: UIView {
     /// What the active touch is doing: painting, a tap for fill / eyedropper (acted on when it
     /// lifts), or drawing a lasso.
     private enum Mode { case stroke, tap, lasso, moveDrag }
+    /// Two-finger gestures, before snapping (see `pinched`, `rotated`, `panned`).
+    fileprivate var scaleIntent: CGFloat = 1
+    fileprivate var rotationIntent: CGFloat = 0
+    fileprivate var offsetIntent: CGSize = .zero
+    fileprivate struct Snap: OptionSet { let rawValue: Int; static let scale = Snap(rawValue: 1), rotation = Snap(rawValue: 2), offset = Snap(rawValue: 4) }
+    fileprivate var snaps: Snap = []
+    fileprivate let haptics = UIImpactFeedbackGenerator(style: .light)
     private var mode = Mode.stroke
     /// Move: where the finger came down (canvas pixels and view points), to pick and drag in one go.
     private var moveStart: (canvas: CGPoint, view: CGPoint)?
@@ -233,23 +240,59 @@ extension CanvasUIView: UIGestureRecognizerDelegate {
     @objc private func undoTapped() { state?.undo() }
     @objc private func redoTapped() { state?.redo() }
 
+    // The fingers' own scale, rotation and position, before snapping; the canvas follows them
+    // except near upright, fitted or centred, where it clicks in place (with a light haptic tap).
+
     @objc private func pinched(_ g: UIPinchGestureRecognizer) {
-        guard let state, g.state == .changed else { return }
-        state.canvasTransform.zoom(by: g.scale, around: g.location(in: self), viewSize: bounds.size)
+        guard let state else { return }
+        if g.state == .began { scaleIntent = state.canvasTransform.scale }
+        guard g.state == .changed else { snaps.remove(.scale); return }
+        let range = CanvasTransform.scaleRange
+        scaleIntent = min(max(scaleIntent * g.scale, range.lowerBound), range.upperBound)
+        let snap = CanvasTransform.snappedScale(scaleIntent)
+        click(.scale, snap != nil)
+        let target = snap ?? scaleIntent
+        if target != state.canvasTransform.scale {
+            state.canvasTransform.zoom(by: target / state.canvasTransform.scale, around: g.location(in: self), viewSize: bounds.size)
+        }
+        if let snap { state.canvasTransform.scale = snap }      // exactly, so "fitted" is fitted
         g.scale = 1
     }
 
     @objc private func rotated(_ g: UIRotationGestureRecognizer) {
-        guard let state, g.state == .changed else { return }
-        state.canvasTransform.rotate(by: g.rotation, around: g.location(in: self), viewSize: bounds.size)
+        guard let state else { return }
+        if g.state == .began { rotationIntent = state.canvasTransform.rotation }
+        guard g.state == .changed else { snaps.remove(.rotation); return }
+        rotationIntent += g.rotation
+        let snap = CanvasTransform.snappedRotation(rotationIntent)
+        click(.rotation, snap != nil)
+        let target = snap ?? rotationIntent
+        if target != state.canvasTransform.rotation {
+            state.canvasTransform.rotate(by: target - state.canvasTransform.rotation, around: g.location(in: self), viewSize: bounds.size)
+        }
+        if let snap { state.canvasTransform.rotation = snap }
         g.rotation = 0
     }
 
     @objc private func panned(_ g: UIPanGestureRecognizer) {
-        guard let state, g.state == .changed else { return }
+        guard let state else { return }
+        if g.state == .began { offsetIntent = state.canvasTransform.offset }
+        guard g.state == .changed else { snaps.remove(.offset); return }
         let t = g.translation(in: self)
-        state.canvasTransform.pan(by: CGSize(width: t.x, height: t.y))
+        // Zoom and twist move the offset too; follow them, then add the drag.
+        if snaps.contains(.offset) == false { offsetIntent = state.canvasTransform.offset }
+        offsetIntent.width += t.x
+        offsetIntent.height += t.y
+        let snap = CanvasTransform.snappedOffset(offsetIntent)
+        click(.offset, snap != nil)
+        state.canvasTransform.offset = snap ?? offsetIntent
         g.setTranslation(.zero, in: self)
+    }
+
+    /// A haptic tap when something clicks into place (not while it stays there).
+    private func click(_ kind: Snap, _ now: Bool) {
+        if now && !snaps.contains(kind) { haptics.impactOccurred() }
+        if now { snaps.insert(kind) } else { snaps.remove(kind) }
     }
 }
 

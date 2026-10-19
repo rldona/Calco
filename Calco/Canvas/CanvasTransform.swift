@@ -63,10 +63,35 @@ struct CanvasTransform: Equatable {
     }
 
     /// Fitted and upright, whether or not it's mirrored.
-    var isFit: Bool { scale == 1 && rotation == 0 && offset == .zero }
+    var isFit: Bool {
+        // A hair's breadth of floating-point drift from gestures still counts.
+        abs(scale - 1) < 1e-6 && abs(rotation) < 1e-6 && abs(offset.width) < 0.01 && abs(offset.height) < 0.01
+    }
 
     mutating func pan(by delta: CGSize) {
         offset.width += delta.width
         offset.height += delta.height
+    }
+
+    // MARK: - Snapping
+
+    // While you twist, pinch or drag with two fingers, the canvas clicks into upright (and every
+    // quarter turn), its fitted size and the middle, so it's easy to put back straight.
+
+    /// Within 5° of a quarter turn (0°, 90°, 180°, 270°…), exactly that.
+    static func snappedRotation(_ r: CGFloat) -> CGFloat? {
+        let quarter = CGFloat.pi / 2
+        let nearest = (r / quarter).rounded() * quarter
+        return abs(r - nearest) < 5 * .pi / 180 ? nearest : nil
+    }
+
+    /// Within 6 % of the fitted size, the fitted size.
+    static func snappedScale(_ s: CGFloat) -> CGFloat? {
+        abs(s - 1) < 0.06 ? 1 : nil
+    }
+
+    /// Within `tolerance` points of the middle, the middle.
+    static func snappedOffset(_ o: CGSize, tolerance: CGFloat = 14) -> CGSize? {
+        hypot(o.width, o.height) < tolerance ? .zero : nil
     }
 }

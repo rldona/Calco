@@ -11,6 +11,7 @@ De arriba abajo:
 - **Relleno** (G)
 - **Cuentagotas** (I)
 - **Lazo** (L)
+- **Mover** (V)
 - **Color**: toca para la paleta y el selector de color.
 - **Tamaño**: arrastra la barra, o toca el número para valores exactos. `[` y `]` con teclado.
 - **Deshacer / Rehacer**: también tocando con dos y tres dedos en el lienzo.
@@ -63,6 +64,29 @@ Toca otra vez el lazo para **Seleccionar todo** y **Pegar**:
 
 Lo pegado aparece donde lo copiaste, en el fotograma y la capa en que estés: útil para llevar una pose a otro dibujo y ajustarla.
 
+## Mover
+
+**Mover** coge el dibujo de la capa actual, en el cabezal, para moverlo, escalarlo o girarlo, con los mismos tiradores que el lazo.
+
+![Mover: todo el dibujo](/crops/es/move-all.jpg)
+
+- Al elegir **Mover** se coge **todo el dibujo**, en un recuadro ajustado a la pintura.
+- **Toca un trazo** para coger solo ese: un ojo, una mano, una antena. Calco recuerda cada trazo que haces con el pincel, así que coge el trazo exacto aunque se cruce con otros.
+- **Arrastra un trazo** para cogerlo y moverlo de una vez.
+- Toca un hueco para volver a todo el dibujo.
+
+![Mover: un trazo](/crops/es/move-stroke.jpg)
+
+Donde se cruzan varios trazos, **toca otra vez en el mismo sitio** para pasar al de debajo; el aviso bajo el lienzo dice cuál tienes. **Añadir trazos** hace que cada toque añada un trazo a lo que mueves, o lo quite, para mover varios juntos.
+
+![Coger el trazo de debajo](/crops/es/move-crossing.jpg)
+
+Al mover, girar y escalar, la forma **se engancha** a su sitio de inicio, recta (o a un cuarto de vuelta) y a su tamaño, con un toque suave que se nota; el pivote se engancha al centro. Así siempre puedes volver a donde empezaste. Toca fuera, cambia de herramienta o de fotograma para soltarlo; todo el movimiento se deshace en un paso.
+
+- Los trazos movidos siguen siendo trazos: puedes volver a cogerlos.
+- La **goma** recorta los trazos por los que pasa. Un **relleno**, el **lazo** o pegar funden el dibujo, que entonces se separa en sus formas sueltas.
+- En una capa **bloqueada**, como una [imagen importada](./layers#imagenes-de-referencia), Mover ofrece **Desbloquear y mover**, y la vuelve a bloquear al terminar.
+
 ## Pixel art
 
 Con **Pixel art** activado, todas las herramientas trabajan con píxeles enteros: sin bordes suaves en el pincel, la goma, el relleno ni el lazo, y las selecciones movidas siguen nítidas. Actívalo al crear el proyecto o en las opciones del pincel.
@@ -71,6 +95,6 @@ Con **Pixel art** activado, todas las herramientas trabajan con píxeles enteros
 
 - **Voltear la vista** (el icono del espejo en la barra superior, o H) muestra el dibujo en espejo sin modificarlo, para ver los errores con otros ojos.
 - **Ajustar** vuelve al lienzo centrado y recto (⌘0); si la vista está volteada, sigue volteada.
-- El **modo Zen** oculta todo menos el lienzo y una pequeña barra flotante (⌃⌘F).
+- El **modo Zen** oculta todo menos el lienzo y una pequeña barra flotante con deshacer, rehacer, todas las herramientas y el color (⌃⌘F).
 
 ![Modo Zen](/screens/es/zen.jpg)

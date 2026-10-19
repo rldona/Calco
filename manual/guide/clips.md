@@ -11,11 +11,13 @@ Tap a clip's name in the timeline to switch. The **…** button next to the clip
 - **New clip…**: starts with one blank frame and the same layers as the current clip.
 - **Rename…** and **Delete**.
 
-Each clip has its own **fps** (the arrow next to it goes back to the project's) and its own **loop** setting: a walk loops, a jump plays once.
+Each clip has its own **fps** and its own **loop** setting: a walk loops, a jump plays once. Both are in the **12 fps ⌄** button; **Use project fps** goes back to the project's speed.
+
+![Clip settings](/crops/en/clip-settings.jpg)
 
 ## Pivot
 
-The pivot is the point the game uses to place the sprite, usually between the feet. Tap the **pivot** button (the crosshair) to show it on the canvas and drag it.
+The pivot is the point the game uses to place the sprite, usually between the feet. Turn on **Show pivot** in **12 fps ⌄** to see it on the canvas, and drag it.
 
 ![The pivot](/crops/en/pivot.jpg)
 

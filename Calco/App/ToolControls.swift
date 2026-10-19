@@ -14,39 +14,51 @@ struct ToolRail: View {
     @State private var editingLasso = false
 
     var body: some View {
-        VStack(spacing: 6) {
+        // Full size while there's room; tighter when the timeline is tall (or many layers) so the
+        // canvas, not the timeline, gives up the space.
+        ViewThatFits(in: .vertical) {
+            tools(compact: false)
+            tools(compact: true)
+        }
+        .frame(width: 40)
+        .calcoPanel(padding: 5)
+        .onChange(of: state.colorPickerRequest) { editingColor = true }
+    }
+
+    private func tools(compact: Bool) -> some View {
+        VStack(spacing: compact ? 1 : 6) {
             // Like the bucket: tap once to pick the brush, again for its options.
-            RailButton(icon: "pencil.tip", label: "Brush", active: state.tool == .brush) {
+            RailButton(icon: "pencil.tip", label: "Brush", active: state.tool == .brush, size: compact ? 32 : 36) {
                 if state.tool == .brush { editingBrush = true } else { state.tool = .brush }
             }
             .popover(isPresented: $editingBrush, arrowEdge: .leading) { BrushOptions(state: state) }
-            RailButton(icon: "eraser", label: "Eraser", active: state.tool == .eraser) { state.tool = .eraser }
+            RailButton(icon: "eraser", label: "Eraser", active: state.tool == .eraser, size: compact ? 32 : 36) { state.tool = .eraser }
             // Tap once to pick the bucket, again for its options.
-            RailButton(icon: "drop.halffull", label: "Fill", active: state.tool == .fill) {
+            RailButton(icon: "drop.halffull", label: "Fill", active: state.tool == .fill, size: compact ? 32 : 36) {
                 if state.tool == .fill { editingFill = true } else { state.tool = .fill }
             }
             .popover(isPresented: $editingFill, arrowEdge: .leading) { FillOptions(state: state) }
-            RailButton(icon: "eyedropper", label: "Eyedropper", active: state.tool == .eyedropper) {
+            RailButton(icon: "eyedropper", label: "Eyedropper", active: state.tool == .eyedropper, size: compact ? 32 : 36) {
                 state.tool = .eyedropper
             }
             // Tap once for the lasso, again for select all and paste.
-            RailButton(icon: "lasso", label: "Lasso", active: state.tool == .lasso) {
+            RailButton(icon: "lasso", label: "Lasso", active: state.tool == .lasso, size: compact ? 32 : 36) {
                 if state.tool == .lasso { editingLasso = true } else { state.tool = .lasso }
             }
             .popover(isPresented: $editingLasso, arrowEdge: .leading) { LassoOptions(state: state) { editingLasso = false } }
             // Picks up the whole drawing; tap a shape on the canvas to move just that one.
-            RailButton(icon: "arrow.up.and.down.and.arrow.left.and.right", label: "Move", active: state.tool == .move) {
+            RailButton(icon: "arrow.up.and.down.and.arrow.left.and.right", label: "Move", active: state.tool == .move, size: compact ? 32 : 36) {
                 if state.tool == .move { state.liftForMove() } else { state.tool = .move }
             }
 
-            Divider().overlay(Theme.hairline).padding(.horizontal, 8).padding(.vertical, 4)
+            Divider().overlay(Theme.hairline).padding(.horizontal, 8).padding(.vertical, compact ? 2 : 4)
 
             ColorSwatch(state: state, editing: $editingColor)
 
             // Gives up height first when the timeline is stretched, so the canvas can shrink.
             VerticalSizeSlider(state: state)
-                .frame(minHeight: 44, maxHeight: 120)
-                .padding(.top, 6)
+                .frame(minHeight: compact ? 28 : 44, maxHeight: 120)
+                .padding(.top, compact ? 2 : 6)
             Button { editingSize = true } label: {
                 Text("\(Int(state.toolSize))")
                     .font(.system(.caption, design: .monospaced))
@@ -59,14 +71,11 @@ struct ToolRail: View {
 
             Spacer(minLength: 4)
 
-            RailButton(icon: "arrow.uturn.backward", label: "Undo") { state.undo() }
+            RailButton(icon: "arrow.uturn.backward", label: "Undo", size: compact ? 32 : 36) { state.undo() }
                 .opacity(state.canUndo ? 1 : 0.35)
-            RailButton(icon: "arrow.uturn.forward", label: "Redo") { state.redo() }
+            RailButton(icon: "arrow.uturn.forward", label: "Redo", size: compact ? 32 : 36) { state.redo() }
                 .opacity(state.canRedo ? 1 : 0.35)
         }
-        .frame(width: 40)
-        .calcoPanel(padding: 5)
-        .onChange(of: state.colorPickerRequest) { editingColor = true }
     }
 }
 

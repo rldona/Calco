@@ -27,6 +27,7 @@ With a hardware keyboard, hold **⌘** to see every shortcut in iPadOS.
 | G | Fill |
 | I | Eyedropper |
 | L | Lasso |
+| V | Move |
 | [ / ] | Smaller / bigger |
 | Return / Esc | Apply / cancel selection |
 | ⇧H | Flip selection |
@@ -48,7 +49,7 @@ With a hardware keyboard, hold **⌘** to see every shortcut in iPadOS.
 |---|---|
 | Space | Play / pause |
 | ← / → | Previous / next frame |
-| ⌥N | New drawing (new frame with Sync layers) |
+| ⌥N | New drawing (a whole frame with All) |
 | ⌘D | Duplicate drawing |
 | ⌫ | Delete drawing |
 | ⌥← / ⌥→ | Move frame earlier / later |

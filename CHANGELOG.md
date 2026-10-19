@@ -18,6 +18,7 @@ A release is made by pushing a tag `vX.Y.Z`: the release workflow tests and buil
 
 - **Animation rail** on the right: a big **New**, Duplicate, Hold, Delete and **More** (label, split, repeat, frame actions), the onion skin, and **Layer | All**, which replaces Sync layers. In portrait it sits above the timeline.
 - The timeline is cleaner: a bigger Play, one **clip settings** button (fps, loop, pivot), taller rows, a **+** over the layer names and a **+** cell after the last drawing.
+- The **canvas clicks into place** while you move it with two fingers: upright and every quarter turn, its fitted size and the middle, with a light haptic tap.
 - **Zen mode**'s bar has every tool now (fill, eyedropper, lasso, move) and redo.
 - The latency readout is off unless you turn it on in Preferences.
 - Releases are built **unsigned**, with no Apple Developer Program: the GitHub release has `Calco-X.Y.Z-unsigned.ipa` and the Unity package. TestFlight is gone.

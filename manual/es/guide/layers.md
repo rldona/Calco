@@ -16,13 +16,13 @@ Mantén pulsado el nombre para **Renombrar…**, **Opacidad…**, **Enmascarar c
 
 ## El panel de capas
 
-**Capas** en la barra inferior abre el panel completo: arrastra el tirador para reordenar, un control de opacidad para la capa seleccionada y botones para añadir, renombrar, vaciar, enmascarar y eliminar.
+El icono de la pila sobre los nombres de las capas abre el panel completo: arrastra el tirador para reordenar, un control de opacidad para la capa seleccionada y botones para añadir, renombrar, vaciar, enmascarar y eliminar.
 
 ![Panel de capas](/crops/es/layers-panel.jpg)
 
 ## Nueva capa
 
-**Nueva capa** en la barra inferior ofrece tres tipos de capa y dos formas de traer una imagen:
+El **+** sobre los nombres de las capas (**Nueva capa**) ofrece tres tipos de capa y dos formas de traer una imagen:
 
 ![Menú de nueva capa](/crops/es/new-layer-menu.jpg)
 

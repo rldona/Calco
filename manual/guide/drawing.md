@@ -11,6 +11,7 @@ From top to bottom:
 - **Fill** (G)
 - **Eyedropper** (I)
 - **Lasso** (L)
+- **Move** (V)
 - **Colour**: tap for the palette and the colour picker.
 - **Size**: drag the slider, or tap the number for exact values. `[` and `]` on a keyboard.
 - **Undo / Redo**: also two-finger and three-finger taps on the canvas.
@@ -63,6 +64,29 @@ Tap the lasso again for **Select all** and **Paste**:
 
 Paste lands where you copied, on whichever frame and layer you're on: handy to carry a pose to another drawing and adjust it.
 
+## Move
+
+**Move** picks up the drawing on the current layer, at the playhead, to move, scale or rotate it, with the same handles as the lasso.
+
+![Move: the whole drawing](/crops/en/move-all.jpg)
+
+- Choosing **Move** picks up the **whole drawing**, in a box that hugs the paint.
+- **Tap a stroke** to pick just that one: an eye, a hand, an antenna. Calco remembers every stroke you draw with the brush, so it picks the exact stroke even where it crosses others.
+- **Drag a stroke** to pick it up and move it in one go.
+- Tap a blank spot to go back to the whole drawing.
+
+![Move: one stroke](/crops/en/move-stroke.jpg)
+
+Where several strokes cross, **tap the same spot again** to go to the one underneath; the hint under the canvas says which one you have. **Add strokes** makes each tap add a stroke to what you're moving, or take it out, to move a few together.
+
+![Picking the stroke underneath](/crops/en/move-crossing.jpg)
+
+Moving, rotating and scaling **click back** into the starting place, upright (or a quarter turn) and the original size, with a light tap you can feel; the pivot clicks back to the middle. So you can always return to where you began. Tap outside, change tool or change frame to drop it; the whole move is one undo step.
+
+- Moved strokes stay strokes: you can pick them again later.
+- The **eraser** trims the strokes it crosses. A **fill**, the **lasso** or a paste merge the drawing, which then splits into its separate shapes.
+- On a **locked** layer, such as an [imported image](./layers#reference-images), Move offers **Unlock and move**, and locks it again when you're done.
+
 ## Pixel art
 
 With **Pixel art** on, every tool works on whole pixels: no soft edges on the brush, eraser, fill or lasso, and moved selections stay crisp. Turn it on when creating the project or in the brush options.
@@ -71,6 +95,6 @@ With **Pixel art** on, every tool works on whole pixels: no soft edges on the br
 
 - **Flip view** (the mirror icon in the top bar, or H) shows the drawing mirrored without changing it, to spot mistakes with fresh eyes.
 - **Fit** returns to the fitted, upright canvas (⌘0); a flipped view stays flipped.
-- **Zen mode** hides everything but the canvas and a small floating bar (⌃⌘F).
+- **Zen mode** hides everything but the canvas and a small floating bar with undo, redo, every tool and the colour (⌃⌘F).
 
 ![Zen mode](/screens/en/zen.jpg)

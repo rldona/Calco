@@ -27,6 +27,7 @@ Con un teclado físico, mantén pulsado **⌘** para ver todos los atajos en iPa
 | G | Relleno |
 | I | Cuentagotas |
 | L | Lazo |
+| V | Mover |
 | [ / ] | Más pequeño / más grande |
 | Retorno / Esc | Aplicar / cancelar selección |
 | ⇧H | Voltear selección |
@@ -48,7 +49,7 @@ Con un teclado físico, mantén pulsado **⌘** para ver todos los atajos en iPa
 |---|---|
 | Espacio | Reproducir / pausa |
 | ← / → | Fotograma anterior / siguiente |
-| ⌥N | Nuevo dibujo (nuevo fotograma con Sincronizar capas) |
+| ⌥N | Nuevo dibujo (un fotograma entero con Todas) |
 | ⌘D | Duplicar dibujo |
 | ⌫ | Eliminar dibujo |
 | ⌥← / ⌥→ | Mover fotograma antes / después |

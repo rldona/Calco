@@ -120,7 +120,13 @@ struct SelectionOverlay: View {
                 let middle = Self.distance(g.location, centre) < Self.snapPoints
                 click(middle)
                 state.updateSelection { $0.moveAnchor(to: (middle ? centre : g.location).applying(toCanvas)) }
-            }.onEnded { _ in snapped = false })
+            }.onEnded { g in
+                snapped = false
+                // A tap on the pivot, not a drag: with Move it picks the stroke under it, like anywhere else.
+                if state.tool == .move, hypot(g.translation.width, g.translation.height) < 4 {
+                    state.liftForMove(at: g.location.applying(toCanvas))
+                }
+            })
             .accessibilityLabel("Selection anchor")
         }
 

@@ -6,19 +6,20 @@ The onion skin shows the drawings before and after the current one, faded and ti
 
 In the picture, Pip's frame 3 is drawn normally; the previous drawings show in **red** and the next one in **blue**.
 
-## Controls in the timeline
+## On the animation rail
 
-![Onion skin controls](/crops/en/onion-controls.jpg)
+![Onion skin on the rail](/crops/en/onion-rail.jpg){.rail}
 
-- **Onion skin** turns it on or off (O). Orange means on.
-- **● Before 2 − +**: how many drawings before show through.
-- **● After 1 − +**: how many drawings after.
+- **Onion** turns it on or off (O). Orange means on.
+- **2 · 1** under it: how many drawings before and after show through. Tap it for the settings.
+
+<div class="clear"></div>
 
 The onion skin counts **drawings, not frames**: a drawing held for several frames counts once, and empty frames are skipped, so the pose you're tracing always shows. A layer that doesn't change, like a still background, never ghosts over itself.
 
 ## More settings
 
-The onion skin icon in the top bar opens the full settings:
+Tapping the numbers under **Onion** opens the full settings:
 
 ![Onion skin settings](/crops/en/onion-popover.jpg)
 

@@ -6,21 +6,22 @@ Calco is an iPad app for drawing sprite animations by hand: a character's idle, 
 
 ## What you see
 
-The editor has four areas:
+The editor has five areas:
 
 | Area | What it does |
 |---|---|
-| **Tool rail** (left) | Brush, eraser, fill, eyedropper, lasso, colour, size, undo and redo. See [Drawing tools](./drawing). |
+| **Tool rail** (left) | Brush, eraser, fill, eyedropper, lasso, move, colour, size, undo and redo. See [Drawing tools](./drawing). |
 | **Canvas** (centre) | Where you draw. Pinch to zoom, two fingers to pan and rotate. |
-| **Top bar** | The file menu on the left; flip view, onion skin settings and Zen mode on the right. |
-| **Timeline** (bottom) | Clips, layers and their drawings, playback and the frame bar. See [Timeline and drawings](./timeline). |
+| **Animation rail** (right) | New drawing, duplicate, hold, delete, more, the onion skin, and whether they act on the layer or every layer. See [Timeline and drawings](./timeline). |
+| **Top bar** | The file menu on the left; flip view and Zen mode on the right. |
+| **Timeline** (bottom) | Playback, clips, the frame length, and the layers with their drawings. See [Timeline and drawings](./timeline). |
 
 ## Your first animation in five steps
 
 1. In the gallery, tap **New**, choose a sprite size and the clips you need (Idle, Run…), and tap **Create and start drawing**. See [Gallery and projects](./gallery).
 2. Draw the first pose with the Apple Pencil on the **Line** layer.
-3. Tap the orange **+** in the bar to add the next drawing. The previous one shows faded in red (the [onion skin](./onion-skin)) so you can follow it.
-4. Repeat, then tap **▶** to play. Change the speed with **fps − +**, or make a drawing last longer with **Lasts N frames**.
+3. Tap the big orange **+ New** at the top of the right rail to add the next drawing. The previous one shows faded in red (the [onion skin](./onion-skin)) so you can follow it.
+4. Repeat, then tap **▶** to play. Change the speed in **12 fps ⌄**, or make a drawing last longer with **Lasts N frames**.
 5. Open the file menu → **Export…** and pick a profile, for example **Unity**. See [Export to your game](./export).
 
 ::: tip Everything saves on its own
