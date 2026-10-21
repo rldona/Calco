@@ -49,6 +49,7 @@ struct CalcoCommands: Commands {
             Button("Move") { state.tool = .move }.keyboardShortcut("v", modifiers: [])
             Button("Shapes") { state.tool = .shape }.keyboardShortcut("u", modifiers: [])
             Button("Pen") { state.tool = .pen }.keyboardShortcut("p", modifiers: [])
+            Button("Node") { state.tool = .node }.keyboardShortcut("a", modifiers: [])
             Button("Smudge") { state.tool = .smudge }.keyboardShortcut("s", modifiers: [])
             Button("Apply Selection") { state.commitSelection() }.keyboardShortcut(.return, modifiers: [])
                 .disabled(!state.hasSelection)

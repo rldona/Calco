@@ -8,6 +8,8 @@ A release is made by pushing a tag `vX.Y.Z`: the release workflow tests and buil
 
 ### Added
 
+- The inside of a shape or a path can have **its own colour**, apart from its outline.
+- **Node** (A): edit the points of paths and shapes without ever drawing or adding points (that's the Pen). Shapes turn into points (an ellipse is four curves), a box picks several nodes to move together, and a double tap switches a node between corner and curve.
 - **Scrub** the frames: drag along the frame numbers, with a finger or the Pencil, and the frames flip by as fast or as slow as you go, with a haptic tick on each.
 - **Pen** (P): points joined by straight lines, or curves with handles; tap the line to add a point, the first point to close the path, and turn any point into a corner or a curve. Outline, fill and brush as with Shapes. A path stays editable (tap it with the Pen) and sharp with Move; its points are saved in the `.strokes` file.
 - **Smudge** (S): smear the paint along, blur it, or blur it along the way you move (motion), with a strength, a soft tip or the brush's, and pressure.

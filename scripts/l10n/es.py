@@ -403,4 +403,12 @@ ES = {
 "Pressing harder works the paint more. The size is the bar's.": "Cuanto más aprietas, más trabaja la pintura. El tamaño es el de la barra.",
 "Tap to place points; drag as you place one, or pull a point, to curve it. Tap the line to add a point, the first point to close the path. The fill is for closed paths.": "Toca para poner puntos; arrastra al ponerlo, o tira de un punto, para curvarlo. Toca la línea para añadir un punto y el primer punto para cerrar el trazado. El relleno es para trazados cerrados.",
 "Drag along the numbers to flip through the frames; hold and drag to move the frame": "Arrastra por los números para pasar los fotogramas; mantén pulsado y arrastra para mover el fotograma",
+"Node": "Nodo",
+"%lld nodes": "%lld nodos",
+"Delete nodes": "Borrar nodos",
+"Tap a path or a shape to edit its points; drag on empty canvas to pick several and move them together. Tap a point twice to switch it between corner and curve.": "Toca un trazado o una forma para editar sus nodos; arrastra en un hueco para coger varios y moverlos juntos. Toca dos veces un nodo para pasarlo de esquina a curva.",
+"Style": "Estilo",
+"Line's colour": "El de la línea",
+"Its own": "Otro color",
+"Fill colour": "Color del relleno",
 }

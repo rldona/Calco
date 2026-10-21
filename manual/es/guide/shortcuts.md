@@ -30,6 +30,7 @@ Con un teclado físico, mantén pulsado **⌘** para ver todos los atajos en iPa
 | V | Mover |
 | U | Formas |
 | P | Pluma |
+| A | Nodo |
 | S | Dedo |
 | [ / ] | Más pequeño / más grande |
 | Retorno / Esc | Aplicar / cancelar selección |

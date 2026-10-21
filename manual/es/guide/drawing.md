@@ -14,6 +14,7 @@ De arriba abajo:
 - **Mover** (V)
 - **Formas** (U)
 - **Pluma** (P)
+- **Nodo** (A)
 - **Dedo** (S)
 - **Color**: toca para la paleta y el selector de color.
 - **Tamaño**: arrastra la barra, o toca el número para valores exactos. `[` y `]` con teclado.
@@ -125,7 +126,7 @@ Al mover, girar y escalar, la forma **se engancha** a su sitio de inicio, recta 
 - **Forma**, y los **lados** del polígono o las **puntas** de la estrella.
 - **Trazo**: continuo, discontinuo o por puntos.
 - **Grosor**: también con la barra de tamaño mientras Formas está elegida.
-- **Relleno**: sin relleno, relleno o solo relleno.
+- **Relleno**: sin relleno, relleno o solo relleno. Con relleno, elige **El de la línea** o **Otro color** para darle al interior su propio color, distinto del borde (el color de la barra).
 - **Pincel**: el entintador, para una línea limpia, o el pincel que tengas elegido (un cuadrado a lápiz, con grano).
 
 Arrastra de esquina a esquina sobre el lienzo; la forma sale con el color de la barra al levantar el dedo. Cerca de 1:1 **encaja** en un cuadrado o un círculo perfecto, y las líneas y flechas cada 45°, con un toque háptico; la etiqueta de debajo dice la medida.
@@ -141,11 +142,23 @@ La **Pluma** dibuja uniendo puntos:
 - **Toca la línea** para añadir un punto ahí y curvar desde ese sitio.
 - **Toca el primer punto** para cerrar el trazado.
 
-Mientras el trazado está abierto, la barra de debajo del lienzo pasa el punto elegido a **Esquina** o **Curva**, cierra o abre el trazado, **borra el punto**, cancela (✕) o termina (✓, **Hecho**). Cambiar de herramienta, de fotograma o de capa también lo termina.
+Mientras el trazado está abierto, la barra de debajo del lienzo pasa el punto elegido a **Esquina** o **Curva**, cierra o abre el trazado, **borra el punto**, abre su **Estilo**, cancela (✕) o termina (✓, **Hecho**). Cambiar de herramienta, de fotograma o de capa también lo termina.
 
-El trazo, el grosor, el relleno (en trazados cerrados) y el pincel son los de **Formas**: toca otra vez la Pluma para sus opciones.
+**Estilo** (o tocar otra vez la Pluma) cambia el trazo (continuo, discontinuo o por puntos), el grosor, el relleno (en trazados cerrados) y el pincel del trazado abierto; son los mismos ajustes que los de **Formas**. El color es el de la barra: al abrir un trazado, la barra toma el suyo, y un color nuevo se le aplica.
 
 Un trazado **se puede volver a editar**: con la Pluma, tócalo y vuelven sus puntos. Es una pieza del dibujo, así que con **Mover** se coge entero y sigue nítido al escalarlo o girarlo.
+
+## Nodo
+
+**Nodo** edita trazados y formas punto a punto, sin dibujar nunca:
+
+- **Toca un trazado de la Pluma o una forma** para ver sus nodos. Las formas (rectángulos, elipses, polígonos…) se editan como trazados: una elipse son cuatro nodos curvos. Las flechas no se pueden editar así.
+- **Arrastra un nodo** o sus manejadores para cambiar la forma. Nodo no añade nodos: para eso está la Pluma.
+- **Arrastra en un hueco** para hacer un recuadro: coge todos los nodos que haya dentro, y al arrastrar uno se mueven todos juntos.
+- **Toca dos veces un nodo** para pasarlo de esquina a curva y al revés.
+- **Toca un hueco** para soltar los nodos elegidos; otra vez, para terminar.
+
+La barra de debajo es la de la Pluma: cuántos nodos tienes, **Esquina** o **Curva** para todos, borrarlos, cancelar o terminar. Se puede pasar de la Pluma a Nodo sin cerrar el trazado.
 
 ## Dedo
 

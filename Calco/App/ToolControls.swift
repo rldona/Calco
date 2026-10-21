@@ -17,6 +17,7 @@ struct ToolRail: View {
     @State private var editingLasso = false
     @State private var editingShape = false
     @State private var editingPen = false
+    @State private var editingNode = false
     @State private var editingSmudge = false
 
     var body: some View {
@@ -39,6 +40,7 @@ struct ToolRail: View {
 
     static let penIcon = "point.topleft.down.to.point.bottomright.curvepath"
     static let smudgeIcon = "hand.point.up.left"
+    static let nodeIcon = "cursorarrow"
 
     /// Popovers point away from the rail: right of it on the side, below it on top.
     private var edge: Edge { axis == .vertical ? .leading : .top }
@@ -85,6 +87,11 @@ struct ToolRail: View {
                 if state.tool == .pen { editingPen = true } else { state.tool = .pen }
             }
             .popover(isPresented: $editingPen, arrowEdge: edge) { ShapePanel(state: state, pen: true) }
+            // Edits paths and shapes point by point, and never draws; tap again for their style.
+            RailButton(icon: Self.nodeIcon, label: "Node", active: state.tool == .node, size: size) {
+                if state.tool == .node { editingNode = true } else { state.tool = .node }
+            }
+            .popover(isPresented: $editingNode, arrowEdge: edge) { ShapePanel(state: state, pen: true, node: true) }
             // Smudge, blur or motion; tap again for which and how strongly.
             RailButton(icon: Self.smudgeIcon, label: "Smudge", active: state.tool == .smudge, size: size) {
                 if state.tool == .smudge { editingSmudge = true } else { state.tool = .smudge }

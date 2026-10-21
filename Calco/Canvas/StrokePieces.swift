@@ -94,6 +94,9 @@ struct StrokeRecipe: Equatable {
     /// A Pen path: its points and style, so it can be edited again.
     var pen: PenDrawing? = nil
 
+    /// The colour of the inside: its own when the style has one, or the line's.
+    var fillColor: SIMD3<Float> { pen?.style.fillColor ?? color }
+
     /// The stamps moved by `t` (canvas space). The line keeps its weight under a stretch: each
     /// stamp's radius scales by how much `t` scales area, the geometric mean of the two axes.
     func transformed(_ t: CGAffineTransform) -> StrokeRecipe {

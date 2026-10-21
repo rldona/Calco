@@ -28,6 +28,8 @@ struct ShapeOptions: Codable, Equatable {
     /// Paint the outline with the brush chosen for the brush tool (a grainy pencil square); off,
     /// with the inker's clean line.
     var useBrush = false
+    /// The inside's own colour (straight RGB); nil, the line's (the bar's colour).
+    var fillColor: SIMD3<Float>?
 
     static let sidesRange = 3...12
     static let pointsRange = 3...12
@@ -194,6 +196,53 @@ enum ShapeGeometry {
             }
         }
         return out
+    }
+
+    /// The shape as a Pen path, so the Pen and the Node tool can edit it point by point: corners
+    /// where it has corners, smooth points with handles on its curves (an ellipse is four).
+    /// Nil for an arrow, which is two lines.
+    static func penPath(_ options: ShapeOptions, from a: CGPoint, to b: CGPoint) -> PenPath? {
+        let r = CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(b.x - a.x), height: abs(b.y - a.y))
+        // How far a handle reaches to make a quarter circle out of a cubic curve.
+        let kappa: CGFloat = 0.5523
+        switch options.kind {
+        case .arrow:
+            return nil
+        case .line:
+            return PenPath(nodes: [.init(point: a), .init(point: b)])
+        case .ellipse:
+            let c = CGPoint(x: r.midX, y: r.midY), rx = r.width / 2, ry = r.height / 2
+            let kx = rx * kappa, ky = ry * kappa
+            return PenPath(nodes: [
+                .init(point: CGPoint(x: c.x, y: r.minY), handleIn: CGPoint(x: c.x - kx, y: r.minY),
+                      handleOut: CGPoint(x: c.x + kx, y: r.minY), smooth: true),
+                .init(point: CGPoint(x: r.maxX, y: c.y), handleIn: CGPoint(x: r.maxX, y: c.y - ky),
+                      handleOut: CGPoint(x: r.maxX, y: c.y + ky), smooth: true),
+                .init(point: CGPoint(x: c.x, y: r.maxY), handleIn: CGPoint(x: c.x + kx, y: r.maxY),
+                      handleOut: CGPoint(x: c.x - kx, y: r.maxY), smooth: true),
+                .init(point: CGPoint(x: r.minX, y: c.y), handleIn: CGPoint(x: r.minX, y: c.y + ky),
+                      handleOut: CGPoint(x: r.minX, y: c.y - ky), smooth: true),
+            ], closed: true)
+        case .roundedRectangle:
+            let k = min(r.width, r.height) * 0.22, h = k * kappa
+            // Each corner's arc: where it starts (coming off one side) and ends (onto the next).
+            let arcs: [(CGPoint, CGPoint, CGPoint, CGPoint)] = [
+                (CGPoint(x: r.maxX - k, y: r.minY), CGPoint(x: r.maxX, y: r.minY + k), CGPoint(x: 1, y: 0), CGPoint(x: 0, y: 1)),
+                (CGPoint(x: r.maxX, y: r.maxY - k), CGPoint(x: r.maxX - k, y: r.maxY), CGPoint(x: 0, y: 1), CGPoint(x: -1, y: 0)),
+                (CGPoint(x: r.minX + k, y: r.maxY), CGPoint(x: r.minX, y: r.maxY - k), CGPoint(x: -1, y: 0), CGPoint(x: 0, y: -1)),
+                (CGPoint(x: r.minX, y: r.minY + k), CGPoint(x: r.minX + k, y: r.minY), CGPoint(x: 0, y: -1), CGPoint(x: 1, y: 0)),
+            ]
+            var nodes: [PenPath.Node] = []
+            for (start, end, inDir, outDir) in arcs {
+                nodes.append(.init(point: start, handleOut: CGPoint(x: start.x + inDir.x * h, y: start.y + inDir.y * h)))
+                nodes.append(.init(point: end, handleIn: CGPoint(x: end.x - outDir.x * h, y: end.y - outDir.y * h)))
+            }
+            return PenPath(nodes: nodes, closed: true)
+        default:
+            // Straight sides: a corner at each vertex.
+            guard let outline = paths(options, from: a, to: b).first else { return nil }
+            return PenPath(nodes: outline.points.map { .init(point: $0) }, closed: outline.closed)
+        }
     }
 
     /// The area a fill covers, or nil when the shape has no inside.

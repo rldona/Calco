@@ -34,12 +34,14 @@ final class EditorState {
     var layerIndex = 0 { didSet { if layerIndex != oldValue { selectionTargetChanged() } } }
     var tool: CanvasRenderer.Tool = .brush {
         didSet {
+            // A path being edited is off the drawing: put it back before anything else looks at
+            // the drawing (Move would lift it without the path, and lose it).
+            if tool != .pen && tool != .node { finishPen() }
             if tool == .eyedropper && oldValue != .eyedropper { toolBeforeEyedropper = oldValue }
             if tool != oldValue { previousTool = oldValue }
             if tool != .lasso && !(tool == .move && oldValue == .move) { commitSelection() }
             if tool != .move { moveBlockedLayer = nil; addingStrokes = false }
             if tool == .move && oldValue != .move { liftForMove() }
-            if tool != .pen { finishPen() }
         }
     }
     /// The eyedropper is one-shot: after a pick you're back on this.
@@ -125,10 +127,27 @@ final class EditorState {
     /// A Pen path being drawn or edited: its points, the one picked, and the drawing it's on.
     struct PenEditing: Equatable {
         var path: PenPath
-        var selected: Int?
+        /// The points picked: one with the Pen, any number with the Node tool.
+        var picked: Set<Int> = []
         let key: LayerKey
         /// Editing a path already in the drawing: which piece it is (hidden while it's edited).
         var piece: Int?
+        /// Its colour: the one it was painted in, or the bar's for a new path.
+        var ink = SIMD3<Float>(0, 0, 0)
+
+        /// The one picked point, whose handles show; nil when none or several are picked.
+        var selected: Int? {
+            get { picked.count == 1 ? picked.first : nil }
+            set { picked = newValue.map { [$0] } ?? [] }
+        }
+
+        init(path: PenPath, selected: Int? = nil, key: LayerKey, piece: Int? = nil, ink: SIMD3<Float>) {
+            self.path = path
+            self.key = key
+            self.piece = piece
+            self.ink = ink
+            self.selected = selected
+        }
     }
     private(set) var penEditing: PenEditing?
     /// The drawing's pixels from before an existing path was opened, for Cancel and undo.
@@ -137,7 +156,13 @@ final class EditorState {
     /// (dragging pulls its handles out, curving it).
     enum PenGrab: Equatable { case node(Int), handle(Int, outgoing: Bool), newNode(Int) }
     /// Brush colour, straight RGBA. Always opaque for now: overlapping stamps would build up any translucency.
-    var color = SIMD4<Float>(0, 0, 0, 1) { didSet { saveToolSettings() } }
+    var color = SIMD4<Float>(0, 0, 0, 1) {
+        didSet {
+            saveToolSettings()
+            // With a path open, a new colour is for that path.
+            if penEditing != nil { penEditing?.ink = SIMD3(color.x, color.y, color.z) }
+        }
+    }
     static let sizeRange: ClosedRange<Float> = 1...64
     var onion = OnionSkin()
     var isPlaying = false { didSet { if !isPlaying { markFrame() } } }
@@ -173,6 +198,8 @@ final class EditorState {
     /// ping-pong with `selectionPreview`.
     @ObservationIgnored private var recipeStroke: MTLTexture?
     @ObservationIgnored private var recipeScratch: MTLTexture?
+    /// A shape's inside in its own colour, before its line goes on top.
+    @ObservationIgnored private var fillScratch: MTLTexture?
     /// Zen mode: only the canvas and a small floating bar. View state only.
     var isZen = false
     /// Zoom / pan / rotation of the canvas on screen. View state only: not saved, not undoable.
@@ -411,6 +438,7 @@ final class EditorState {
     /// Blank project; forgets the current file. The UI confirms unsaved changes first.
     func newProject() {
         stop()
+        finishPen()
         try? install(Self.defaultProject(), images: [:])
         documentURL = nil
         isDirty = false
@@ -419,6 +447,7 @@ final class EditorState {
     /// Loads a `.calco` package (from Files, the document picker or `onOpenURL`).
     func open(_ url: URL) {
         stop()
+        finishPen()
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         do {
@@ -456,6 +485,7 @@ final class EditorState {
 
     /// Writes the package to `url` and makes it the current document.
     func save(to url: URL) {
+        finishPen()
         commitSelection()
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
@@ -477,7 +507,7 @@ final class EditorState {
     private func install(_ newProject: Project, images: [LayerKey: CGImage],
                          strokes loadedStrokes: [LayerKey: [StrokePiece]] = [:]) throws {
         selection = nil; selectionBefore = nil; selectionPreview = nil; lassoPoints = []
-        recipeStroke = nil; recipeScratch = nil; smudgeScratch = nil; penEditing = nil; penBefore = nil
+        recipeStroke = nil; recipeScratch = nil; fillScratch = nil; smudgeScratch = nil; penEditing = nil; penBefore = nil
         strokes = loadedStrokes; movingPieces = nil; lastPick = nil; moveHint = nil; strokeTexture = nil; strokeBase = nil
         playRange = nil
         let size = SIMD2<Int>(newProject.canvas.width, newProject.canvas.height)
@@ -639,6 +669,7 @@ final class EditorState {
     /// written (for sharing), or nil after setting `lastError`.
     func export(_ profile: ExportProfile, in directory: URL = EditorState.documentsDirectory) -> [URL]? {
         stop()
+        finishPen()
         commitSelection()
         let folder = directory
             .appendingPathComponent("Exports", isDirectory: true)
@@ -1349,6 +1380,7 @@ final class EditorState {
     // MARK: - Playback
 
     func togglePlayback() {
+        finishPen()
         commitSelection()
         isPlaying ? stop() : play()
     }
@@ -1686,10 +1718,18 @@ final class EditorState {
     /// `recipe`'s stroke over `base` (nil = blank) into `target`, as the brush laid it.
     private func paintRecipe(_ recipe: StrokeRecipe, stroke: MTLTexture, base: MTLTexture?, into target: MTLTexture,
                              mode: CanvasRenderer.PaintMode = .front) {
+        var base = base
         if let fill = recipe.fill, fill.count >= 3 {
-            renderer.upload(bytes: Self.fillPixels(fill, color: recipe.color, hard: recipe.hard,
+            renderer.upload(bytes: Self.fillPixels(fill, color: recipe.fillColor, hard: recipe.hard,
                                                    width: renderer.canvasSize.x, height: renderer.canvasSize.y),
                             into: stroke)
+            // An inside of its own colour goes down first and the line over it: in one texture
+            // the two colours would mix where they meet. In the line's colour they're one shape.
+            if recipe.fillColor != recipe.color, !recipe.stamps.isEmpty, let under = recipeTexture(\.fillScratch) {
+                renderer.compositeStroke(stroke, base: base, into: under, opacity: recipe.opacity, mode: mode, erase: false)
+                base = under
+                renderer.clear(stroke)
+            }
         } else {
             renderer.clear(stroke)
         }
@@ -1719,20 +1759,21 @@ final class EditorState {
     func shapeRecipe(from a: CGPoint, to b: CGPoint) -> StrokeRecipe? {
         guard hypot(b.x - a.x, b.y - a.y) >= 2 else { return nil }
         let o = shapeOptions
+        // Kept as a Pen path too, so the Pen and the Node tool can edit it point by point later.
         return recipe(outline: ShapeGeometry.paths(o, from: a, to: b), fill: ShapeGeometry.fillPolygon(o, from: a, to: b),
-                      hasInside: o.canFill)
+                      hasInside: o.canFill, pen: ShapeGeometry.penPath(o, from: a, to: b))
     }
 
     /// An outline and its inside, with the Shapes tool's style, in the current colour.
     private func recipe(outline paths: [(points: [CGPoint], closed: Bool)], fill polygon: [CGPoint]?, hasInside: Bool,
-                        pen: PenPath? = nil) -> StrokeRecipe? {
+                        pen: PenPath? = nil, ink: SIMD3<Float>? = nil) -> StrokeRecipe? {
         let o = shapeOptions
         let brush = o.useBrush ? self.brush : .inker
         let outline = o.fill == .only && hasInside ? []
             : ShapeGeometry.stamps(along: paths, radius: o.size, spacing: brush.spacing, outline: o.outline, alpha: brush.flow)
         let fill = o.fill == .none || !hasInside ? nil : polygon?.map { SIMD2(Float($0.x), Float($0.y)) }
         guard !outline.isEmpty || fill != nil else { return nil }
-        return StrokeRecipe(stamps: outline, color: brush.fixedColor ?? SIMD3(color.x, color.y, color.z),
+        return StrokeRecipe(stamps: outline, color: brush.fixedColor ?? ink ?? SIMD3(color.x, color.y, color.z),
                             tip: .init(brush), opacity: o.useBrush ? brushOpacity : 1, hard: project.pixelArt, fill: fill,
                             pen: pen.map { PenDrawing(path: $0, style: o) })
     }
@@ -1789,7 +1830,8 @@ final class EditorState {
             return nil
         }
         commitSelection()
-        penEditing = PenEditing(path: PenPath(nodes: [.init(point: p)]), selected: 0, key: key)
+        penEditing = PenEditing(path: PenPath(nodes: [.init(point: p)]), selected: 0, key: key,
+                                ink: SIMD3(color.x, color.y, color.z))
         return .newNode(0)
     }
 
@@ -1816,10 +1858,10 @@ final class EditorState {
         penEditing = e
     }
 
-    /// The picked point as a corner (straight sides) or a curve.
+    /// The picked points as corners (straight sides) or curves.
     func penSetCurve(_ curve: Bool) {
-        guard var e = penEditing, let i = e.selected, e.path.nodes.indices.contains(i) else { return }
-        e.path.setCurve(curve, at: i)
+        guard var e = penEditing, !e.picked.isEmpty else { return }
+        for i in e.picked.sorted() where e.path.nodes.indices.contains(i) { e.path.setCurve(curve, at: i) }
         penEditing = e
     }
 
@@ -1830,11 +1872,101 @@ final class EditorState {
     }
 
     func penDeleteSelected() {
-        guard var e = penEditing, let i = e.selected, e.path.nodes.indices.contains(i) else { return }
-        e.path.nodes.remove(at: i)
+        guard var e = penEditing, let first = e.picked.min() else { return }
+        for i in e.picked.sorted(by: >) where e.path.nodes.indices.contains(i) { e.path.nodes.remove(at: i) }
         if e.path.nodes.count < 3 { e.path.closed = false }
-        e.selected = e.path.nodes.isEmpty ? nil : min(i, e.path.nodes.count - 1)
+        e.selected = e.path.nodes.isEmpty ? nil : min(first, e.path.nodes.count - 1)
         if e.path.nodes.isEmpty { cancelPen() } else { penEditing = e }
+    }
+
+    // MARK: - Node tool
+
+    /// What a finger grabbed with the Node tool: the picked points (dragged together), a handle,
+    /// or empty canvas (dragging draws a box that picks the points inside it).
+    enum NodeGrab: Equatable { case nodes, handle(Int, outgoing: Bool), marquee(CGPoint), nothing }
+    /// The box being dragged out with the Node tool (canvas pixels).
+    private(set) var nodeMarquee: CGRect?
+    @ObservationIgnored private var nodeDragFrom: CGPoint = .zero
+    @ObservationIgnored private var lastNodeTap: (index: Int, time: TimeInterval)?
+
+    /// A touch with the Node tool. It only edits the points there are, never adds one (that's the
+    /// Pen's): on a point it picks it (a second tap soon after turns it into a corner or a curve),
+    /// on a path or a shape in the drawing it opens it; anywhere else, the line of the open path
+    /// included, it starts a box to pick points with.
+    func nodeTouchDown(at p: CGPoint, tolerance tol: CGFloat, time: TimeInterval) -> NodeGrab {
+        guard !isPlaying, let key = currentDrawingKey, currentLayer?.locked == false else { return .nothing }
+        nodeDragFrom = p
+        if var e = penEditing, e.key == key {
+            if let s = e.selected, e.path.nodes.indices.contains(s) {
+                let n = e.path.nodes[s]
+                if let h = n.handleOut, PenPath.distance(h, p) < tol { return .handle(s, outgoing: true) }
+                if let h = n.handleIn, PenPath.distance(h, p) < tol { return .handle(s, outgoing: false) }
+            }
+            let near = e.path.nodes.indices.min { PenPath.distance(e.path.nodes[$0].point, p) < PenPath.distance(e.path.nodes[$1].point, p) }
+            if let i = near, PenPath.distance(e.path.nodes[i].point, p) < tol {
+                if let last = lastNodeTap, last.index == i, time - last.time < 0.35 {
+                    e.path.setCurve(!e.path.nodes[i].isCurve, at: i)
+                    lastNodeTap = nil
+                } else {
+                    lastNodeTap = (i, time)
+                }
+                // A point already in the picked group drags the group; any other is picked alone.
+                if !e.picked.contains(i) { e.selected = i }
+                penEditing = e
+                return .nodes
+            }
+            if let n = e.path.nearest(to: p), n.distance < tol { return .marquee(p) }
+            if penPiece(at: p, tolerance: tol, key: key) == nil { return .marquee(p) }
+            finishPen()
+        } else if penEditing != nil {
+            finishPen()
+        }
+        if let (index, drawing) = penPiece(at: p, tolerance: tol, key: key) {
+            openPen(piece: index, drawing: drawing, key: key)
+        }
+        return .nothing
+    }
+
+    /// A pinch or a pan took the touch over: no box.
+    func nodeTouchCancelled() { nodeMarquee = nil }
+
+    func nodeDrag(_ grab: NodeGrab, to p: CGPoint) {
+        switch grab {
+        case .nodes:
+            guard var e = penEditing else { return }
+            let d = CGPoint(x: p.x - nodeDragFrom.x, y: p.y - nodeDragFrom.y)
+            for i in e.picked where e.path.nodes.indices.contains(i) {
+                let q = e.path.nodes[i].point
+                e.path.move(node: i, to: CGPoint(x: q.x + d.x, y: q.y + d.y))
+            }
+            nodeDragFrom = p
+            penEditing = e
+        case .handle(let i, let outgoing):
+            guard var e = penEditing, e.path.nodes.indices.contains(i) else { return }
+            e.path.setHandle(of: i, outgoing: outgoing, to: p)
+            penEditing = e
+        case .marquee(let start):
+            nodeMarquee = CGRect(x: min(start.x, p.x), y: min(start.y, p.y), width: abs(p.x - start.x), height: abs(p.y - start.y))
+        case .nothing:
+            break
+        }
+    }
+
+    /// The finger lifted: a box picks the points inside it; a tap on empty canvas lets go of the
+    /// picked points, and with none picked puts the path down.
+    func nodeTouchUp(_ grab: NodeGrab, moved: Bool) {
+        guard case .marquee = grab else { return }
+        defer { nodeMarquee = nil }
+        guard var e = penEditing else { return }
+        if moved, let box = nodeMarquee {
+            e.picked = Set(e.path.nodes.indices.filter { box.contains(e.path.nodes[$0].point) })
+            penEditing = e
+        } else if !e.picked.isEmpty {
+            e.picked = []
+            penEditing = e
+        } else {
+            finishPen()
+        }
     }
 
     /// Paints the path: a new one as one undo step, an edited one in place of what it was. Each
@@ -1845,7 +1977,8 @@ final class EditorState {
         let path = e.path
         let line = path.polyline(step: 1.5)
         let recipe = path.nodes.count >= 2
-            ? recipe(outline: [(line, path.closed)], fill: path.closed ? line : nil, hasInside: path.closed, pen: path)
+            ? recipe(outline: [(line, path.closed)], fill: path.closed ? line : nil, hasInside: path.closed, pen: path,
+                     ink: e.ink)
             : nil
         if let index = e.piece {
             // Back in its place among the drawing's pieces, as one undo step from before it opened.
@@ -1909,12 +2042,16 @@ final class EditorState {
         style.fill = drawing.style.fill
         style.size = min(max(drawing.style.size.rounded(), Self.sizeRange.lowerBound), Self.sizeRange.upperBound)
         style.useBrush = drawing.style.useBrush
+        style.fillColor = drawing.style.fillColor
         shapeOptions = style
         penBefore = store.copy(of: key)
         let others = pieces.indices.filter { $0 != index }.map { pieces[$0] }
         renderer.upload(bytes: StrokePieces.composite(others, width: renderer.canvasSize.x, height: renderer.canvasSize.y),
                         into: target)
-        penEditing = PenEditing(path: drawing.path, selected: nil, key: key, piece: index)
+        // Its colour too, so the bar shows it and a new colour goes to it.
+        let ink = pieces[index].recipe?.color ?? SIMD3(color.x, color.y, color.z)
+        color = SIMD4(ink, 1)
+        penEditing = PenEditing(path: drawing.path, selected: nil, key: key, piece: index, ink: ink)
         canvasVersion &+= 1
     }
 
@@ -2033,6 +2170,7 @@ final class EditorState {
     /// piece underneath; with `addingStrokes`, taps add pieces or take them out. A locked layer
     /// lifts nothing and sets `moveBlockedLayer`, so the editor can offer to unlock it.
     func liftForMove(at point: CGPoint? = nil) {
+        finishPen()
         let previous = movingPieces
         lassoPoints = []
         commitSelection()
@@ -2304,7 +2442,7 @@ final class EditorState {
         get {
             switch tool {
             case .eraser: eraserSize
-            case .shape, .pen: shapeOptions.size
+            case .shape, .pen, .node: shapeOptions.size
             case .smudge: smudge.size
             default: brushSize
             }
@@ -2313,7 +2451,7 @@ final class EditorState {
             let v = min(max(newValue.rounded(), Self.sizeRange.lowerBound), Self.sizeRange.upperBound)
             switch tool {
             case .eraser: eraserSize = v
-            case .shape, .pen: shapeOptions.size = v
+            case .shape, .pen, .node: shapeOptions.size = v
             case .smudge: smudge.size = v
             default: brushSize = v
             }
@@ -2415,8 +2553,9 @@ final class EditorState {
 
     func setColor(_ c: SIMD4<Float>) {
         color = SIMD4<Float>(min(max(c.x, 0), 1), min(max(c.y, 0), 1), min(max(c.z, 0), 1), 1)
-        // A colour is for painting: leave the eraser, but keep filling if that's what you were doing.
-        if tool != .fill { tool = .brush }
+        // A colour is for painting: leave the eraser, but keep filling, or drawing shapes and paths
+        // (an open path takes the colour), if that's what you were doing.
+        if ![.fill, .shape, .pen, .node].contains(tool) { tool = .brush }
     }
 
     // MARK: - Undo / redo
@@ -2451,6 +2590,8 @@ final class EditorState {
     /// `copyPixels` when it changes them in place (strokes, clear). Edits sharing a `coalescing` tag
     /// in a row (a drag, a stepper) become one undo step.
     private func recordUndo(textures keys: [LayerKey] = [], copyPixels: Bool = false, coalescing tag: String? = nil) {
+        // An open path goes back on the drawing first: every edit sees it, and undoes after it.
+        finishPen()
         commitSelection()
         if let tag, tag == coalesceTag, !undoStack.isEmpty { return }
         coalesceTag = tag

@@ -5,12 +5,14 @@ import SwiftUI
 struct ShapePanel: View {
     @Bindable var state: EditorState
     var pen = false
+    /// The Node tool's: the same style, for the path it's editing.
+    var node = false
 
     private var o: ShapeOptions { state.shapeOptions }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(pen ? "Pen" : "Shapes").font(.headline)
+            Text(node ? "Node" : pen ? "Pen" : "Shapes").font(.headline)
 
             if !pen {
             caption("Shape")
@@ -67,6 +69,27 @@ struct ShapePanel: View {
             }
             .pickerStyle(.segmented)
             .disabled(!o.canFill && !pen)
+            if o.fill != .none && (o.canFill || pen) {
+                // The line is in the bar's colour; the inside can have its own.
+                HStack(spacing: 10) {
+                    Picker("Fill colour", selection: Binding(
+                        get: { o.fillColor != nil },
+                        set: { own in
+                            state.shapeOptions.fillColor = own ? (o.fillColor ?? SIMD3(state.color.x, state.color.y, state.color.z)) : nil
+                        })) {
+                        Text("Line's colour").tag(false)
+                        Text("Its own").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    if let c = o.fillColor {
+                        ColorPicker("Fill colour", selection: Binding(
+                            get: { Color(rgba: SIMD4(c, 1)) },
+                            set: { let v = SIMD4<Float>($0); state.shapeOptions.fillColor = SIMD3(v.x, v.y, v.z) }),
+                                    supportsOpacity: false)
+                            .labelsHidden()
+                    }
+                }
+            }
 
             caption("Brush")
             Picker("Brush", selection: $state.shapeOptions.useBrush) {
@@ -75,7 +98,8 @@ struct ShapePanel: View {
             }
             .pickerStyle(.segmented)
 
-            Text(pen ? "Tap to place points; drag as you place one, or pull a point, to curve it. Tap the line to add a point, the first point to close the path. The fill is for closed paths."
+            Text(node ? "Tap a path or a shape to edit its points; drag on empty canvas to pick several and move them together. Tap a point twice to switch it between corner and curve."
+                 : pen ? "Tap to place points; drag as you place one, or pull a point, to curve it. Tap the line to add a point, the first point to close the path. The fill is for closed paths."
                      : "Drag from corner to corner. Near even, it clicks into a square or a circle; lines click every 45°. In the bar's colour.")
                 .font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -113,7 +137,8 @@ struct ShapeDraftOverlay: View {
                 }
                 ZStack {
                     if o.fill != .none, let fill = ShapeGeometry.fillPolygon(o, from: draft.from, to: draft.to) {
-                        Path { p in p.addLines(fill.map { $0.applying(toView) }); p.closeSubpath() }.fill(ink)
+                        Path { p in p.addLines(fill.map { $0.applying(toView) }); p.closeSubpath() }
+                            .fill(o.fillColor.map { Color(rgba: SIMD4($0, 1)) } ?? ink)
                     }
                     if !(o.fill == .only && o.canFill) {
                         outline.stroke(ink, style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round,
@@ -182,7 +207,8 @@ struct PenOverlay: View {
                 let zoom = max(hypot(toView.a, toView.b), 0.0001)
                 let o = state.shapeOptions
                 let path = e.path
-                let ink = Color(rgba: state.shapeInk).opacity(o.useBrush ? Double(state.brushOpacity) : 1)
+                let fixed = o.useBrush ? state.brush.fixedColor : nil
+                let ink = Color(rgba: SIMD4(fixed ?? e.ink, 1)).opacity(o.useBrush ? Double(state.brushOpacity) : 1)
                 let width = CGFloat(o.size) * 2 * zoom
                 let line = Path { p in
                     guard let first = path.nodes.first else { return }
@@ -194,7 +220,7 @@ struct PenOverlay: View {
                     if path.closed { p.closeSubpath() }
                 }
                 ZStack {
-                    if path.closed && o.fill != .none { line.fill(ink) }
+                    if path.closed && o.fill != .none { line.fill(o.fillColor.map { Color(rgba: SIMD4($0, 1)) } ?? ink) }
                     if !(path.closed && o.fill == .only) {
                         line.stroke(ink, style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round,
                                                             dash: ShapeDraftOverlay.dash(o.outline, width: width)))
@@ -211,9 +237,17 @@ struct PenOverlay: View {
                                 .frame(width: 12, height: 12).position(h)
                         }
                     }
+                    // The Node tool's box, picking the points inside it.
+                    if let box = state.nodeMarquee {
+                        let r = box.applying(toView)
+                        Rectangle().fill(Theme.accent.opacity(0.1))
+                            .overlay(Rectangle().strokeBorder(Theme.accent, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+                            .frame(width: r.width, height: r.height)
+                            .position(x: r.midX, y: r.midY)
+                    }
                     ForEach(path.nodes.indices, id: \.self) { i in
                         let n = path.nodes[i]
-                        let picked = i == e.selected
+                        let picked = e.picked.contains(i)
                         let shape = n.isCurve ? AnyShape(Circle()) : AnyShape(Rectangle())
                         shape.fill(picked ? Theme.accent : Theme.background)
                             .overlay(shape.stroke(picked ? Theme.onAccent : Theme.accent, lineWidth: 2))
@@ -238,14 +272,20 @@ struct PenOverlay: View {
 /// open the path, delete the point, cancel, and done.
 struct PenBar: View {
     @Bindable var state: EditorState
+    @State private var styling = false
 
     var body: some View {
         let e = state.penEditing
-        let picked = e.flatMap { e in e.selected.flatMap { e.path.nodes.indices.contains($0) ? e.path.nodes[$0] : nil } }
+        let nodes = e.map { e in e.picked.sorted().filter { e.path.nodes.indices.contains($0) }.map { e.path.nodes[$0] } } ?? []
+        let picked: PenPath.Node? = nodes.first
         HStack(spacing: 6) {
+            if nodes.count > 1 {
+                Text("\(nodes.count) nodes").font(.subheadline).foregroundStyle(Theme.text)
+                    .padding(.leading, 8).fixedSize()
+            }
             HStack(spacing: 2) {
-                option("Corner", icon: "square", on: picked.map { !$0.isCurve } ?? false) { state.penSetCurve(false) }
-                option("Curve", icon: "circle", on: picked?.isCurve ?? false) { state.penSetCurve(true) }
+                option("Corner", icon: "square", on: !nodes.isEmpty && nodes.allSatisfy { !$0.isCurve }) { state.penSetCurve(false) }
+                option("Curve", icon: "circle", on: !nodes.isEmpty && nodes.allSatisfy(\.isCurve)) { state.penSetCurve(true) }
             }
             .padding(3)
             .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
@@ -254,9 +294,14 @@ struct PenBar: View {
             Divider().overlay(Theme.hairline).frame(height: 22)
             RailButton(icon: e?.path.closed == true ? "point.topleft.down.to.point.bottomright.curvepath" : "circle.dashed",
                        label: e?.path.closed == true ? "Open path" : "Close path", size: 34) { state.penToggleClosed() }
-            RailButton(icon: "trash", label: "Delete point", size: 34) { state.penDeleteSelected() }
+            RailButton(icon: "trash", label: nodes.count > 1 ? "Delete nodes" : "Delete point", size: 34) { state.penDeleteSelected() }
                 .disabled(picked == nil)
                 .opacity(picked == nil ? 0.4 : 1)
+            // Outline, thickness, fill and brush of this path (the Pen's options, right here).
+            RailButton(icon: "slider.horizontal.3", label: "Style", size: 34) { styling = true }
+                .popover(isPresented: $styling, arrowEdge: .bottom) {
+                    ShapePanel(state: state, pen: true, node: state.tool == .node)
+                }
             RailButton(icon: "xmark", label: "Cancel path", size: 34) { state.cancelPen() }
             RailButton(icon: "checkmark", label: "Done", active: true, size: 34) { state.finishPen() }
         }

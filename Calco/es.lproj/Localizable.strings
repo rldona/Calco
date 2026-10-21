@@ -19,6 +19,7 @@
 "%lld clips ·" = "%lld clips ·";
 "%lld fps" = "%lld fps";
 "%lld frames" = "%lld fotogramas";
+"%lld nodes" = "%lld nodos";
 "%lld pixels per unit" = "%lld píxeles por unidad";
 "%lld points" = "%lld puntas";
 "%lld sides" = "%lld lados";
@@ -109,6 +110,7 @@
 "Delete drawing" = "Eliminar dibujo";
 "Delete frame" = "Eliminar fotograma";
 "Delete layer…" = "Eliminar capa…";
+"Delete nodes" = "Borrar nodos";
 "Delete point" = "Borrar punto";
 "Delete profile" = "Eliminar perfil";
 "Delete selection" = "Eliminar selección";
@@ -153,6 +155,7 @@
 "Eyedropper" = "Cuentagotas";
 "File error" = "Error de archivo";
 "Fill" = "Relleno";
+"Fill colour" = "Color del relleno";
 "Fill only" = "Solo relleno";
 "Filled" = "Relleno";
 "Fine and steady" = "Fino y constante";
@@ -193,6 +196,7 @@
 "Inside" = "Dentro";
 "Its drawing in all %lld frames of %@ goes with it. You can undo this." = "Su dibujo en los %lld fotogramas de %@ se elimina con ella. Puedes deshacerlo.";
 "Its drawings in all %lld frames of %@ go with it. You can undo this." = "Sus dibujos en los %lld fotogramas de %@ se eliminan con ella. Puedes deshacerlo.";
+"Its own" = "Otro color";
 "Label drawing" = "Etiquetar dibujo";
 "Labels as animation events" = "Etiquetas como eventos de animación";
 "Label…" = "Etiqueta…";
@@ -211,6 +215,7 @@
 "Leave Zen Mode" = "Salir del modo Zen";
 "Leave Zen mode" = "Salir del modo Zen";
 "Line" = "Línea";
+"Line's colour" = "El de la línea";
 "Loop" = "Bucle";
 "Marker" = "Rotulador";
 "Mask to layer below" = "Enmascarar con la capa de abajo";
@@ -247,6 +252,7 @@
 "New project…" = "Nuevo proyecto…";
 "Next Frame" = "Fotograma siguiente";
 "No fill" = "Sin relleno";
+"Node" = "Nodo";
 "Nothing to fix" = "Nada que corregir";
 "OK" = "OK";
 "Off" = "No";
@@ -364,7 +370,9 @@
 "Stretch height" = "Estirar a lo alto";
 "Stretch width" = "Estirar a lo ancho";
 "Stroke %lld of %lld here · tap again for the one below" = "Trazo %lld de %lld aquí · toca otra vez para el de debajo";
+"Style" = "Estilo";
 "Sync Layers" = "Sincronizar capas";
+"Tap a path or a shape to edit its points; drag on empty canvas to pick several and move them together. Tap a point twice to switch it between corner and curve." = "Toca un trazado o una forma para editar sus nodos; arrastra en un hueco para coger varios y moverlos juntos. Toca dos veces un nodo para pasarlo de esquina a curva.";
 "Tap to place points; drag as you place one, or pull a point, to curve it. Tap the line to add a point, the first point to close the path. The fill is for closed paths." = "Toca para poner puntos; arrastra al ponerlo, o tira de un punto, para curvarlo. Toca la línea para añadir un punto y el primer punto para cerrar el trazado. El relleno es para trazados cerrados.";
 "Taps add strokes to what you're moving, or take them out" = "Cada toque añade un trazo a lo que mueves, o lo quita";
 "The usual for games" = "Lo habitual en juegos";

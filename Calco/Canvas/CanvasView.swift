@@ -18,7 +18,10 @@ final class CanvasUIView: UIView {
     private var activeTouch: UITouch?
     /// What the active touch is doing: painting, a tap for fill / eyedropper (acted on when it
     /// lifts), drawing a lasso, dragging out a shape, or working a Pen path.
-    private enum Mode { case stroke, tap, lasso, moveDrag, shape, pen }
+    private enum Mode { case stroke, tap, lasso, moveDrag, shape, pen, node }
+    /// The Node tool: what the touch grabbed (it shares where it went down and whether it moved
+    /// with the Pen).
+    private var nodeGrab: EditorState.NodeGrab = .nothing
     /// The Pen: what the touch grabbed, where it went down (view points), and whether it moved.
     private var penGrab: EditorState.PenGrab?
     private var penStart: CGPoint = .zero
@@ -162,6 +165,12 @@ final class CanvasUIView: UIView {
             penStart = t.location(in: self)
             penMoved = false
             penGrab = state.penTouchDown(at: canvasPoint(t, in: state), tolerance: penTolerance(state))
+        case .node:
+            activeTouch = t
+            mode = .node
+            penStart = t.location(in: self)
+            penMoved = false
+            nodeGrab = state.nodeTouchDown(at: canvasPoint(t, in: state), tolerance: penTolerance(state), time: t.timestamp)
         case .brush, .eraser, .smudge:
             guard let target = state.beginStroke() else { return }
             activeTouch = t
@@ -182,6 +191,10 @@ final class CanvasUIView: UIView {
             if penMoved, let grab = penGrab {
                 state.penDrag(grab, to: canvasPoint(t, in: state), tolerance: penTolerance(state))
             }
+        case .node:
+            let v = t.location(in: self)
+            if hypot(v.x - penStart.x, v.y - penStart.y) > 4 { penMoved = true }
+            if penMoved { state.nodeDrag(nodeGrab, to: canvasPoint(t, in: state)) }
         case .shape:
             guard var draft = state.shapeDraft else { break }
             let (end, snap) = ShapeGeometry.snapped(state.shapeOptions.kind, from: draft.from, to: canvasPoint(t, in: state))
@@ -234,6 +247,9 @@ final class CanvasUIView: UIView {
         case .pen:
             if let grab = penGrab { state.penTouchUp(grab, moved: penMoved) }
             penGrab = nil
+        case .node:
+            state.nodeTouchUp(nodeGrab, moved: penMoved)
+            nodeGrab = .nothing
         case .stroke:
             feed(touch: t, event: event)
             endStroke()
@@ -249,6 +265,9 @@ final class CanvasUIView: UIView {
         case .lasso: state?.lassoPoints = []
         case .shape: state?.shapeDraft = nil
         case .pen: penGrab = nil
+        case .node:
+            state?.nodeTouchCancelled()
+            nodeGrab = .nothing
         case .stroke:
             strokeTarget = nil
             state?.cancelStroke()

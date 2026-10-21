@@ -106,3 +106,40 @@ final class ShapeToolTests: XCTestCase {
         XCTAssertEqual(alpha(state, x: 300, y: 300), 0)
     }
 }
+
+/// The inside can have its own colour, kept with the shape.
+@MainActor
+final class ShapeFillColourTests: XCTestCase {
+
+    func testTheInsideHasItsOwnColourAndKeepsIt() throws {
+        guard let device = MTLCreateSystemDefaultDevice(),
+              let state = EditorState(device: device, screenFormat: .bgra8Unorm) else { throw XCTSkip("Metal unavailable") }
+        func pixel(_ x: Int, _ y: Int) -> [UInt8] {
+            let l = state.currentLayer!
+            let t = state.store.existingTexture(clip: state.clip.id, frame: state.currentFrame!.id, layer: l.id)!
+            let px = state.renderer.readbackBytes(t)!
+            let i = (y * state.renderer.canvasSize.x + x) * 4
+            return Array(px[i..<(i + 4)])
+        }
+        state.tool = .shape
+        state.setColor(SIMD4(1, 0, 0, 1))
+        state.shapeOptions.kind = .rectangle
+        state.shapeOptions.fill = .filled
+        state.shapeOptions.outline = .solid
+        state.shapeOptions.size = 3
+        state.shapeOptions.fillColor = SIMD3(0, 0, 1)
+        state.drawShape(from: CGPoint(x: 100, y: 100), to: CGPoint(x: 200, y: 160))
+        XCTAssertEqual(pixel(150, 130), [0, 0, 255, 255], "blue inside")
+        XCTAssertEqual(pixel(150, 100), [255, 0, 0, 255], "red line")
+
+        // Opened again with the Node tool, it brings its fill colour along.
+        state.shapeOptions.fillColor = nil
+        state.tool = .node
+        _ = state.nodeTouchDown(at: CGPoint(x: 150, y: 100), tolerance: 6, time: 0)
+        XCTAssertEqual(state.shapeOptions.fillColor, SIMD3(0, 0, 1))
+        state.shapeOptions.fillColor = SIMD3(0, 1, 0)
+        state.finishPen()
+        XCTAssertEqual(pixel(150, 130), [0, 255, 0, 255], "only the inside changed")
+        XCTAssertEqual(pixel(150, 100), [255, 0, 0, 255])
+    }
+}

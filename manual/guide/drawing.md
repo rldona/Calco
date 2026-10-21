@@ -14,6 +14,7 @@ From top to bottom:
 - **Move** (V)
 - **Shapes** (U)
 - **Pen** (P)
+- **Node** (A)
 - **Smudge** (S)
 - **Colour**: tap for the palette and the colour picker.
 - **Size**: drag the slider, or tap the number for exact values. `[` and `]` on a keyboard.
@@ -125,7 +126,7 @@ Moving, rotating and scaling **click back** into the starting place, upright (or
 - **Shape**, and the polygon's **sides** or the star's **points**.
 - **Outline**: solid, dashed or dotted.
 - **Thickness**: also with the size slider while Shapes is chosen.
-- **Fill**: no fill, filled, or fill only.
+- **Fill**: no fill, filled, or fill only. With a fill, pick **Line's colour** or **Its own** to give the inside a colour of its own, apart from the outline (the bar's colour).
 - **Brush**: the inker, for a clean line, or the brush you have chosen (a pencil square, with grain).
 
 Drag from corner to corner on the canvas; the shape comes out in the bar's colour when you lift. Near 1:1 it **clicks** into a perfect square or circle, and lines and arrows every 45°, with a light haptic tap; the chip under it gives the size.
@@ -141,11 +142,23 @@ The **Pen** draws by joining points:
 - **Tap the line** to add a point there and curve from that spot.
 - **Tap the first point** to close the path.
 
-While the path is open, the bar under the canvas turns the picked point into a **Corner** or a **Curve**, closes or opens the path, **deletes the point**, cancels (✕) or finishes it (✓, **Done**). Changing tool, frame or layer finishes it too.
+While the path is open, the bar under the canvas turns the picked point into a **Corner** or a **Curve**, closes or opens the path, **deletes the point**, opens its **Style**, cancels (✕) or finishes it (✓, **Done**). Changing tool, frame or layer finishes it too.
 
-The outline, thickness, fill (on closed paths) and brush are the **Shapes** ones: tap the Pen again for its options.
+**Style** (or tapping the Pen again) changes the open path's outline (solid, dashed or dotted), thickness, fill (on closed paths) and brush; they're the same settings as **Shapes**. The colour is the bar's: opening a path puts its colour in the bar, and a new colour goes to it.
 
 A path **can be edited again**: with the Pen, tap it and its points come back. It's a piece of the drawing, so **Move** picks it up whole and it stays sharp when scaled or turned.
+
+## Node
+
+**Node** edits paths and shapes point by point, and never draws:
+
+- **Tap a Pen path or a shape** to see its nodes. Shapes (rectangles, ellipses, polygons…) edit like paths: an ellipse is four curved nodes. Arrows can't be edited this way.
+- **Drag a node** or its handles to change the shape. Node never adds nodes: that's the Pen's job.
+- **Drag on an empty spot** to draw a box: it picks every node inside, and dragging one moves them all together.
+- **Tap a node twice** to switch it between corner and curve.
+- **Tap an empty spot** to let go of the picked nodes; again, to finish.
+
+The bar under the canvas is the Pen's: how many nodes you have, **Corner** or **Curve** for all of them, delete them, cancel or finish. You can switch between the Pen and Node without closing the path.
 
 ## Smudge
 

@@ -30,6 +30,7 @@ With a hardware keyboard, hold **⌘** to see every shortcut in iPadOS.
 | V | Move |
 | U | Shapes |
 | P | Pen |
+| A | Node |
 | S | Smudge |
 | [ / ] | Smaller / bigger |
 | Return / Esc | Apply / cancel selection |

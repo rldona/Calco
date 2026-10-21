@@ -274,6 +274,7 @@ struct ZenBar: View {
                 state.tool = .shape
             }
             RailButton(icon: ToolRail.penIcon, label: "Pen", active: state.tool == .pen, size: 34) { state.tool = .pen }
+            RailButton(icon: ToolRail.nodeIcon, label: "Node", active: state.tool == .node, size: 34) { state.tool = .node }
             RailButton(icon: ToolRail.smudgeIcon, label: "Smudge", active: state.tool == .smudge, size: 34) { state.tool = .smudge }
             ColorSwatch(state: state, editing: $editingColor, diameter: 20)
             Divider().overlay(Theme.hairline).frame(height: 20).padding(.horizontal, 2)
