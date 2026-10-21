@@ -42,7 +42,8 @@ struct RailButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: icon)
+            // An SF Symbol, or one of Calco's own drawn icons (the fill bucket) from the asset catalog.
+            (UIImage(systemName: icon) != nil ? Image(systemName: icon) : Image(icon))
                 .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(active ? Theme.onAccent : Theme.textDim)
                 .frame(width: size, height: size)

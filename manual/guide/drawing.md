@@ -8,7 +8,7 @@ From top to bottom:
 
 - **Brush** (B)
 - **Eraser** (E)
-- **Fill** (G)
+- **Fill** (G): the paint bucket.
 - **Eyedropper** (I)
 - **Lasso** (L)
 - **Move** (V)

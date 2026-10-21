@@ -8,7 +8,7 @@ De arriba abajo:
 
 - **Pincel** (B)
 - **Goma** (E)
-- **Relleno** (G)
+- **Relleno** (G): el cubo de pintura.
 - **Cuentagotas** (I)
 - **Lazo** (L)
 - **Mover** (V)

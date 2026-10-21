@@ -264,7 +264,7 @@ struct ZenBar: View {
             Divider().overlay(Theme.hairline).frame(height: 20).padding(.horizontal, 2)
             RailButton(icon: state.brush.icon, label: "Brush", active: state.tool == .brush, size: 34) { state.tool = .brush }
             RailButton(icon: "eraser", label: "Eraser", active: state.tool == .eraser, size: 34) { state.tool = .eraser }
-            RailButton(icon: "drop.halffull", label: "Fill", active: state.tool == .fill, size: 34) { state.tool = .fill }
+            RailButton(icon: "FillBucket", label: "Fill", active: state.tool == .fill, size: 34) { state.tool = .fill }
             RailButton(icon: "eyedropper", label: "Eyedropper", active: state.tool == .eyedropper, size: 34) { state.tool = .eyedropper }
             RailButton(icon: "lasso", label: "Lasso", active: state.tool == .lasso, size: 34) { state.tool = .lasso }
             RailButton(icon: "arrow.up.and.down.and.arrow.left.and.right", label: "Move", active: state.tool == .move, size: 34) {

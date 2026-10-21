@@ -61,7 +61,7 @@ struct ToolRail: View {
             }
             .popover(isPresented: $editingEraser, arrowEdge: edge) { EraserPanel(state: state) }
             // Tap once to pick the bucket, again for its options.
-            RailButton(icon: "drop.halffull", label: "Fill", active: state.tool == .fill, size: size) {
+            RailButton(icon: "FillBucket", label: "Fill", active: state.tool == .fill, size: size) {
                 if state.tool == .fill { editingFill = true } else { state.tool = .fill }
             }
             .popover(isPresented: $editingFill, arrowEdge: edge) { FillOptions(state: state) }
