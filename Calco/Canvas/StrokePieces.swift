@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import simd
 
 /// One piece of a drawing that Move can pick up on its own: a pencil stroke, or a shape of
 /// pixels that are no longer separable (filled, lassoed, from an older project). Its pixels are
@@ -8,6 +9,9 @@ import Foundation
 struct StrokePiece: Equatable {
     var x: Int, y: Int, width: Int, height: Int
     var pixels: [UInt8]
+    /// How a pencil stroke was painted, so Move can paint it again, sharp, wherever it goes;
+    /// nil for shapes of pixels, which can only be resampled.
+    var recipe: StrokeRecipe?
 
     var rect: CGRect { CGRect(x: x, y: y, width: width, height: height) }
 
@@ -22,8 +26,9 @@ struct StrokePiece: Equatable {
         }
     }
 
-    init(x: Int, y: Int, width: Int, height: Int, pixels: [UInt8]) {
+    init(x: Int, y: Int, width: Int, height: Int, pixels: [UInt8], recipe: StrokeRecipe? = nil) {
         self.x = x; self.y = y; self.width = width; self.height = height; self.pixels = pixels
+        self.recipe = recipe
     }
 
     /// Back to a canvas-sized buffer, clear around it.
@@ -53,6 +58,7 @@ struct StrokePiece: Equatable {
     /// `coverage` is one byte per canvas pixel. Nil when nothing is left.
     func erased(by coverage: [UInt8], canvasWidth w: Int) -> StrokePiece? {
         var out = self
+        out.recipe = nil                        // part of it is gone: only its pixels are true now
         var any = false
         for row in 0..<height {
             for col in 0..<width {
@@ -67,10 +73,33 @@ struct StrokePiece: Equatable {
         return any ? out : nil
     }
 
-    /// Moved, scaled, rotated and flipped by `transform` (canvas space); nil if it left the canvas.
+    /// Moved, scaled, rotated and flipped by `transform` (canvas space), by resampling its pixels;
+    /// nil if it left the canvas. A piece with a recipe is better painted again (EditorState).
     func transformed(_ transform: CGAffineTransform, canvasWidth w: Int, height h: Int, hard: Bool) -> StrokePiece? {
         let placed = SelectionPixels.render(canvas(width: w, height: h), width: w, height: h, transform: transform, hard: hard)
         return StrokePiece(canvas: placed, width: w, height: h)
+    }
+}
+
+/// A pencil stroke as it was painted: its stamps and how they were laid. Painting it again gives
+/// the same pixels; painting it transformed gives a sharp line where resampling would blur it.
+struct StrokeRecipe: Equatable {
+    var stamps: [CanvasRenderer.Stamp]
+    var color: SIMD3<Float>
+    var tip: CanvasRenderer.BrushTip
+    var opacity: Float
+    var hard: Bool
+
+    /// The stamps moved by `t` (canvas space). The line keeps its weight under a stretch: each
+    /// stamp's radius scales by how much `t` scales area, the geometric mean of the two axes.
+    func transformed(_ t: CGAffineTransform) -> StrokeRecipe {
+        var out = self
+        let k = Float(sqrt(abs(t.a * t.d - t.b * t.c)))
+        out.stamps = stamps.map { s in
+            let p = CGPoint(x: CGFloat(s.position.x), y: CGFloat(s.position.y)).applying(t)
+            return CanvasRenderer.Stamp(position: SIMD2(Float(p.x), Float(p.y)), radius: s.radius * k, alpha: s.alpha)
+        }
+        return out
     }
 }
 
@@ -155,18 +184,51 @@ enum StrokePieces {
 
     // MARK: File
 
-    /// `<layer>.strokes`: "CSTK", version 1, piece count, then each piece's x, y, width, height
-    /// and its LZFSE-compressed pixels (all integers UInt32 little-endian).
+    /// `<layer>.strokes`: "CSTK", version 2, piece count, then each piece's x, y, width, height
+    /// and its LZFSE-compressed pixels, then its recipe's byte count (0 = none) and the recipe
+    /// LZFSE-compressed. All UInt32 little-endian; floats as their bits. Version 1 has no recipes.
     static func encode(_ pieces: [StrokePiece]) -> Data? {
         var data = Data("CSTK".utf8)
         func put(_ v: Int) { var u = UInt32(v).littleEndian; data.append(Data(bytes: &u, count: 4)) }
-        put(1); put(pieces.count)
+        put(2); put(pieces.count)
         for p in pieces {
             guard let packed = try? (Data(p.pixels) as NSData).compressed(using: .lzfse) as Data else { return nil }
             put(p.x); put(p.y); put(p.width); put(p.height); put(packed.count)
             data.append(packed)
+            if let r = p.recipe, let packed = try? (encode(r) as NSData).compressed(using: .lzfse) as Data {
+                put(packed.count)
+                data.append(packed)
+            } else {
+                put(0)
+            }
         }
         return data
+    }
+
+    /// A recipe: colour (3 floats), hardness, grain, grain scale, builds up, opacity, hard, stamp
+    /// count, then each stamp's x, y, radius and alpha.
+    private static func encode(_ r: StrokeRecipe) -> Data {
+        var words: [UInt32] = [r.color.x, r.color.y, r.color.z, r.tip.hardness, r.tip.grain, r.tip.grainScale].map(\.bitPattern)
+        words += [r.tip.buildsUp ? 1 : 0, r.opacity.bitPattern, r.hard ? 1 : 0, UInt32(r.stamps.count)]
+        for s in r.stamps { words += [s.position.x, s.position.y, s.radius, s.alpha].map(\.bitPattern) }
+        return words.map(\.littleEndian).withUnsafeBytes { Data($0) }
+    }
+
+    private static func decodeRecipe(_ data: Data) -> StrokeRecipe? {
+        let bytes = [UInt8](data)
+        guard bytes.count % 4 == 0, bytes.count >= 40 else { return nil }
+        let w = stride(from: 0, to: bytes.count, by: 4).map {
+            UInt32(bytes[$0]) | UInt32(bytes[$0 + 1]) << 8 | UInt32(bytes[$0 + 2]) << 16 | UInt32(bytes[$0 + 3]) << 24
+        }
+        let f = { (i: Int) in Float(bitPattern: w[i]) }
+        let n = Int(w[9])
+        guard w.count == 10 + n * 4 else { return nil }
+        let stamps = (0..<n).map { i in
+            CanvasRenderer.Stamp(position: SIMD2(f(10 + i * 4), f(11 + i * 4)), radius: f(12 + i * 4), alpha: f(13 + i * 4))
+        }
+        return StrokeRecipe(stamps: stamps, color: SIMD3(f(0), f(1), f(2)),
+                            tip: .init(hardness: f(3), grain: f(4), grainScale: f(5), buildsUp: w[6] != 0),
+                            opacity: f(7), hard: w[8] != 0)
     }
 
     static func decode(_ data: Data) -> [StrokePiece]? {
@@ -180,7 +242,7 @@ enum StrokePieces {
         }
         guard bytes.count >= 12, String(bytes: bytes[0..<4], encoding: .utf8) == "CSTK" else { return nil }
         at = 4
-        guard get() == 1, let count = get(), count < 100_000 else { return nil }
+        guard let version = get(), version == 1 || version == 2, let count = get(), count < 100_000 else { return nil }
         var pieces: [StrokePiece] = []
         for _ in 0..<count {
             guard let x = get(), let y = get(), let w = get(), let h = get(), let n = get(),
@@ -188,7 +250,15 @@ enum StrokePieces {
                   let raw = try? (Data(bytes[at..<(at + n)]) as NSData).decompressed(using: .lzfse) as Data,
                   raw.count == w * h * 4 else { return nil }
             at += n
-            pieces.append(StrokePiece(x: x, y: y, width: w, height: h, pixels: [UInt8](raw)))
+            var recipe: StrokeRecipe?
+            if version >= 2 {
+                guard let m = get(), at + m <= bytes.count else { return nil }
+                if m > 0, let packed = try? (Data(bytes[at..<(at + m)]) as NSData).decompressed(using: .lzfse) as Data {
+                    recipe = decodeRecipe(packed)
+                }
+                at += m
+            }
+            pieces.append(StrokePiece(x: x, y: y, width: w, height: h, pixels: [UInt8](raw), recipe: recipe))
         }
         return pieces
     }

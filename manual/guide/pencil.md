@@ -11,6 +11,8 @@ The Apple Pencil always draws; fingers move the canvas.
 | Two fingers twist | Rotate |
 | Two-finger tap | Undo |
 | Three-finger tap | Redo |
+| Three fingers swipe down | Into Zen mode |
+| Three fingers swipe up | Out of Zen mode |
 
 A finger stroke that turns into one of these gestures is cancelled and leaves no mark. The **Fit** button in the top bar (or ⌘0) brings the canvas back.
 

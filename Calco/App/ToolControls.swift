@@ -2,11 +2,13 @@ import SwiftUI
 import UIKit
 import simd
 
-/// Left rail: brush / eraser, colour, size, undo / redo. The size is a vertical slider you can
-/// drag with a finger; tapping the number opens the precise popover.
+/// Left rail: brush / eraser, colour, size, undo / redo. The size is a slider you can drag with
+/// a finger; tapping the number opens the precise popover. In portrait it lies across the top
+/// (`axis: .horizontal`), where there's height to spare, and the canvas gets the whole width.
 /// Keyboard shortcuts (B, E, [ and ]) live in CalcoCommands.
 struct ToolRail: View {
     @ObservedObject var state: EditorState
+    var axis: Axis = .vertical
     @State private var editingSize = false
     @State private var editingColor = false
     @State private var editingFill = false
@@ -15,55 +17,77 @@ struct ToolRail: View {
     @State private var editingLasso = false
 
     var body: some View {
-        // Full size while there's room; tighter when the timeline is tall (or many layers) so the
-        // canvas, not the timeline, gives up the space.
-        ViewThatFits(in: .vertical) {
-            tools(compact: false).fixedSize(horizontal: false, vertical: true)
-            tools(compact: true).fixedSize(horizontal: false, vertical: true)
+        Group {
+            if axis == .vertical {
+                // Full size while there's room; tighter when the timeline is tall (or many layers) so
+                // the canvas, not the timeline, gives up the space.
+                ViewThatFits(in: .vertical) {
+                    tools(compact: false).fixedSize(horizontal: false, vertical: true)
+                    tools(compact: true).fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(width: 40)
+            } else {
+                tools(compact: false).fixedSize().frame(height: 40)
+            }
         }
-        .frame(width: 40)
         .calcoPanel(padding: 5)
         .onChange(of: state.colorPickerRequest) { editingColor = true }
     }
 
+    /// Popovers point away from the rail: right of it on the side, below it on top.
+    private var edge: Edge { axis == .vertical ? .leading : .top }
+
     private func tools(compact: Bool) -> some View {
-        VStack(spacing: compact ? 1 : 6) {
+        let size: CGFloat = compact ? 32 : 36
+        let layout = axis == .vertical ? AnyLayout(VStackLayout(spacing: compact ? 1 : 6))
+                                       : AnyLayout(HStackLayout(spacing: 4))
+        return layout {
             // Like the bucket: tap once to pick the brush, again for its options.
-            RailButton(icon: state.brush.icon, label: "Brush", active: state.tool == .brush, size: compact ? 32 : 36) {
+            RailButton(icon: state.brush.icon, label: "Brush", active: state.tool == .brush, size: size) {
                 if state.tool == .brush { editingBrush = true } else { state.tool = .brush }
             }
-            .popover(isPresented: $editingBrush, arrowEdge: .leading) { BrushPanel(state: state) }
+            .popover(isPresented: $editingBrush, arrowEdge: edge) { BrushPanel(state: state) }
             // Tap once for the eraser, again for its tip.
-            RailButton(icon: "eraser", label: "Eraser", active: state.tool == .eraser, size: compact ? 32 : 36) {
+            RailButton(icon: "eraser", label: "Eraser", active: state.tool == .eraser, size: size) {
                 if state.tool == .eraser { editingEraser = true } else { state.tool = .eraser }
             }
-            .popover(isPresented: $editingEraser, arrowEdge: .leading) { EraserPanel(state: state) }
+            .popover(isPresented: $editingEraser, arrowEdge: edge) { EraserPanel(state: state) }
             // Tap once to pick the bucket, again for its options.
-            RailButton(icon: "drop.halffull", label: "Fill", active: state.tool == .fill, size: compact ? 32 : 36) {
+            RailButton(icon: "drop.halffull", label: "Fill", active: state.tool == .fill, size: size) {
                 if state.tool == .fill { editingFill = true } else { state.tool = .fill }
             }
-            .popover(isPresented: $editingFill, arrowEdge: .leading) { FillOptions(state: state) }
-            RailButton(icon: "eyedropper", label: "Eyedropper", active: state.tool == .eyedropper, size: compact ? 32 : 36) {
+            .popover(isPresented: $editingFill, arrowEdge: edge) { FillOptions(state: state) }
+            RailButton(icon: "eyedropper", label: "Eyedropper", active: state.tool == .eyedropper, size: size) {
                 state.tool = .eyedropper
             }
             // Tap once for the lasso, again for select all and paste.
-            RailButton(icon: "lasso", label: "Lasso", active: state.tool == .lasso, size: compact ? 32 : 36) {
+            RailButton(icon: "lasso", label: "Lasso", active: state.tool == .lasso, size: size) {
                 if state.tool == .lasso { editingLasso = true } else { state.tool = .lasso }
             }
-            .popover(isPresented: $editingLasso, arrowEdge: .leading) { LassoOptions(state: state) { editingLasso = false } }
+            .popover(isPresented: $editingLasso, arrowEdge: edge) { LassoOptions(state: state) { editingLasso = false } }
             // Picks up the whole drawing; tap a shape on the canvas to move just that one.
-            RailButton(icon: "arrow.up.and.down.and.arrow.left.and.right", label: "Move", active: state.tool == .move, size: compact ? 32 : 36) {
+            RailButton(icon: "arrow.up.and.down.and.arrow.left.and.right", label: "Move", active: state.tool == .move, size: size) {
                 if state.tool == .move { state.liftForMove() } else { state.tool = .move }
             }
 
-            Divider().overlay(Theme.hairline).padding(.horizontal, 8).padding(.vertical, compact ? 2 : 4)
+            if axis == .vertical {
+                Divider().overlay(Theme.hairline).padding(.horizontal, 8).padding(.vertical, compact ? 2 : 4)
+            } else {
+                Divider().overlay(Theme.hairline).frame(height: 22).padding(.horizontal, 4)
+            }
 
             ColorSwatch(state: state, editing: $editingColor)
 
-            // Gives up height first when the timeline is stretched, so the canvas can shrink.
-            VerticalSizeSlider(state: state)
-                .frame(minHeight: compact ? 28 : 44, maxHeight: 120)
-                .padding(.top, compact ? 2 : 6)
+            if axis == .vertical {
+                // Gives up height first when the timeline is stretched, so the canvas can shrink.
+                SizeSlider(state: state, axis: .vertical)
+                    .frame(minHeight: compact ? 28 : 44, maxHeight: 120)
+                    .padding(.top, compact ? 2 : 6)
+            } else {
+                SizeSlider(state: state, axis: .horizontal)
+                    .frame(width: 120)
+                    .padding(.leading, 6)
+            }
             Button { editingSize = true } label: {
                 Text("\(Int(state.toolSize))")
                     .font(.system(.caption, design: .monospaced))
@@ -72,13 +96,17 @@ struct ToolRail: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Size \(Int(state.toolSize))")
-            .popover(isPresented: $editingSize, arrowEdge: .leading) { SizePopover(state: state) }
+            .popover(isPresented: $editingSize, arrowEdge: edge) { SizePopover(state: state) }
 
-            Spacer(minLength: 4)
+            if axis == .vertical {
+                Spacer(minLength: 4)
+            } else {
+                Divider().overlay(Theme.hairline).frame(height: 22).padding(.horizontal, 4)
+            }
 
-            RailButton(icon: "arrow.uturn.backward", label: "Undo", size: compact ? 32 : 36) { state.undo() }
+            RailButton(icon: "arrow.uturn.backward", label: "Undo", size: size) { state.undo() }
                 .opacity(state.canUndo ? 1 : 0.35)
-            RailButton(icon: "arrow.uturn.forward", label: "Redo", size: compact ? 32 : 36) { state.redo() }
+            RailButton(icon: "arrow.uturn.forward", label: "Redo", size: size) { state.redo() }
                 .opacity(state.canRedo ? 1 : 0.35)
         }
     }
@@ -107,26 +135,35 @@ struct ColorSwatch: View {
     }
 }
 
-/// Drag up for bigger, down for smaller. Square-root mapping so small sizes get most of the travel.
-private struct VerticalSizeSlider: View {
+/// Drag up (or right) for bigger. Square-root mapping so small sizes get most of the travel.
+private struct SizeSlider: View {
     @ObservedObject var state: EditorState
+    let axis: Axis
 
     var body: some View {
         GeometryReader { geo in
             let range = EditorState.sizeRange
             let t = CGFloat(sqrt((state.toolSize - range.lowerBound) / (range.upperBound - range.lowerBound)))
-            ZStack(alignment: .bottom) {
-                Capsule().fill(Theme.hairline).frame(width: 4)
-                Capsule().fill(Theme.accent).frame(width: 4, height: max(4, geo.size.height * t))
+            let length = axis == .vertical ? geo.size.height : geo.size.width
+            ZStack(alignment: axis == .vertical ? .bottom : .leading) {
+                if axis == .vertical {
+                    Capsule().fill(Theme.hairline).frame(width: 4)
+                    Capsule().fill(Theme.accent).frame(width: 4, height: max(4, length * t))
+                } else {
+                    Capsule().fill(Theme.hairline).frame(height: 4)
+                    Capsule().fill(Theme.accent).frame(width: max(4, length * t), height: 4)
+                }
                 Circle()
                     .fill(Theme.text)
                     .frame(width: 14, height: 14)
-                    .offset(y: -(geo.size.height - 14) * t)
+                    .offset(x: axis == .vertical ? 0 : (length - 14) * t,
+                            y: axis == .vertical ? -(length - 14) * t : 0)
             }
             .frame(width: geo.size.width, height: geo.size.height)
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0).onChanged { g in
-                let f = Float(min(max(1 - g.location.y / geo.size.height, 0), 1))
+                let along = axis == .vertical ? 1 - g.location.y / length : g.location.x / length
+                let f = Float(min(max(along, 0), 1))
                 state.toolSize = range.lowerBound + f * f * (range.upperBound - range.lowerBound)
             })
         }

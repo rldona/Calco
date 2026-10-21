@@ -66,6 +66,27 @@ final class StrokePiecesTests: XCTestCase {
         XCTAssertEqual(StrokePieces.decode(data), pieces)
         XCTAssertNil(StrokePieces.decode(Data("nope".utf8)))
     }
+
+    func testRecipesSurviveTheFile() throws {
+        var piece = try XCTUnwrap(StrokePiece(canvas: block(10, 10, x: 1, y: 2, w: 3, h: 4), width: 10, height: 10))
+        piece.recipe = StrokeRecipe(stamps: [.init(position: SIMD2(2.5, 3), radius: 1.5, alpha: 0.8),
+                                             .init(position: SIMD2(3, 4.25), radius: 2, alpha: 1)],
+                                    color: SIMD3(0.1, 0.2, 0.3), tip: .init(hardness: 0.7, grain: 0.5, grainScale: 1.6, buildsUp: true),
+                                    opacity: 0.6, hard: false)
+        let plain = try XCTUnwrap(StrokePiece(canvas: block(10, 10, x: 5, y: 5, w: 2, h: 2), width: 10, height: 10))
+        let data = try XCTUnwrap(StrokePieces.encode([piece, plain]))
+        XCTAssertEqual(StrokePieces.decode(data), [piece, plain])
+    }
+
+    func testARecipeStretchedKeepsItsLineWeight() {
+        let r = StrokeRecipe(stamps: [.init(position: SIMD2(10, 10), radius: 4, alpha: 1)], color: .zero,
+                             tip: .init(), opacity: 1, hard: false)
+        let doubled = r.transformed(CGAffineTransform(scaleX: 2, y: 2))
+        XCTAssertEqual(doubled.stamps[0].position, SIMD2(20, 20))
+        XCTAssertEqual(doubled.stamps[0].radius, 8, accuracy: 0.001)
+        let squashed = r.transformed(CGAffineTransform(scaleX: 2, y: 0.5))
+        XCTAssertEqual(squashed.stamps[0].radius, 4, accuracy: 0.001, "as much wider as it is flatter")
+    }
 }
 
 /// Strokes remembered by the editor and picked one by one with Move.

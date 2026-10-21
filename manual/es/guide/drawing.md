@@ -18,6 +18,10 @@ De arriba abajo:
 
 <div class="clear"></div>
 
+::: tip En vertical
+Con el iPad en vertical, las herramientas se tumban arriba, bajo el nombre del documento, con la barra de tamaño en horizontal. El lienzo ocupa todo el ancho.
+:::
+
 ## Pincel
 
 Toca otra vez el pincel para abrir la **biblioteca de pinceles**: todos los pinceles con una muestra de cómo pintan.
@@ -75,7 +79,9 @@ Rodea algo para levantarlo como selección.
 ![Una selección con el lazo](/crops/es/lasso-selection.jpg)
 
 - **Arrastra por dentro** para moverla.
-- **Tirador de la esquina**: escalar. **Tirador redondo**: girar. **Punto central**: el punto alrededor del que escala y gira; arrástralo para moverlo.
+- **Tirador de la esquina**: escalar. **Tiradores de los lados**: estirar a lo ancho o a lo alto, para el *squash & stretch*. **Tirador redondo**: girar. **Punto central**: el punto alrededor del que escala, estira y gira; arrástralo para moverlo (a los pies, por ejemplo, para que al aplastar sigan en el suelo).
+- Mientras escalas o estiras, una etiqueta muestra el ancho y el alto en porcentaje. Cada uno **encaja** en el 100 %, o en las proporciones del otro, con un toque háptico suave.
+- **Uniforme | Libre**, bajo el lienzo, es lo que hace la esquina: mantener las proporciones, o estirar el ancho y el alto por separado.
 - La barra de encima: **Copiar**, **Cortar**, **Eliminar**, **Voltear en horizontal**, **Cancelar** (✕, Esc) y **Aplicar** (✓, Retorno). Tocar fuera también aplica.
 
 Toca otra vez el lazo para **Seleccionar todo** y **Pegar**:
@@ -97,6 +103,8 @@ Lo pegado aparece donde lo copiaste, en el fotograma y la capa en que estés: ú
 
 ![Mover: un trazo](/crops/es/move-stroke.jpg)
 
+Al escalarlo, estirarlo o girarlo, un trazo **sigue nítido**: Calco lo vuelve a pintar donde cae, con su pincel, en vez de remuestrear sus píxeles. Los trazos borrados, rellenados o pasados por el lazo, y las imágenes importadas, se remuestrean.
+
 Donde se cruzan varios trazos, **toca otra vez en el mismo sitio** para pasar al de debajo; el aviso bajo el lienzo dice cuál tienes. **Añadir trazos** hace que cada toque añada un trazo a lo que mueves, o lo quite, para mover varios juntos.
 
 ![Coger el trazo de debajo](/crops/es/move-crossing.jpg)
@@ -115,6 +123,6 @@ Con **Pixel art** activado, todas las herramientas trabajan con píxeles enteros
 
 - **Voltear la vista** (el icono del espejo en la barra superior, o H) muestra el dibujo en espejo sin modificarlo, para ver los errores con otros ojos.
 - **Ajustar** vuelve al lienzo centrado y recto (⌘0); si la vista está volteada, sigue volteada.
-- El **modo Zen** oculta todo menos el lienzo y una pequeña barra flotante con deshacer, rehacer, todas las herramientas y el color (⌃⌘F).
+- El **modo Zen** oculta todo menos el lienzo y una pequeña barra flotante con deshacer, rehacer, todas las herramientas y el color. Desliza **tres dedos hacia abajo** para entrar y **hacia arriba** para salir, como el agarre de la línea de tiempo (o ⌃⌘F).
 
 ![Modo Zen](/screens/es/zen.jpg)

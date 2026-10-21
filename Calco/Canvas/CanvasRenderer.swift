@@ -8,7 +8,7 @@ import CoreGraphics
 /// Knows nothing about frames, clips, UIKit or SwiftUI.
 final class CanvasRenderer {
 
-    struct Stamp {
+    struct Stamp: Equatable {
         var position: SIMD2<Float>
         var radius: Float
         var alpha: Float
@@ -24,7 +24,7 @@ final class CanvasRenderer {
     }
 
     /// The tip of a brush, as the stamp shader sees it.
-    struct BrushTip {
+    struct BrushTip: Equatable {
         var hardness: Float = 1
         var grain: Float = 0
         var grainScale: Float = 2

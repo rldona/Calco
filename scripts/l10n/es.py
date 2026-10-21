@@ -355,4 +355,10 @@ ES = {
 "Grid around the canvas": "Cuadrícula alrededor del lienzo",
 "A faint grid behind the canvas, like a cutting mat.": "Una cuadrícula suave detrás del lienzo, como una plancha de corte.",
 "Show the timeline": "Mostrar la línea de tiempo",
+"Stretch width": "Estirar a lo ancho",
+"Stretch height": "Estirar a lo alto",
+"W %lld%% · H %lld%%": "An %lld%% · Al %lld%%",
+"Uniform": "Uniforme",
+"Free": "Libre",
+"Uniform keeps the proportions when you drag the corner; Free stretches width and height apart": "Uniforme mantiene las proporciones al arrastrar la esquina; Libre estira el ancho y el alto por separado",
 }

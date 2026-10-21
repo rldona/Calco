@@ -18,6 +18,10 @@ From top to bottom:
 
 <div class="clear"></div>
 
+::: tip In portrait
+Turn the iPad upright and the tools lie across the top, under the document's name, with the size slider running sideways. The canvas gets the whole width.
+:::
+
 ## Brush
 
 Tap the brush again to open the **brush library**: every brush with a sample of how it paints.
@@ -75,7 +79,9 @@ Draw around something to lift it into a selection.
 ![A lasso selection](/crops/en/lasso-selection.jpg)
 
 - **Drag inside** to move it.
-- **Corner handle**: scale. **Round handle**: rotate. **Centre dot**: the point it scales and rotates around; drag it to move it.
+- **Corner handle**: scale. **Side handles**: stretch it wider or taller, for squash and stretch. **Round handle**: rotate. **Centre dot**: the point it scales, stretches and rotates around; drag it to move it (to the feet, say, so a squash keeps them on the ground).
+- While you scale or stretch, a chip shows the width and height as a percentage. Each one **clicks** back to 100 %, or to the other's proportions, with a light haptic tap.
+- **Uniform | Free**, under the canvas, is what the corner does: keep the proportions, or stretch width and height apart.
 - The bar above it: **Copy**, **Cut**, **Delete**, **Flip horizontally**, **Cancel** (✕, Esc) and **Apply** (✓, Return). Tapping outside also applies.
 
 Tap the lasso again for **Select all** and **Paste**:
@@ -97,6 +103,8 @@ Paste lands where you copied, on whichever frame and layer you're on: handy to c
 
 ![Move: one stroke](/crops/en/move-stroke.jpg)
 
+Scaled, stretched or turned, a stroke **stays sharp**: Calco paints it again where it lands, with its brush, instead of resampling its pixels. Strokes that were erased, filled or lassoed, and imported images, are resampled.
+
 Where several strokes cross, **tap the same spot again** to go to the one underneath; the hint under the canvas says which one you have. **Add strokes** makes each tap add a stroke to what you're moving, or take it out, to move a few together.
 
 ![Picking the stroke underneath](/crops/en/move-crossing.jpg)
@@ -115,6 +123,6 @@ With **Pixel art** on, every tool works on whole pixels: no soft edges on the br
 
 - **Flip view** (the mirror icon in the top bar, or H) shows the drawing mirrored without changing it, to spot mistakes with fresh eyes.
 - **Fit** returns to the fitted, upright canvas (⌘0); a flipped view stays flipped.
-- **Zen mode** hides everything but the canvas and a small floating bar with undo, redo, every tool and the colour (⌃⌘F).
+- **Zen mode** hides everything but the canvas and a small floating bar with undo, redo, every tool and the colour. Swipe **three fingers down** to go in and **up** to come out, like the timeline's grip (or ⌃⌘F).
 
 ![Zen mode](/screens/en/zen.jpg)

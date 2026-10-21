@@ -18,6 +18,7 @@ A release is made by pushing a tag `vX.Y.Z`: the release workflow tests and buil
 - The **status bar is hidden**: the whole screen is the studio.
 - **Brush library**: Inker, Ballpoint, Marker, Pencil, Blue pencil, Charcoal, Paintbrush, Airbrush and Flat, each with a sample stroke. Pressure can change size or opacity, the pencils have paper grain and shade when you tilt the Pencil, the marker stays even where it crosses itself, the airbrush builds up. Each brush remembers its size and opacity; the eraser can use any brush's tip.
 - **Strokes you can pick one by one**: each drawing remembers its pencil strokes. With Move, a tap picks the exact stroke under it even where it crosses others; tap the same spot again for the one underneath, and **Add strokes** to pick several. Dragging a stroke moves it straight away. The eraser trims strokes; a fill or the lasso merges a drawing into shapes. Saved in the project as optional `<layer>.strokes` files.
+- **Stretch** with Move or the lasso: the handles in the middle of each side stretch the drawing wider or taller (squash and stretch), and **Uniform | Free** under the canvas makes the corner keep the proportions or stretch both ways. A chip shows the width and height while you drag, and each clicks back to 100 % or to the other's proportions. Pencil strokes **stay sharp** however much you scale or stretch them: each remembers how it was painted (saved as version 2 of the `.strokes` file) and is painted again where it lands instead of being resampled.
 - **Move tool** (V): picks up the current layer's whole drawing, boxed tight, to move, scale or rotate; tap a shape (an eye, a hand) to move just that one. On a locked layer, such as an imported image, **Unlock and move** unlocks it for the move and locks it again after. Moving, rotating or scaling **clicks back** into its starting place, upright (or a quarter turn) and its own size, and the pivot clicks back to the middle, with a light haptic tap.
 
 ### Changed
@@ -25,6 +26,8 @@ A release is made by pushing a tag `vX.Y.Z`: the release workflow tests and buil
 - **Animation rail** on the right: a big **New**, Duplicate, Hold, Delete and **More** (label, split, repeat, frame actions), the onion skin, and **Layer | All**, which replaces Sync layers. In portrait it sits above the timeline.
 - The timeline is cleaner: a bigger Play, one **clip settings** button (fps, loop, pivot), taller rows, a **+** over the layer names and a **+** cell after the last drawing.
 - The **canvas clicks into place** while you move it with two fingers: upright and every quarter turn, its fitted size and the middle, with a light haptic tap.
+- In **portrait** the tools lie across the top instead of down the left, so the canvas gets the whole width.
+- **Swipe three fingers down** for Zen mode, and up to leave it.
 - **Zen mode**'s bar has every tool now (fill, eyedropper, lasso, move) and redo.
 - **Snappier controls**: the canvas redraws only when something changes (continuously only while you draw or move it), and the latency readout no longer redraws the editor on every Pencil sample. `scripts/install-ipad.sh` installs an optimised Release build.
 - The latency readout is off unless you turn it on in Preferences.

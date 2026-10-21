@@ -294,11 +294,29 @@ extension CanvasUIView: UIGestureRecognizerDelegate {
         pan.minimumNumberOfTouches = 2
         pan.maximumNumberOfTouches = 2
 
-        for g in [undoTap, redoTap, pinch, rotate, pan] as [UIGestureRecognizer] {
+        // Three fingers down pushes everything but the canvas away (Zen); three fingers up brings it
+        // back. The same way the timeline's grip hides it and shows it again.
+        let zenIn = UISwipeGestureRecognizer(target: self, action: #selector(swipedIntoZen))
+        zenIn.direction = .down
+        let zenOut = UISwipeGestureRecognizer(target: self, action: #selector(swipedOutOfZen))
+        zenOut.direction = .up
+
+        for g in [zenIn, zenOut] {
+            g.numberOfTouchesRequired = 3
+            redoTap.require(toFail: g)
+        }
+
+        for g in [undoTap, redoTap, pinch, rotate, pan, zenIn, zenOut] as [UIGestureRecognizer] {
             g.allowedTouchTypes = fingers
             g.delegate = self
             addGestureRecognizer(g)
         }
+    }
+
+    /// Zoom and twist are two-finger gestures: with three down, it's a swipe for Zen.
+    override func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
+        if g is UIPinchGestureRecognizer || g is UIRotationGestureRecognizer { return g.numberOfTouches <= 2 }
+        return true
     }
 
     func gestureRecognizer(_ g: UIGestureRecognizer,
@@ -309,6 +327,18 @@ extension CanvasUIView: UIGestureRecognizerDelegate {
 
     @objc private func undoTapped() { state?.undo() }
     @objc private func redoTapped() { state?.redo() }
+
+    @objc private func swipedIntoZen() {
+        guard let state, !state.isZen else { return }
+        state.isZen = true
+        haptics.impactOccurred()
+    }
+
+    @objc private func swipedOutOfZen() {
+        guard let state, state.isZen else { return }
+        state.isZen = false
+        haptics.impactOccurred()
+    }
 
     // The fingers' own scale, rotation and position, before snapping; the canvas follows them
     // except near upright, fitted or centred, where it clicks in place (with a light haptic tap).

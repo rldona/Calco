@@ -3,7 +3,7 @@ import Metal
 
 /// Estudio layout: the canvas fills the whole screen and the panels float over it, Procreate
 /// style: tools on the left and animation on the right, both centred, and a narrower timeline at
-/// the bottom (the animation rail lies above it in portrait). The drawing fits in the space the
+/// the bottom. In portrait the tools lie across the top and the animation rail above the timeline. The drawing fits in the space the
 /// panels leave free. Zen mode hides all of it except a small floating bar.
 struct ContentView: View {
     @ObservedObject var state: EditorState
@@ -24,13 +24,22 @@ struct ContentView: View {
                         .padding(.horizontal, Theme.gap).padding(.top, Theme.gap)
                         .frame(maxHeight: .infinity, alignment: .top)
                         .transition(.move(edge: .top).combined(with: .opacity))
-                    // The rails float centred on each side, whatever the timeline does.
-                    ToolRail(state: state)
-                        .reportFrame(.left)
-                        .padding(.leading, Theme.gap)
-                        .padding(.vertical, Self.topBarRoom)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                        .transition(.move(edge: .leading).combined(with: .opacity))
+                    // The rails float centred on each side, whatever the timeline does. In portrait,
+                    // where width is what the canvas lacks, the tools lie across the top instead.
+                    if portrait {
+                        ToolRail(state: state, axis: .horizontal)
+                            .reportFrame(.tools)
+                            .padding(.top, Self.topBarRoom)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    } else {
+                        ToolRail(state: state)
+                            .reportFrame(.left)
+                            .padding(.leading, Theme.gap)
+                            .padding(.vertical, Self.topBarRoom)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                            .transition(.move(edge: .leading).combined(with: .opacity))
+                    }
                     if !portrait {
                         AnimationRail(state: state, axis: .vertical)
                             .reportFrame(.right)
@@ -75,10 +84,16 @@ struct ContentView: View {
         if !state.isZen {
             let g = Theme.gap * 2
             if let r = panels[.top] { insets.top = r.maxY + g }
-            if let r = panels[.left] { insets.left = r.maxX + g }
-            if let r = panels[.right] { insets.right = size.width - r.minX + g }
             if let r = panels[.bottom] { insets.bottom = size.height - r.minY + g }
-            if portrait { insets.right = insets.left }
+            if portrait {
+                // Tools across the top: the drawing gets the whole width.
+                if let r = panels[.tools] { insets.top = max(insets.top, r.maxY + g) }
+                insets.left = Theme.gap
+                insets.right = Theme.gap
+            } else {
+                if let r = panels[.left] { insets.left = r.maxX + g }
+                if let r = panels[.right] { insets.right = size.width - r.minX + g }
+            }
         }
         if state.canvasTransform.insets != insets { state.canvasTransform.insets = insets }
     }
@@ -97,6 +112,12 @@ struct ContentView: View {
                         .padding(.bottom, state.canvasTransform.insets.bottom + 6)
                 } else if state.tool == .move && state.selection != nil {
                     MoveStrokesHint(state: state)
+                        .padding(.bottom, state.canvasTransform.insets.bottom + 6)
+                } else if state.selection != nil {
+                    ScaleModePicker()
+                        .padding(3)
+                        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 13))
+                        .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(Theme.hairline))
                         .padding(.bottom, state.canvasTransform.insets.bottom + 6)
                 }
             }
@@ -183,7 +204,7 @@ struct MoveLockedHint: View {
 }
 
 /// Under the canvas while Move holds something: which stroke of the ones under the finger it
-/// is, and the switch to pick several.
+/// is, the switch to pick several, and how the corner scales.
 struct MoveStrokesHint: View {
     @ObservedObject var state: EditorState
 
@@ -215,6 +236,8 @@ struct MoveStrokesHint: View {
             .buttonStyle(.plain)
             .accessibilityValue(state.addingStrokes ? "On" : "Off")
             .help("Taps add strokes to what you're moving, or take them out")
+            Divider().overlay(Theme.hairline).frame(height: 22)
+            ScaleModePicker()
         }
         .padding(.leading, 14).padding(.trailing, 5).padding(.vertical, 5)
         .background(Theme.panel, in: RoundedRectangle(cornerRadius: 13))
@@ -485,7 +508,7 @@ struct PivotOverlay: View {
 }
 
 /// The floating panels the canvas keeps clear of.
-enum PanelSlot: Hashable { case top, left, right, bottom }
+enum PanelSlot: Hashable { case top, tools, left, right, bottom }
 
 struct PanelFramesKey: PreferenceKey {
     static let defaultValue: [PanelSlot: CGRect] = [:]

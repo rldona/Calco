@@ -2,18 +2,22 @@ import SwiftUI
 import UIKit
 
 /// Draws the lasso while it's being drawn, then the floating selection with its handles:
-/// drag inside to move, the corner to scale, the knob above to rotate, the dot to move the
-/// anchor (what scaling and rotation pivot around) without moving the drawing.
+/// drag inside to move, the corner to scale, the side handles to stretch it wider or taller
+/// (squash and stretch), the knob above to rotate, the dot to move the anchor (what scaling and
+/// rotation pivot around) without moving the drawing. With Free scaling the corner stretches too.
 /// Sits over the canvas view; everywhere it draws nothing, touches reach the canvas.
 struct SelectionOverlay: View {
     @ObservedObject var state: EditorState
     @State private var start: FloatingSelection?
     /// Whether the drag in progress is clicked into place; a light tap of haptics when it gets there.
     @State private var snapped = false
+    /// Showing the width and height chip: while scaling or stretching.
+    @State private var sizing = false
+    @AppStorage(ScaleModePicker.key) private var freeScale = false
     private let haptics = UIImpactFeedbackGenerator(style: .light)
 
     private let handle: CGFloat = 26
-    private let rotateReach: CGFloat = 34
+    private let rotateReach: CGFloat = 44
     private static let fingerSize: CGFloat = 72
 
     var body: some View {
@@ -42,6 +46,10 @@ struct SelectionOverlay: View {
                        CGPoint(x: b.maxX, y: b.maxY), CGPoint(x: b.minX, y: b.maxY)].map { $0.applying(place) }
         let anchor = sel.placedAnchor.applying(toView)
         let topMid = CGPoint(x: b.midX, y: b.minY).applying(place)
+        let sides: [(point: CGPoint, horizontal: Bool)] = [
+            (CGPoint(x: b.maxX, y: b.midY).applying(place), true), (CGPoint(x: b.minX, y: b.midY).applying(place), true),
+            (CGPoint(x: b.midX, y: b.maxY).applying(place), false), (topMid, false),
+        ]
         let centre = CGPoint(x: b.midX, y: b.midY).applying(place)
         let rotateKnob = Self.extend(from: centre, through: topMid, by: rotateReach)
         let xs = corners.map(\.x), ys = corners.map(\.y)
@@ -80,17 +88,44 @@ struct SelectionOverlay: View {
             .stroke(Theme.textDim.opacity(0.6), lineWidth: 0.75)
             .allowsHitTesting(false)
 
-        // Scale: the bottom-right corner, uniform, around the anchor.
+        // Stretch: the middle of each side, along the selection's own width or height, around the
+        // anchor. Too small a box has no room for them; the corner in Free mode still stretches.
+        if !small {
+            ForEach(sides.indices, id: \.self) { i in
+                sideHandle(at: sides[i].point, horizontal: sides[i].horizontal, rotation: sel.rotation)
+                    .gesture(DragGesture(minimumDistance: 0).onChanged { g in
+                        let s = begin(sel)
+                        sizing = true
+                        let toLocal = s.transform.concatenating(toView).inverted()
+                        let snap = stretch(s, horizontal: sides[i].horizontal,
+                                           from: g.startLocation.applying(toLocal), to: g.location.applying(toLocal))
+                        click(snap)
+                    }.onEnded { _ in start = nil; snapped = false; sizing = false })
+                    .accessibilityLabel(sides[i].horizontal ? "Stretch width" : "Stretch height")
+            }
+        }
+
+        // Scale: the bottom-right corner, around the anchor. Uniform keeps the proportions; Free
+        // stretches width and height on their own.
         knob(systemImage: "arrow.up.left.and.arrow.down.right", at: corners[2])
             .gesture(DragGesture(minimumDistance: 0).onChanged { g in
                 let s = begin(sel)
+                sizing = true
+                if freeScale {
+                    let toLocal = s.transform.concatenating(toView).inverted()
+                    let a = g.startLocation.applying(toLocal), c = g.location.applying(toLocal)
+                    let x = stretch(s, horizontal: true, from: a, to: c)
+                    let y = stretch(s, horizontal: false, from: a, to: c, keepingOther: true)
+                    click(x || y)
+                    return
+                }
                 let d0 = Self.distance(g.startLocation, anchor), d1 = Self.distance(g.location, anchor)
                 guard d0 > 1 else { return }
                 let scale = s.scale * d1 / d0
                 let snap = FloatingSelection.snappedScale(scale)
                 click(snap != nil)
                 state.updateSelection { $0.scale = snap ?? scale }
-            }.onEnded { _ in start = nil; snapped = false })
+            }.onEnded { _ in start = nil; snapped = false; sizing = false })
             .accessibilityLabel("Scale selection")
 
         // Rotate: the knob above the top edge, around the anchor.
@@ -131,8 +166,49 @@ struct SelectionOverlay: View {
         }
 
         // Above the rotate knob, or under the box when there's no room above.
+        let barAbove = box.minY - 92 >= 28
         SelectionBar(state: state)
-            .position(x: box.midX, y: box.minY - 82 >= 28 ? box.minY - 82 : box.maxY + 52)
+            .position(x: box.midX, y: barAbove ? box.minY - 92 : box.maxY + 52)
+
+        if sizing {
+            SizeChip(width: sel.scaleX, height: sel.scaleY)
+                .position(x: box.midX, y: barAbove ? box.maxY + 30 : box.minY - 64)
+                .allowsHitTesting(false)
+        }
+    }
+
+    /// Stretches `s` along one of its own axes by how far the finger went from the anchor, from
+    /// `a` to `c` (both in the selection's own space). With `keepingOther`, the other axis's
+    /// stretch is the one already set in this drag (the corner does both). True when it clicked
+    /// into place.
+    @discardableResult
+    private func stretch(_ s: FloatingSelection, horizontal: Bool, from a: CGPoint, to c: CGPoint,
+                         keepingOther: Bool = false) -> Bool {
+        let d0 = horizontal ? a.x - s.anchor.x : a.y - s.anchor.y
+        let d1 = horizontal ? c.x - s.anchor.x : c.y - s.anchor.y
+        guard abs(d0) > 1 else { return false }
+        // Past the anchor it would turn inside out: it stops thin instead (Flip is in the bar).
+        let ratio = max(d1 / d0, 0.02)
+        let current = state.selection?.stretch ?? s.stretch
+        let other = horizontal ? (keepingOther ? current.height : s.stretch.height)
+                               : (keepingOther ? current.width : s.stretch.width)
+        let value = (horizontal ? s.stretch.width : s.stretch.height) * ratio
+        let snap = FloatingSelection.snappedStretch(value, scale: s.scale, other: other)
+        state.updateSelection {
+            if horizontal { $0.stretch.width = snap ?? value } else { $0.stretch.height = snap ?? value }
+        }
+        return snap != nil
+    }
+
+    private func sideHandle(at point: CGPoint, horizontal: Bool, rotation: CGFloat) -> some View {
+        Capsule()
+            .fill(Theme.accent)
+            .overlay(Capsule().strokeBorder(Theme.background, lineWidth: 2))
+            .frame(width: horizontal ? 12 : 26, height: horizontal ? 26 : 12)
+            .rotationEffect(.radians(rotation))
+            .frame(width: 34, height: 34)
+            .contentShape(Rectangle())
+            .position(point)
     }
 
     private func knob(systemImage: String, at point: CGPoint) -> some View {
@@ -172,6 +248,51 @@ struct SelectionOverlay: View {
         let d = distance(a, b)
         guard d > 0.5 else { return CGPoint(x: b.x, y: b.y - reach) }
         return CGPoint(x: b.x + (b.x - a.x) / d * reach, y: b.y + (b.y - a.y) / d * reach)
+    }
+}
+
+/// Width and height as a percentage of the original, while scaling or stretching.
+private struct SizeChip: View {
+    let width: CGFloat
+    let height: CGFloat
+
+    var body: some View {
+        Text("W \(Int((width * 100).rounded()))% · H \(Int((height * 100).rounded()))%")
+            .font(.system(.caption, design: .rounded).weight(.semibold).monospacedDigit())
+            .foregroundStyle(Theme.text)
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(Theme.panel, in: Capsule())
+            .overlay(Capsule().strokeBorder(Theme.hairline))
+    }
+}
+
+/// How the corner handle scales a selection: keeping its proportions, or width and height apart.
+/// The side handles always stretch one axis.
+struct ScaleModePicker: View {
+    static let key = "selection.freeScale"
+    @AppStorage(Self.key) private var free = false
+
+    var body: some View {
+        HStack(spacing: 2) {
+            option("Uniform", icon: "aspectratio", on: !free) { free = false }
+            option("Free", icon: "arrow.up.left.and.down.right.and.arrow.up.right.and.down.left", on: free) { free = true }
+        }
+        .padding(3)
+        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
+        .help("Uniform keeps the proportions when you drag the corner; Free stretches width and height apart")
+    }
+
+    private func option(_ title: LocalizedStringKey, icon: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(.subheadline.weight(on ? .semibold : .regular))
+                .foregroundStyle(on ? Theme.text : Theme.textDim)
+                .padding(.horizontal, 10).padding(.vertical, 5)
+                .background(on ? Theme.panel : .clear, in: RoundedRectangle(cornerRadius: 7))
+                .fixedSize()
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
 

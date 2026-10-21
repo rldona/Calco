@@ -16,6 +16,9 @@ struct FloatingSelection: Equatable {
     var anchor: CGPoint
     var offset = CGVector.zero
     var scale: CGFloat = 1
+    /// Stretch along the selection's own width and height, on top of `scale`: squash and stretch.
+    /// Both 1 while it keeps its proportions.
+    var stretch = CGSize(width: 1, height: 1)
     var rotation: CGFloat = 0
     var flipped = false
 
@@ -28,9 +31,13 @@ struct FloatingSelection: Equatable {
             .concatenating(CGAffineTransform(translationX: anchor.x + offset.dx, y: anchor.y + offset.dy))
     }
 
-    /// Scale, flip and rotation only.
+    /// Scale on each axis, stretch included.
+    var scaleX: CGFloat { scale * stretch.width }
+    var scaleY: CGFloat { scale * stretch.height }
+
+    /// Scale, stretch, flip and rotation only.
     var linear: CGAffineTransform {
-        CGAffineTransform(scaleX: flipped ? -scale : scale, y: scale)
+        CGAffineTransform(scaleX: flipped ? -scaleX : scaleX, y: scaleY)
             .concatenating(CGAffineTransform(rotationAngle: rotation))
     }
 
@@ -48,7 +55,9 @@ struct FloatingSelection: Equatable {
         anchor = newAnchor
     }
 
-    var isIdentity: Bool { offset == .zero && scale == 1 && rotation == 0 && !flipped }
+    var isIdentity: Bool {
+        offset == .zero && scale == 1 && stretch == CGSize(width: 1, height: 1) && rotation == 0 && !flipped
+    }
 
     // Snapping: near where it started, it clicks back into place, so you can always return to it.
 
@@ -67,6 +76,15 @@ struct FloatingSelection: Equatable {
     /// Within 4 % of its own size, its own size.
     static func snappedScale(_ s: CGFloat) -> CGFloat? {
         abs(s - 1) < 0.04 ? 1 : nil
+    }
+
+    /// Stretching one axis to `stretch` (with the other at `other`, both times `scale`): within 4 %
+    /// it clicks to its original size on that axis, or back to the proportions of the other axis.
+    static func snappedStretch(_ stretch: CGFloat, scale: CGFloat, other: CGFloat) -> CGFloat? {
+        for target in [1 / scale, other] where abs(stretch - target) < 0.04 * target {
+            return target
+        }
+        return nil
     }
 }
 

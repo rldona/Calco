@@ -11,6 +11,8 @@ El Apple Pencil siempre dibuja; los dedos mueven el lienzo.
 | Girar dos dedos | Rotar |
 | Tocar con dos dedos | Deshacer |
 | Tocar con tres dedos | Rehacer |
+| Deslizar tres dedos hacia abajo | Entrar en modo Zen |
+| Deslizar tres dedos hacia arriba | Salir del modo Zen |
 
 Un trazo con el dedo que se convierte en uno de estos gestos se cancela y no deja marca. El botón **Ajustar** de la barra superior (o ⌘0) devuelve el lienzo a su sitio.
 

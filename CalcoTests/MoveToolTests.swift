@@ -152,4 +152,19 @@ final class MoveToolTests: XCTestCase {
         state.undo()
         XCTAssertEqual(alpha(state, x: 100, y: 100), 0, "the only undo step left was the stroke")
     }
+
+    func testAPencilStrokeScaledUpStaysSharp() throws {
+        let state = try makeState()
+        let target = try XCTUnwrap(state.beginStroke())
+        state.paintStroke((0...40).map { .init(position: SIMD2(Float(100 + $0), 200), radius: 3, alpha: 1) }, into: target)
+        state.strokeEnded()
+        state.tool = .move
+        state.updateSelection { $0.scale = 4 }
+        state.commitSelection()
+        // Across the line, 4× as thick: painted again, its edge is still about one pixel soft.
+        let soft = (150...250).filter { (1...254).contains(alpha(state, x: 120, y: $0)) }.count
+        let solid = (150...250).filter { alpha(state, x: 120, y: $0) == 255 }.count
+        XCTAssertGreaterThan(solid, 18, "about 24 px thick")
+        XCTAssertLessThanOrEqual(soft, 4, "a sharp edge, not a blur")
+    }
 }

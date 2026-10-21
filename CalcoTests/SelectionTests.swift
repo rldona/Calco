@@ -97,6 +97,41 @@ final class SelectionPixelsTests: XCTestCase {
         XCTAssertEqual(sel.placedAnchor.x, 40, accuracy: 0.0001, "the anchor is where it was dropped")
         XCTAssertEqual(sel.placedAnchor.y, 12, accuracy: 0.0001)
     }
+
+    func testStretchingOneAxisLeavesTheOtherAndTheAnchor() {
+        var sel = FloatingSelection(key: LayerKey(clip: "c", frame: "f", layer: "l"), lifted: [],
+                                    outline: [], bounds: CGRect(x: 0, y: 0, width: 10, height: 10),
+                                    anchor: CGPoint(x: 5, y: 10))
+        sel.stretch = CGSize(width: 1.5, height: 0.5)
+        XCTAssertFalse(sel.isIdentity)
+        let right = CGPoint(x: 10, y: 10).applying(sel.transform)
+        XCTAssertEqual(right.x, 12.5, accuracy: 0.0001, "1.5× as wide around the anchor")
+        let top = CGPoint(x: 5, y: 0).applying(sel.transform)
+        XCTAssertEqual(top.y, 5, accuracy: 0.0001, "half as tall, the feet stay put")
+        let anchor = sel.anchor.applying(sel.transform)
+        XCTAssertEqual(anchor.x, 5, accuracy: 0.0001)
+        XCTAssertEqual(anchor.y, 10, accuracy: 0.0001)
+    }
+
+    func testStretchStacksOnScaleAndStaysWithRotation() {
+        var sel = FloatingSelection(key: LayerKey(clip: "c", frame: "f", layer: "l"), lifted: [],
+                                    outline: [], bounds: CGRect(x: 0, y: 0, width: 10, height: 10),
+                                    anchor: .zero)
+        sel.scale = 2; sel.stretch.width = 1.5
+        XCTAssertEqual(sel.scaleX, 3); XCTAssertEqual(sel.scaleY, 2)
+        sel.rotation = .pi / 2
+        // Along its own width even when turned: the right edge now points down.
+        let p = CGPoint(x: 1, y: 0).applying(sel.transform)
+        XCTAssertEqual(p.x, 0, accuracy: 0.0001)
+        XCTAssertEqual(p.y, 3, accuracy: 0.0001)
+    }
+
+    func testStretchClicksToItsOwnSizeOrToTheOtherAxis() {
+        XCTAssertEqual(FloatingSelection.snappedStretch(1.03, scale: 1, other: 0.6), 1, "back to its own size")
+        XCTAssertEqual(FloatingSelection.snappedStretch(0.62, scale: 1, other: 0.6), 0.6, "proportional again")
+        XCTAssertEqual(FloatingSelection.snappedStretch(0.51, scale: 2, other: 1), 0.5, "100 % on screen at 2×")
+        XCTAssertNil(FloatingSelection.snappedStretch(1.3, scale: 1, other: 1))
+    }
 }
 
 /// Lasso through the editor: lift, move, drop, undo; cancel; auto-drop.

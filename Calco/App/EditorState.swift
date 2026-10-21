@@ -110,6 +110,10 @@ final class EditorState: ObservableObject {
     private var relockAfterMove: String?
     /// The selection drawn at its current transform, composited above its layer.
     private var selectionPreview: MTLTexture?
+    /// Where strokes are painted again from their recipes: the stroke, and the other half of a
+    /// ping-pong with `selectionPreview`.
+    private var recipeStroke: MTLTexture?
+    private var recipeScratch: MTLTexture?
     /// Zen mode: only the canvas and a small floating bar. View state only.
     @Published var isZen = false
     /// Zoom / pan / rotation of the canvas on screen. View state only: not saved, not undoable.
@@ -400,6 +404,7 @@ final class EditorState: ObservableObject {
     private func install(_ newProject: Project, images: [LayerKey: CGImage],
                          strokes loadedStrokes: [LayerKey: [StrokePiece]] = [:]) throws {
         selection = nil; selectionBefore = nil; selectionPreview = nil; lassoPoints = []
+        recipeStroke = nil; recipeScratch = nil
         strokes = loadedStrokes; movingPieces = nil; lastPick = nil; moveHint = nil; strokeTexture = nil; strokeBase = nil
         playRange = nil
         let size = SIMD2<Int>(newProject.canvas.width, newProject.canvas.height)
@@ -1551,7 +1556,10 @@ final class EditorState: ObservableObject {
         case .brush where paintMode == .front:
             var pieces = strokes[key] ?? before.flatMap { renderer.readbackBytes($0) }
                 .map { StrokePieces.shapes(of: $0, width: w, height: h) } ?? []
-            if let alone = strokeAlone(), let piece = StrokePiece(canvas: alone, width: w, height: h) {
+            if let alone = strokeAlone(), var piece = StrokePiece(canvas: alone, width: w, height: h) {
+                let b = activeBrush
+                piece.recipe = StrokeRecipe(stamps: stamps, color: b.fixedColor ?? SIMD3(color.x, color.y, color.z),
+                                            tip: .init(b), opacity: brushOpacity, hard: project.pixelArt)
                 pieces.append(piece)
             }
             strokes[key] = pieces
@@ -1562,6 +1570,28 @@ final class EditorState: ObservableObject {
         default:
             strokes[key] = nil
         }
+    }
+
+    /// A stroke painted again from its recipe, on its own, as a piece; nil if it's off the canvas.
+    private func paint(_ recipe: StrokeRecipe) -> StrokePiece? {
+        guard let stroke = recipeTexture(\.recipeStroke), let out = recipeTexture(\.recipeScratch) else { return nil }
+        paintRecipe(recipe, stroke: stroke, base: nil, into: out)
+        let w = renderer.canvasSize.x, h = renderer.canvasSize.y
+        guard let px = renderer.readbackBytes(out), var piece = StrokePiece(canvas: px, width: w, height: h) else { return nil }
+        piece.recipe = recipe
+        return piece
+    }
+
+    /// `recipe`'s stroke over `base` (nil = blank) into `target`, as the brush laid it.
+    private func paintRecipe(_ recipe: StrokeRecipe, stroke: MTLTexture, base: MTLTexture?, into target: MTLTexture) {
+        renderer.clear(stroke)
+        renderer.paintStroke(recipe.stamps, into: stroke, color: recipe.color, tip: recipe.tip, hard: recipe.hard)
+        renderer.compositeStroke(stroke, base: base, into: target, opacity: recipe.opacity, mode: .front, erase: false)
+    }
+
+    private func recipeTexture(_ slot: ReferenceWritableKeyPath<EditorState, MTLTexture?>) -> MTLTexture? {
+        if self[keyPath: slot] == nil { self[keyPath: slot] = renderer.makeLayerTexture() }
+        return self[keyPath: slot]
     }
 
     /// The drawing's pieces, checked against its pixels: if they no longer add up (it was filled,
@@ -1752,11 +1782,15 @@ final class EditorState: ObservableObject {
         if let i = layers.firstIndex(where: { $0.id == id }) { clip.layers[i].locked = true }
     }
 
-    /// Changes the floating selection's transform (move, scale, rotate, flip, anchor).
+    /// Changes the floating selection's transform (move, scale, stretch, rotate, flip, anchor).
     func updateSelection(_ change: (inout FloatingSelection) -> Void) {
         guard var sel = selection else { return }
         change(&sel)
-        sel.scale = min(max(sel.scale, FloatingSelection.scaleRange.lowerBound), FloatingSelection.scaleRange.upperBound)
+        let range = FloatingSelection.scaleRange
+        sel.scale = min(max(sel.scale, range.lowerBound), range.upperBound)
+        // Each axis on its own stays within the same range.
+        sel.stretch.width = min(max(sel.scaleX, range.lowerBound), range.upperBound) / sel.scale
+        sel.stretch.height = min(max(sel.scaleY, range.lowerBound), range.upperBound) / sel.scale
         selection = sel
         renderSelectionPreview()
     }
@@ -1780,9 +1814,12 @@ final class EditorState: ObservableObject {
         coalesceTag = nil
         push(snapshot(before))                  // with the pieces as they were
         if let moving, moving.key == sel.key, var pieces = strokes[sel.key] {
-            // Each piece moves on its own and stays a piece, in its place in the stack.
+            // Each piece moves on its own and stays a piece, in its place in the stack. A pencil
+            // stroke is painted again where it lands, so it stays as sharp as when it was drawn.
             for i in moving.indices.sorted(by: >) where pieces.indices.contains(i) {
-                if let t = pieces[i].transformed(sel.transform, canvasWidth: w, height: h, hard: project.pixelArt) {
+                if let recipe = pieces[i].recipe {
+                    if let t = paint(recipe.transformed(sel.transform)) { pieces[i] = t } else { pieces.remove(at: i) }
+                } else if let t = pieces[i].transformed(sel.transform, canvasWidth: w, height: h, hard: project.pixelArt) {
                     pieces[i] = t
                 } else {
                     pieces.remove(at: i)
@@ -1894,11 +1931,34 @@ final class EditorState: ObservableObject {
         renderSelectionPreview()
     }
 
+    /// The selection where it's placed now. Pencil strokes are painted again from their recipes,
+    /// sharp at any size; the rest (shapes, lassoed or pasted pixels) is resampled, beneath them.
     private func renderSelectionPreview() {
-        guard let sel = selection, let preview = selectionPreview else { return }
+        guard let sel = selection, var preview = selectionPreview else { return }
         let w = renderer.canvasSize.x, h = renderer.canvasSize.y
-        renderer.upload(bytes: SelectionPixels.render(sel.lifted, width: w, height: h, transform: sel.transform, hard: project.pixelArt),
-                        into: preview)
+        var recipes: [StrokeRecipe] = []
+        var lifted = sel.lifted
+        if let moving = movingPieces, moving.key == sel.key, let pieces = strokes[sel.key] {
+            let chosen = moving.indices.filter { pieces.indices.contains($0) }.map { pieces[$0] }
+            recipes = chosen.compactMap { $0.recipe?.transformed(sel.transform) }
+            if !recipes.isEmpty {
+                lifted = StrokePieces.composite(chosen.filter { $0.recipe == nil }, width: w, height: h)
+            }
+        }
+        if recipes.isEmpty || !SelectionPixels.isEmpty(lifted) {
+            renderer.upload(bytes: SelectionPixels.render(lifted, width: w, height: h, transform: sel.transform,
+                                                          hard: project.pixelArt), into: preview)
+        } else {
+            renderer.clear(preview)
+        }
+        guard !recipes.isEmpty, let stroke = recipeTexture(\.recipeStroke), var other = recipeTexture(\.recipeScratch)
+        else { return }
+        for r in recipes {
+            paintRecipe(r, stroke: stroke, base: preview, into: other)
+            swap(&preview, &other)
+        }
+        selectionPreview = preview
+        recipeScratch = other
     }
 
     private static func boundingBox(_ points: [CGPoint]) -> CGRect {
