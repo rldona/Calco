@@ -6,7 +6,7 @@ import Metal
 /// the bottom. In portrait the tools lie across the top and the animation rail above the timeline. The drawing fits in the space the
 /// panels leave free. Zen mode hides all of it except a small floating bar.
 struct ContentView: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     @State private var latencyMs: Double = 0
     /// Where each floating panel is, to keep the drawing out from under them.
     @State private var panels: [PanelSlot: CGRect] = [:]
@@ -109,16 +109,16 @@ struct ContentView: View {
                 if state.tool == .move, let id = state.moveBlockedLayer,
                    let layer = state.layers.first(where: { $0.id == id }) {
                     MoveLockedHint(state: state, layerName: layer.name)
-                        .padding(.bottom, state.canvasTransform.insets.bottom + 6)
-                } else if state.tool == .move && state.selection != nil {
+                        .padding(.bottom, state.bottomInset + 6)
+                } else if state.tool == .move && state.hasSelection {
                     MoveStrokesHint(state: state)
-                        .padding(.bottom, state.canvasTransform.insets.bottom + 6)
-                } else if state.selection != nil {
+                        .padding(.bottom, state.bottomInset + 6)
+                } else if state.hasSelection {
                     ScaleModePicker()
                         .padding(3)
                         .background(Theme.panel, in: RoundedRectangle(cornerRadius: 13))
                         .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(Theme.hairline))
-                        .padding(.bottom, state.canvasTransform.insets.bottom + 6)
+                        .padding(.bottom, state.bottomInset + 6)
                 }
             }
             .overlay(alignment: .top) {
@@ -137,7 +137,7 @@ struct ContentView: View {
 
 /// Document on the left; view toggles (fit, flip, Zen) on the right.
 struct TopBar: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     let latencyMs: Double
     @AppStorage("showLatency") private var showLatency = false
 
@@ -145,7 +145,7 @@ struct TopBar: View {
         HStack(spacing: 16) {
             FileMenu(state: state)
             Spacer()
-            if !state.canvasTransform.isFit {
+            if !state.canvasIsFit {
                 Button { state.fitCanvas() } label: {
                     Image(systemName: "arrow.down.right.and.arrow.up.left")
                 }
@@ -153,10 +153,10 @@ struct TopBar: View {
             }
             Button { state.canvasTransform.flipped.toggle() } label: {
                 Image(systemName: "arrow.left.and.right.righttriangle.left.righttriangle.right")
-                    .foregroundStyle(state.canvasTransform.flipped ? Theme.accent : Theme.textDim)
+                    .foregroundStyle(state.viewFlipped ? Theme.accent : Theme.textDim)
             }
             .help("Flip the view (H): see the drawing mirrored without changing it")
-            .accessibilityLabel(state.canvasTransform.flipped ? "Unflip view" : "Flip view")
+            .accessibilityLabel(state.viewFlipped ? "Unflip view" : "Flip view")
             Button { state.isZen = true } label: {
                 Label("Zen", systemImage: "circle.dashed.inset.filled")
                     .font(.caption.weight(.medium))
@@ -180,7 +180,7 @@ struct TopBar: View {
 
 /// Move on a locked layer (an imported image, say): one tap unlocks it for this move.
 struct MoveLockedHint: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     let layerName: String
 
     var body: some View {
@@ -206,7 +206,7 @@ struct MoveLockedHint: View {
 /// Under the canvas while Move holds something: which stroke of the ones under the finger it
 /// is, the switch to pick several, and how the corner scales.
 struct MoveStrokesHint: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
 
     private var caption: String {
         guard let hint = state.moveHint else { return String(localized: "The whole drawing", bundle: AppLanguage.bundle) }
@@ -247,7 +247,7 @@ struct MoveStrokesHint: View {
 
 /// Zen mode's only chrome: undo / redo, every tool, the colour, and the way back.
 struct ZenBar: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     @State private var editingColor = false
 
     var body: some View {
@@ -278,7 +278,7 @@ struct ZenBar: View {
 
 /// New / Open / Save / Save As, plus the project name with an unsaved-changes dot.
 struct FileMenu: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     @State private var showingOpen = false
     @State private var showingSaveAs = false
     @State private var showingNewProject = false
@@ -457,7 +457,7 @@ struct ExportSheet: View {
 
 /// Draggable pivot marker drawn in canvas space. Only the handle takes touches; the rest passes to the canvas.
 struct PivotOverlay: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     @GestureState private var dragging = false
 
     var body: some View {
@@ -525,3 +525,4 @@ extension View {
         })
     }
 }
+

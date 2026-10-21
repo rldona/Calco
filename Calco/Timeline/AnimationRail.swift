@@ -5,7 +5,7 @@ import SwiftUI
 /// current layer or on every layer. Upright beside the canvas in landscape; lying down above the
 /// timeline in portrait.
 struct AnimationRail: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     var axis: Axis = .vertical
     @State private var labeling = false
     @State private var labelText = ""
@@ -96,33 +96,9 @@ struct AnimationRail: View {
         }
     }
 
-    /// The cell at the playhead: hold the drawing before, or (when held) give it one of its own.
-    @ViewBuilder
+    /// Its own view, so only it follows the playhead (playing, it changes every frame).
     private func cell(compact: Bool) -> some View {
-        if state.syncLayers {
-            EmptyView()
-        } else if state.currentCellIsLinked {
-            AnimationButton(icon: "link", caption: "Unlink", compact: compact, label: "Unlink (keep a copy)") {
-                state.releaseCurrentCell(copying: true)
-            }
-        } else if state.currentCellIsHeld {
-            Menu {
-                Button { state.releaseCurrentCell(copying: false) } label: {
-                    Label("New drawing here", systemImage: "square.dashed")
-                }
-                Button { state.releaseCurrentCell(copying: true) } label: {
-                    Label("Copy drawing here", systemImage: "square.on.square")
-                }
-            } label: {
-                AnimationButtonLabel(icon: "square.dashed", caption: "Own drawing", compact: compact)
-            }
-            .accessibilityLabel("Own drawing")
-        } else {
-            AnimationButton(icon: "arrow.right.to.line", caption: "Hold", compact: compact, label: "Hold previous drawing") {
-                state.holdCurrentCell()
-            }
-            .disabled(state.frameIndex == 0)
-        }
+        CellButton(state: state, compact: compact)
     }
 
     private func delete(compact: Bool) -> some View {
@@ -136,38 +112,8 @@ struct AnimationRail: View {
     /// Everything used less often: label, inbetweens, cycles, and the whole-frame actions.
     private func more(compact: Bool) -> some View {
         Menu {
-            if !state.syncLayers {
-                Button {
-                    labelText = state.currentLayer.flatMap { state.drawingLabel(layer: $0.id, at: state.frameIndex) } ?? ""
-                    labeling = true
-                } label: { Label("Label drawing", systemImage: "tag") }
-            }
-            Menu {
-                Button { state.splitCurrentDrawing(copying: false) } label: {
-                    Label("Blank inbetween halfway", systemImage: "square.split.2x1")
-                }
-                Button { state.splitCurrentDrawing(copying: true) } label: {
-                    Label("Duplicate split halfway", systemImage: "square.on.square")
-                }
-            } label: { Label("Split drawing halfway", systemImage: "square.split.2x1") }
-            .disabled(!state.canSplitCurrentDrawing)
-            Button { repeating = true } label: { Label("Repeat drawings…", systemImage: "repeat") }
-                .disabled(state.drawingsUpToPlayhead == 0)
-            Section("Frame \(state.frameIndex + 1), all layers") {
-                Button { state.addBlankFrame() } label: { Label("Add frame", systemImage: "plus") }
-                Button { state.duplicateFrame() } label: { Label("Duplicate frame", systemImage: "plus.square.on.square") }
-                Button { state.moveFrame(by: -1) } label: { Label("Move earlier", systemImage: "arrowshape.left") }
-                    .disabled(state.frameIndex == 0)
-                Button { state.moveFrame(by: 1) } label: { Label("Move later", systemImage: "arrowshape.right") }
-                    .disabled(state.frameIndex >= state.frames.count - 1)
-                Button { state.setPlayRange(start: true) } label: { Label("Play from this frame", systemImage: "arrow.right.to.line") }
-                Button { state.setPlayRange(start: false) } label: { Label("Play up to this frame", systemImage: "arrow.left.to.line") }
-                if state.playRange != nil {
-                    Button { state.playRange = nil } label: { Label("Play whole clip", systemImage: "arrow.left.and.right") }
-                }
-                Button(role: .destructive) { state.deleteFrame() } label: { Label("Delete frame", systemImage: "trash") }
-                    .disabled(state.frames.count <= 1)
-            }
+            // Its own view, so the rail doesn't follow the playhead for it.
+            MoreMenuItems(state: state, labeling: $labeling, labelText: $labelText, repeating: $repeating)
         } label: {
             AnimationButtonLabel(icon: "ellipsis", caption: "More", compact: compact,
                                  tint: state.playRange == nil ? nil : Theme.accentText)
@@ -275,7 +221,7 @@ private struct AnimationButtonLabel: View {
 
 /// How many drawings before / after show through, their colours and strength.
 struct OnionOptions: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -317,7 +263,7 @@ struct OnionOptions: View {
 
 /// "Repeat": a cycle of the last few drawings, linked, right after the one at the playhead.
 struct RepeatOptions: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     let done: () -> Void
     @State private var count = 2
 
@@ -346,5 +292,82 @@ struct RepeatOptions: View {
         .tint(Theme.accent)
         .preferredColorScheme(.dark)
         .onAppear { count = max(1, min(count, state.drawingsUpToPlayhead)) }
+    }
+}
+
+/// The rail's button for the cell at the playhead: hold the drawing before, or (when held) give it
+/// one of its own.
+private struct CellButton: View {
+    @Bindable var state: EditorState
+    let compact: Bool
+
+    var body: some View {
+        if state.syncLayers {
+            EmptyView()
+        } else if state.currentCellIsLinked {
+            AnimationButton(icon: "link", caption: "Unlink", compact: compact, label: "Unlink (keep a copy)") {
+                state.releaseCurrentCell(copying: true)
+            }
+        } else if state.currentCellIsHeld {
+            Menu {
+                Button { state.releaseCurrentCell(copying: false) } label: {
+                    Label("New drawing here", systemImage: "square.dashed")
+                }
+                Button { state.releaseCurrentCell(copying: true) } label: {
+                    Label("Copy drawing here", systemImage: "square.on.square")
+                }
+            } label: {
+                AnimationButtonLabel(icon: "square.dashed", caption: "Own drawing", compact: compact)
+            }
+            .accessibilityLabel("Own drawing")
+        } else {
+            AnimationButton(icon: "arrow.right.to.line", caption: "Hold", compact: compact, label: "Hold previous drawing") {
+                state.holdCurrentCell()
+            }
+            .disabled(state.frameIndex == 0)
+        }
+    }
+}
+
+/// The More menu: label, inbetweens, cycles, and the whole-frame actions.
+private struct MoreMenuItems: View {
+    @Bindable var state: EditorState
+    @Binding var labeling: Bool
+    @Binding var labelText: String
+    @Binding var repeating: Bool
+
+    var body: some View {
+        if !state.syncLayers {
+            Button {
+                labelText = state.currentLayer.flatMap { state.drawingLabel(layer: $0.id, at: state.frameIndex) } ?? ""
+                labeling = true
+            } label: { Label("Label drawing", systemImage: "tag") }
+        }
+        Menu {
+            Button { state.splitCurrentDrawing(copying: false) } label: {
+                Label("Blank inbetween halfway", systemImage: "square.split.2x1")
+            }
+            Button { state.splitCurrentDrawing(copying: true) } label: {
+                Label("Duplicate split halfway", systemImage: "square.on.square")
+            }
+        } label: { Label("Split drawing halfway", systemImage: "square.split.2x1") }
+        .disabled(!state.canSplitCurrentDrawing)
+        Button { repeating = true } label: { Label("Repeat drawings…", systemImage: "repeat") }
+            .disabled(state.drawingsUpToPlayhead == 0)
+        Section("Frame \(state.frameIndex + 1), all layers") {
+            Button { state.addBlankFrame() } label: { Label("Add frame", systemImage: "plus") }
+            Button { state.duplicateFrame() } label: { Label("Duplicate frame", systemImage: "plus.square.on.square") }
+            Button { state.moveFrame(by: -1) } label: { Label("Move earlier", systemImage: "arrowshape.left") }
+                .disabled(state.frameIndex == 0)
+            Button { state.moveFrame(by: 1) } label: { Label("Move later", systemImage: "arrowshape.right") }
+                .disabled(state.frameIndex >= state.frames.count - 1)
+            Button { state.setPlayRange(start: true) } label: { Label("Play from this frame", systemImage: "arrow.right.to.line") }
+            Button { state.setPlayRange(start: false) } label: { Label("Play up to this frame", systemImage: "arrow.left.to.line") }
+            if state.playRange != nil {
+                Button { state.playRange = nil } label: { Label("Play whole clip", systemImage: "arrow.left.and.right") }
+            }
+            Button(role: .destructive) { state.deleteFrame() } label: { Label("Delete frame", systemImage: "trash") }
+                .disabled(state.frames.count <= 1)
+        }
     }
 }

@@ -2,7 +2,7 @@ import SwiftUI
 
 /// App-wide preferences (⌘,): the language and a performance readout.
 struct PreferencesView: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     @Environment(\.dismiss) private var dismiss
     @AppStorage("showLatency") private var showLatency = false
 

@@ -1,7 +1,6 @@
 import UIKit
 import MetalKit
 import SwiftUI
-import Combine
 
 /// UIKit view that owns the MTKView and handles Apple Pencil input.
 /// Paints into whatever `EditorState.beginStroke()` hands out, and composites
@@ -33,12 +32,8 @@ final class CanvasUIView: UIView {
     private var strokeTarget: MTLTexture?
 
     weak var state: EditorState? {
-        didSet {
-            changes = state?.objectWillChange.sink { [weak self] _ in self?.redraw() }
-            redraw()
-        }
+        didSet { redraw() }
     }
-    private var changes: AnyCancellable?
     private var touchLive = false { didSet { if touchLive != oldValue { live += touchLive ? 1 : -1 } } }
     /// Two-finger gestures in progress (pinch, twist, drag), each counted once.
     private var gesturesLive: Set<ObjectIdentifier> = [] { didSet { live = (touchLive ? 1 : 0) + gesturesLive.count } }
@@ -267,11 +262,20 @@ extension CanvasUIView: MTKViewDelegate {
     func draw(in view: MTKView) {
         // MTKView calls this on the main thread.
         MainActor.assumeIsolated {
-            guard let state, let drawable = view.currentDrawable else { return }
-            state.renderer.showsWorkspaceGrid = state.workspaceGrid
-            var transform = state.canvasTransform
+            guard let state else { return }
+            // Whatever this frame reads from the editor is watched: the next change to any of it
+            // (the playhead, a layer, the zoom, an edit…) asks for another frame. Nothing else does.
+            let (layers, grid, target) = withObservationTracking {
+                _ = state.canvasVersion
+                return (state.visibleLayers(), state.workspaceGrid, state.canvasTransform)
+            } onChange: { [weak self] in
+                DispatchQueue.main.async { self?.redraw() }
+            }
+            guard let drawable = view.currentDrawable else { return }
+            state.renderer.showsWorkspaceGrid = grid
+            var transform = target
             transform.insets = insets(toward: transform.insets)
-            state.renderer.present(state.visibleLayers(), to: drawable, viewSize: view.drawableSize,
+            state.renderer.present(layers, to: drawable, viewSize: view.drawableSize,
                                    transform: transform, unitsPerPoint: view.contentScaleFactor)
         }
     }
@@ -410,7 +414,7 @@ extension CanvasUIView: UIGestureRecognizerDelegate {
 // MARK: - SwiftUI bridge
 
 struct CanvasView: UIViewRepresentable {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     @Binding var latencyMs: Double
 
     func makeUIView(context: Context) -> CanvasUIView {

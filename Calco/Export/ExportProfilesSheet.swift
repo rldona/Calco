@@ -3,7 +3,7 @@ import SwiftUI
 /// "Export…": pick or tweak a profile, then export. Edits save straight into the profile, so the
 /// next project exports the same way; "Export again" (⇧⌘E) reruns the last one without this sheet.
 struct ExportProfilesSheet: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     let finished: ([URL], String) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var selection: UUID?
@@ -84,7 +84,7 @@ struct ExportProfilesSheet: View {
 }
 
 private struct ProfileEditor: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     @Binding var profile: ExportProfile
     @State private var issues: [ExportChecks.Issue] = []
 

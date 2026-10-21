@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Opens the full layers panel (drag to reorder, opacity sliders) from the exposure sheet.
 struct LayersButton: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     var iconOnly = false
     @State private var showing = false
 
@@ -25,7 +25,7 @@ struct LayersButton: View {
 
 /// The clip's layer stack, top layer first like every drawing app. Tap a row to paint on it; drag the handle to reorder.
 struct LayersPanel: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     @State private var naming: Naming?
     @State private var name = ""
     @State private var confirmingDelete = false
@@ -114,7 +114,7 @@ struct LayersPanel: View {
 }
 
 private struct LayerRow: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     let layerID: String
 
     var body: some View {

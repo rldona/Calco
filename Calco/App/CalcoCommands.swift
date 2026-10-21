@@ -3,7 +3,7 @@ import SwiftUI
 /// Every keyboard shortcut lives here, as app menu commands, so iPadOS lists them in the
 /// overlay you get by holding ⌘. Views keep their buttons but don't register shortcuts.
 struct CalcoCommands: Commands {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
 
     var body: some Commands {
         // File
@@ -48,12 +48,12 @@ struct CalcoCommands: Commands {
             Button("Lasso") { state.tool = .lasso }.keyboardShortcut("l", modifiers: [])
             Button("Move") { state.tool = .move }.keyboardShortcut("v", modifiers: [])
             Button("Apply Selection") { state.commitSelection() }.keyboardShortcut(.return, modifiers: [])
-                .disabled(state.selection == nil)
+                .disabled(!state.hasSelection)
             Button("Cancel Selection") { state.cancelSelection() }.keyboardShortcut(.escape, modifiers: [])
-                .disabled(state.selection == nil)
+                .disabled(!state.hasSelection)
             Button("Flip Selection") { state.updateSelection { $0.flipped.toggle() } }
                 .keyboardShortcut("h", modifiers: [.shift])
-                .disabled(state.selection == nil)
+                .disabled(!state.hasSelection)
             Button("Smaller") { state.stepToolSize(-1) }.keyboardShortcut("[", modifiers: [])
             Button("Bigger") { state.stepToolSize(1) }.keyboardShortcut("]", modifiers: [])
             Divider()
@@ -63,7 +63,7 @@ struct CalcoCommands: Commands {
             Button("Zoom In") { state.canvasTransform.zoom(by: 1.25) }.keyboardShortcut("=")
             Button("Zoom Out") { state.canvasTransform.zoom(by: 0.8) }.keyboardShortcut("-")
             Button("Fit Canvas") { state.fitCanvas() }.keyboardShortcut("0")
-            Button(state.canvasTransform.flipped ? "Unflip View" : "Flip View") { state.canvasTransform.flipped.toggle() }
+            Button(state.viewFlipped ? "Unflip View" : "Flip View") { state.canvasTransform.flipped.toggle() }
                 .keyboardShortcut("h", modifiers: [])
             Button(state.isZen ? "Leave Zen Mode" : "Zen Mode") { state.isZen.toggle() }
                 .keyboardShortcut("f", modifiers: [.command, .control])

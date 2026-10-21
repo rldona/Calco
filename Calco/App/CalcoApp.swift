@@ -3,7 +3,7 @@ import Metal
 
 @main
 struct CalcoApp: App {
-    @StateObject private var state = EditorState.make()
+    @State private var state = EditorState.make()
     @Environment(\.scenePhase) private var scenePhase
 
     init() {

@@ -3,7 +3,7 @@ import SwiftUI
 /// What Calco opens on: the projects in Documents as cards that play their first clip, with the
 /// most recent one up top as "Continue". Long-press a card to rename, duplicate or delete it.
 struct GalleryView: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     @State private var entries: [ProjectLibrary.Entry] = []
     @State private var previews: [URL: ProjectLibrary.Preview] = [:]
     @State private var showingNew = false

@@ -7,7 +7,7 @@ import UIKit
 /// rotation pivot around) without moving the drawing. With Free scaling the corner stretches too.
 /// Sits over the canvas view; everywhere it draws nothing, touches reach the canvas.
 struct SelectionOverlay: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     @State private var start: FloatingSelection?
     /// Whether the drag in progress is clicked into place; a light tap of haptics when it gets there.
     @State private var snapped = false
@@ -298,7 +298,7 @@ struct ScaleModePicker: View {
 
 /// Copy, cut, delete, flip, cancel and apply, floating above the selection.
 private struct SelectionBar: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
 
     var body: some View {
         HStack(spacing: 2) {

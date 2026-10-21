@@ -3,7 +3,7 @@ import Metal
 
 /// The brush's popover: the library (every brush with a sample stroke) and its settings.
 struct BrushPanel: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     @State private var tab = 0
 
     var body: some View {
@@ -31,7 +31,7 @@ struct BrushPanel: View {
 
 /// The eraser's popover: which brush tip it rubs out with.
 struct EraserPanel: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -49,7 +49,7 @@ struct EraserPanel: View {
 
 /// The current brush's opacity.
 private struct OpacityRow: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
 
     var body: some View {
         HStack {
@@ -65,7 +65,7 @@ private struct OpacityRow: View {
 
 /// Every brush, by section, each with a stroke painted by the real engine.
 private struct BrushList: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     let selected: String
     var ink = true
     let choose: (String) -> Void

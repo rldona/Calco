@@ -15,13 +15,24 @@ struct OnionSkin: Equatable {
 /// Everything the editor UI and the canvas view share.
 /// Owns the project model, the pixel store, and the current selection.
 @MainActor
-final class EditorState: ObservableObject {
+@Observable
+final class EditorState {
 
-    @Published var project: Project
-    @Published var clipIndex = 0
-    @Published var frameIndex = 0 { didSet { if frameIndex != oldValue { selectionTargetChanged() } } }
-    @Published var layerIndex = 0 { didSet { if layerIndex != oldValue { selectionTargetChanged() } } }
-    @Published var tool: CanvasRenderer.Tool = .brush {
+    var project: Project
+    var clipIndex = 0
+    var frameIndex = 0 {
+        didSet {
+            if frameIndex != oldValue { selectionTargetChanged() }
+            if !isPlaying { markFrame() }
+        }
+    }
+    /// The frame the timeline marks as current: the playhead, except while playing, when it stays
+    /// where playback started. So playing moves only the playhead, its counter and the canvas, not
+    /// every cell of the timeline.
+    private(set) var markedFrameIndex = 0
+    private func markFrame() { if markedFrameIndex != frameIndex { markedFrameIndex = frameIndex } }
+    var layerIndex = 0 { didSet { if layerIndex != oldValue { selectionTargetChanged() } } }
+    var tool: CanvasRenderer.Tool = .brush {
         didSet {
             if tool == .eyedropper && oldValue != .eyedropper { toolBeforeEyedropper = oldValue }
             if tool != oldValue { previousTool = oldValue }
@@ -31,16 +42,16 @@ final class EditorState: ObservableObject {
         }
     }
     /// The eyedropper is one-shot: after a pick you're back on this.
-    private var toolBeforeEyedropper: CanvasRenderer.Tool = .brush
+    @ObservationIgnored private var toolBeforeEyedropper: CanvasRenderer.Tool = .brush
     /// The brush the brush tool paints with, and the one whose tip the eraser rubs out with.
-    @Published var brushID = Brush.inker.id { didSet { saveToolSettings() } }
-    @Published var eraserBrushID = Brush.inker.id { didSet { saveToolSettings() } }
+    var brushID = Brush.inker.id { didSet { saveToolSettings() } }
+    var eraserBrushID = Brush.inker.id { didSet { saveToolSettings() } }
     /// Each brush's own size (radius in canvas pixels at full pressure) and opacity, once changed.
-    @Published private var brushSizes: [String: Float] = [:] { didSet { saveToolSettings() } }
-    @Published private var brushOpacities: [String: Float] = [:] { didSet { saveToolSettings() } }
-    @Published var eraserSize: Float = 18 { didSet { saveToolSettings() } }
+    private var brushSizes: [String: Float] = [:] { didSet { saveToolSettings() } }
+    private var brushOpacities: [String: Float] = [:] { didSet { saveToolSettings() } }
+    var eraserSize: Float = 18 { didSet { saveToolSettings() } }
     /// The faint grid around the canvas (Preferences).
-    @Published var workspaceGrid = true { didSet { saveToolSettings() } }
+    var workspaceGrid = true { didSet { saveToolSettings() } }
 
     var brush: Brush { Brush.named(brushID) }
     var eraserBrush: Brush { Brush.named(eraserBrushID) }
@@ -64,81 +75,100 @@ final class EditorState: ObservableObject {
     func opacity(of brush: Brush) -> Float { brushOpacities[brush.id] ?? brush.defaultOpacity }
 
     /// The stroke in progress on its own, composited onto the layer as it grows.
-    private var strokeTexture: MTLTexture?
-    private var strokeBase: MTLTexture?
+    @ObservationIgnored private var strokeTexture: MTLTexture?
+    @ObservationIgnored private var strokeBase: MTLTexture?
     /// Brush stabiliser 0–1 and whether the Pencil's pressure changes the size. Remembered.
-    @Published var smoothing: Float = 0.3 { didSet { saveToolSettings() } }
-    @Published var usePressure = true { didSet { saveToolSettings() } }
+    var smoothing: Float = 0.3 { didSet { saveToolSettings() } }
+    var usePressure = true { didSet { saveToolSettings() } }
     /// Brush and fill: over what's on the layer, behind it, or only inside it.
-    @Published var paintMode: CanvasRenderer.PaintMode = .front { didSet { saveToolSettings() } }
+    var paintMode: CanvasRenderer.PaintMode = .front { didSet { saveToolSettings() } }
     /// Fingers never draw (they still zoom, pan and undo); only the Apple Pencil does. Starts as the
     /// system's "Only draw with Apple Pencil" setting.
-    @Published var pencilOnly = false { didSet { saveToolSettings() } }
+    var pencilOnly = false { didSet { saveToolSettings() } }
     /// The tool before the current one, for the Pencil's "switch to previous tool".
     private(set) var previousTool: CanvasRenderer.Tool = .eraser
     /// Bumped when the Pencil asks for the colour palette (double tap / squeeze set to show it).
-    @Published var colorPickerRequest = 0
+    var colorPickerRequest = 0
     /// The bar's add / duplicate / delete act on every layer's frame instead of the current layer's drawing.
-    @Published var syncLayers = false { didSet { saveToolSettings() } }
+    var syncLayers = false { didSet { saveToolSettings() } }
     /// How big a break in a line the fill bucket bridges. Remembered across launches.
-    @Published var fillGaps: FillGaps = .small { didSet { saveToolSettings() } }
+    var fillGaps: FillGaps = .small { didSet { saveToolSettings() } }
     /// Brush colour, straight RGBA. Always opaque for now: overlapping stamps would build up any translucency.
-    @Published var color = SIMD4<Float>(0, 0, 0, 1) { didSet { saveToolSettings() } }
+    var color = SIMD4<Float>(0, 0, 0, 1) { didSet { saveToolSettings() } }
     static let sizeRange: ClosedRange<Float> = 1...64
-    @Published var onion = OnionSkin()
-    @Published var isPlaying = false
+    var onion = OnionSkin()
+    var isPlaying = false { didSet { if !isPlaying { markFrame() } } }
     /// Show the draggable pivot handle over the canvas.
-    @Published var showPivot = false
+    var showPivot = false
     /// The project gallery is showing instead of the editor. The app starts there.
-    @Published var isInGallery = true
+    var isInGallery = true
     /// English unless changed in Preferences; applies at once and is remembered.
-    @Published var language: AppLanguage = AppLanguage.saved {
+    var language: AppLanguage = AppLanguage.saved {
         didSet { if language != oldValue { AppLanguage.apply(language) } }
     }
-    @Published var showingPreferences = false
+    var showingPreferences = false
     /// The lasso being drawn, in canvas pixels. Empty when not drawing one.
-    @Published var lassoPoints: [CGPoint] = []
+    var lassoPoints: [CGPoint] = []
     /// What the lasso lifted, while it's being transformed. Nil when nothing is selected.
-    @Published private(set) var selection: FloatingSelection?
+    private(set) var selection: FloatingSelection? {
+        didSet { if (selection != nil) != hasSelection { hasSelection = selection != nil } }
+    }
+    /// Whether something floats, apart from where: the chrome only needs this much, and so isn't
+    /// redrawn on every step of a drag.
+    private(set) var hasSelection = false
     /// The layer's pixels from before the lift: one undo step covers lift, transform and drop.
-    private var selectionBefore: MTLTexture?
+    @ObservationIgnored private var selectionBefore: MTLTexture?
     /// The selection was lifted off the layer (lasso or Move), not pasted: left where it was, it's no change.
-    private var selectionIsLift = false
+    @ObservationIgnored private var selectionIsLift = false
     /// With Move: the current layer is locked, so nothing was lifted. The editor offers to unlock it.
-    @Published private(set) var moveBlockedLayer: String?
+    private(set) var moveBlockedLayer: String?
     /// A layer Move unlocked for a moment; it's locked again when the move is dropped.
-    private var relockAfterMove: String?
+    @ObservationIgnored private var relockAfterMove: String?
     /// The selection drawn at its current transform, composited above its layer.
-    private var selectionPreview: MTLTexture?
+    @ObservationIgnored private var selectionPreview: MTLTexture?
     /// Where strokes are painted again from their recipes: the stroke, and the other half of a
     /// ping-pong with `selectionPreview`.
-    private var recipeStroke: MTLTexture?
-    private var recipeScratch: MTLTexture?
+    @ObservationIgnored private var recipeStroke: MTLTexture?
+    @ObservationIgnored private var recipeScratch: MTLTexture?
     /// Zen mode: only the canvas and a small floating bar. View state only.
-    @Published var isZen = false
+    var isZen = false
     /// Zoom / pan / rotation of the canvas on screen. View state only: not saved, not undoable.
-    @Published var canvasTransform = CanvasTransform.identity
+    var canvasTransform = CanvasTransform.identity {
+        didSet {
+            if canvasTransform.flipped != viewFlipped { viewFlipped = canvasTransform.flipped }
+            if canvasTransform.isFit != canvasIsFit { canvasIsFit = canvasTransform.isFit }
+            if canvasTransform.insets.bottom != bottomInset { bottomInset = canvasTransform.insets.bottom }
+        }
+    }
+    /// The bits of `canvasTransform` the chrome shows, apart, so a pinch or a pan doesn't redraw
+    /// the chrome on every frame.
+    private(set) var viewFlipped = false
+    private(set) var canvasIsFit = true
+    private(set) var bottomInset: CGFloat = 0
 
     /// Back to the fitted, upright canvas; a flipped view stays flipped.
     func fitCanvas() { canvasTransform = CanvasTransform(flipped: canvasTransform.flipped, insets: canvasTransform.insets) }
     /// Each drawing on its own over white paper, for the timeline's cells.
-    @Published private(set) var drawingThumbnails: [LayerKey: CGImage] = [:]
+    private(set) var drawingThumbnails: [LayerKey: CGImage] = [:]
     /// Which texture each preview was made from, to skip the ones that haven't changed.
-    private var drawingThumbnailSource: [LayerKey: ObjectIdentifier] = [:]
-    private var pendingThumbnails: [LayerKey: CGImage?] = [:]
-    private var thumbnailFlushScheduled = false
+    @ObservationIgnored private var drawingThumbnailSource: [LayerKey: ObjectIdentifier] = [:]
+    @ObservationIgnored private var pendingThumbnails: [LayerKey: CGImage?] = [:]
+    @ObservationIgnored private var thumbnailFlushScheduled = false
 
     /// Where the project lives on disk. Nil until the first save.
-    @Published private(set) var documentURL: URL?
+    private(set) var documentURL: URL?
     /// True when there are changes since the last save or load.
-    @Published private(set) var isDirty = false
+    private(set) var isDirty = false { didSet { canvasVersion &+= 1 } }
+    /// Bumped whenever the drawings' pixels may have changed (every edit marks the document
+    /// dirty), so the canvas, which watches what it draws, knows to draw again.
+    private(set) var canvasVersion = 0
     /// Last file error, shown by the UI and cleared by it.
-    @Published var lastError: String?
+    var lastError: String?
 
     /// Actions that need a dialog or sheet owned by a view (the file menu). Menus and keyboard
     /// shortcuts set it; the view presents what's needed and clears it.
     enum Request: Equatable { case newProject, open, saveAs, export, exportAgain, exportGIF }
-    @Published var request: Request?
+    var request: Request?
 
     private(set) var renderer: CanvasRenderer
     private(set) var store: FrameStore
@@ -147,39 +177,39 @@ final class EditorState: ObservableObject {
     private let defaults: UserDefaults?
 
     /// Saved export profiles (app-wide) and the one used last.
-    @Published var exportProfiles: [ExportProfile] = ExportProfile.presets {
+    var exportProfiles: [ExportProfile] = ExportProfile.presets {
         didSet { ExportProfileStore(defaults: defaults).save(exportProfiles) }
     }
-    @Published var lastExportProfileID: UUID? {
+    var lastExportProfileID: UUID? {
         didSet { ExportProfileStore(defaults: defaults).lastUsed = lastExportProfileID }
     }
     var lastExportProfile: ExportProfile? {
         exportProfiles.first { $0.id == lastExportProfileID }
     }
 
-    private var nextFrameNumber = 0
-    private var playTask: Task<Void, Never>?
+    @ObservationIgnored private var nextFrameNumber = 0
+    @ObservationIgnored private var playTask: Task<Void, Never>?
 
-    @Published private var undoStack: [Snapshot] = []
-    @Published private var redoStack: [Snapshot] = []
-    private var coalesceTag: String?
+    private var undoStack: [Snapshot] = []
+    private var redoStack: [Snapshot] = []
+    @ObservationIgnored private var coalesceTag: String?
     /// Pixels from before the stroke in progress; enters the history only when the stroke ends.
-    private var pendingStroke: Snapshot?
+    @ObservationIgnored private var pendingStroke: Snapshot?
     /// The stamps of the stroke in progress, so it can be kept as a piece of its own.
-    private var pendingStamps: [CanvasRenderer.Stamp] = []
+    @ObservationIgnored private var pendingStamps: [CanvasRenderer.Stamp] = []
 
     /// Each drawing's pieces, bottom to top: its pencil strokes, and shapes for what can't be told
     /// apart any more. Move picks them one by one. Missing means not known: the drawing is split
     /// into its separate shapes when Move needs it.
-    private(set) var strokes: [LayerKey: [StrokePiece]] = [:]
+    @ObservationIgnored private(set) var strokes: [LayerKey: [StrokePiece]] = [:]
     /// When Move picked pieces: which ones float, so they go back as pieces.
-    private var movingPieces: (key: LayerKey, indices: [Int])?
+    @ObservationIgnored private var movingPieces: (key: LayerKey, indices: [Int])?
     /// Where the last tap picked, so tapping the same spot again goes to the piece underneath.
-    private var lastPick: (key: LayerKey, point: CGPoint, index: Int)?
+    @ObservationIgnored private var lastPick: (key: LayerKey, point: CGPoint, index: Int)?
     /// Move: taps add pieces to (or take them out of) what's floating instead of replacing it.
-    @Published var addingStrokes = false
+    var addingStrokes = false
     /// What Move picked with the last tap, for the hint under the canvas.
-    @Published private(set) var moveHint: MoveHint?
+    private(set) var moveHint: MoveHint?
 
     struct MoveHint: Equatable {
         /// Pieces under the tap, and which of them (1 = the bottom one) is picked.
@@ -1282,7 +1312,7 @@ final class EditorState: ObservableObject {
 
     /// Frames playback runs over: the whole clip, or the in / out range when one is set.
     /// View state: not saved, and it never affects export.
-    @Published var playRange: ClosedRange<Int>?
+    var playRange: ClosedRange<Int>?
 
     var effectivePlayRange: ClosedRange<Int> {
         let all = 0...max(0, frames.count - 1)
@@ -1540,6 +1570,7 @@ final class EditorState: ObservableObject {
         pendingStroke = nil
         pendingStamps = []
         for (k, t) in s.textures { store.set(t, for: k); refreshThumbnails(showing: k) }
+        canvasVersion &+= 1
     }
 
     // MARK: - Pieces
@@ -1857,7 +1888,7 @@ final class EditorState: ObservableObject {
         var pixels: [UInt8]
         var outline: [CGPoint]
     }
-    @Published private(set) var clipboard: Clipboard?
+    private(set) var clipboard: Clipboard?
 
     /// Lifts the whole drawing at the playhead into a selection, ready to move, copy or cut.
     func selectAll() {
@@ -2001,7 +2032,7 @@ final class EditorState: ObservableObject {
         static let pencilOnly = "tool.pencilOnly"
     }
 
-    private var loadingToolSettings = false
+    @ObservationIgnored private var loadingToolSettings = false
 
     /// Missing or out-of-range values keep the defaults.
     private func loadToolSettings() {

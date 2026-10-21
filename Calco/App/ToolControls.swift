@@ -7,7 +7,7 @@ import simd
 /// (`axis: .horizontal`), where there's height to spare, and the canvas gets the whole width.
 /// Keyboard shortcuts (B, E, [ and ]) live in CalcoCommands.
 struct ToolRail: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     var axis: Axis = .vertical
     @State private var editingSize = false
     @State private var editingColor = false
@@ -114,7 +114,7 @@ struct ToolRail: View {
 
 /// The brush colour; dims while erasing. Tapping opens the palette.
 struct ColorSwatch: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     @Binding var editing: Bool
     var diameter: CGFloat = 24
 
@@ -137,7 +137,7 @@ struct ColorSwatch: View {
 
 /// Drag up (or right) for bigger. Square-root mapping so small sizes get most of the travel.
 private struct SizeSlider: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     let axis: Axis
 
     var body: some View {
@@ -178,7 +178,7 @@ private struct SizeSlider: View {
 
 /// The brush's options: where it draws, stabiliser, pressure and pixel art.
 struct BrushOptions: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -215,7 +215,7 @@ struct BrushOptions: View {
 
 /// The bucket's options: how big a gap in a line it bridges.
 struct FillOptions: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -237,7 +237,7 @@ struct FillOptions: View {
 }
 
 struct SizePopover: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
 
     var body: some View {
         VStack(spacing: 14) {
@@ -266,7 +266,7 @@ struct SizePopover: View {
 }
 
 struct ColorPopover: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
 
     /// Neutrals first, then a hue wheel, then skin and earth tones.
     static let palette: [UInt32] = [
@@ -327,7 +327,7 @@ extension Color {
 
 /// Where new paint lands on the layer, shared by brush and fill.
 struct PaintModePicker: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -355,7 +355,7 @@ extension CanvasRenderer.PaintMode {
 
 /// The lasso's options: select the whole drawing, or paste what was copied.
 struct LassoOptions: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     let done: () -> Void
 
     var body: some View {

@@ -8,7 +8,7 @@ import ImageIO
 /// for the whole clip is a single long cell. Tap a cell to go to that frame and layer. What you do
 /// to the drawings lives in the AnimationRail.
 struct TimelineView: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     @State private var labeling = false
     @State private var labelText = ""
 
@@ -91,9 +91,7 @@ struct TimelineView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(state.isPlaying ? "Pause" : "Play")
-            Text("\(state.frameIndex + 1) / \(state.frames.count)")
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(Theme.textDim)
+            FrameCounter(state: state, font: .system(.caption, design: .monospaced))
             Capsule().fill(Theme.textFaint).frame(width: 46, height: 5)
             Image(systemName: "chevron.up").font(.caption.weight(.semibold)).foregroundStyle(Theme.textDim)
         }
@@ -145,11 +143,7 @@ struct TimelineView: View {
                             .coordinateSpace(name: Self.sheet)
                             .padding(.trailing, 8)
                         }
-                        .onChange(of: state.frameIndex) { _, _ in
-                            if let f = state.currentFrame {
-                                withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(f.id, anchor: .center) }
-                            }
-                        }
+                        .background { FollowPlayhead(state: state, proxy: proxy) }
                     }
                 }
             }
@@ -215,9 +209,7 @@ struct TimelineView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(state.isPlaying ? "Pause" : "Play")
 
-            Text("\(state.frameIndex + 1) / \(state.frames.count)")
-                .font(.system(.subheadline, design: .monospaced))
-                .foregroundStyle(Theme.textDim)
+            FrameCounter(state: state, font: .system(.subheadline, design: .monospaced))
                 .fixedSize()
 
             ClipTabs(state: state)
@@ -253,7 +245,7 @@ struct TimelineView: View {
             ForEach(Array(state.frames.enumerated()), id: \.element.id) { i, frame in
                 Text("\(i + 1)")
                     .font(.system(size: 9, design: .monospaced))
-                    .foregroundStyle(i == state.frameIndex ? Theme.accentText : Theme.textFaint)
+                    .foregroundStyle(i == state.markedFrameIndex ? Theme.accentText : Theme.textFaint)
                     .padding(.leading, 3)
                     .frame(width: width(frame), height: Self.rulerHeight, alignment: .bottomLeading)
                     .background(state.playRange != nil && range.contains(i) ? Theme.accent.opacity(0.12) : .clear)
@@ -276,21 +268,15 @@ struct TimelineView: View {
     }
 
     private var playhead: some View {
-        let x = x(ofFrame: state.frameIndex)
-        let w = state.currentFrame.map(width) ?? tick
-        return Rectangle()
-            .fill(Theme.accent.opacity(0.10))
-            .frame(width: w, height: Self.rulerHeight + CGFloat(state.layers.count) * (rowHeight + Self.rowGap))
-            .overlay(alignment: .leading) { Rectangle().fill(Theme.accent).frame(width: 2) }
-            .offset(x: x)
-            .allowsHitTesting(false)
+        Playhead(state: state, tick: tick,
+                 height: Self.rulerHeight + CGFloat(state.layers.count) * (rowHeight + Self.rowGap))
     }
 
     /// One layer's exposures: each drawing a cell spanning its own frame and the frames holding it.
     private func row(_ layer: Layer) -> some View {
         let clip = state.clip
         let isCurrentLayer = layer.id == state.currentLayer?.id
-        let currentRun = clip.cellStart(layer: layer.id, at: state.frameIndex)
+        let currentRun = clip.cellStart(layer: layer.id, at: state.markedFrameIndex)
         let runs = clip.runs(of: layer.id)
         let runIndex = Dictionary(uniqueKeysWithValues: runs.enumerated().map { ($1.start, $0) })
         return HStack(spacing: 0) {
@@ -441,7 +427,7 @@ struct TimelineView: View {
 /// A layer's label in the sheet: eye, name, opacity when not 100%, lock. Tap to draw on it;
 /// long-press for rename, opacity, order and delete.
 private struct LayerLabel: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     let layerID: String
     let height: CGFloat
     @State private var renaming = false
@@ -537,7 +523,7 @@ private struct LayerLabel: View {
 
 /// The clips as tabs; the last tab's menu adds, renames and deletes.
 private struct ClipTabs: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     @State private var addingClip = false
     @State private var renamingClip = false
     @State private var confirmingDelete = false
@@ -592,9 +578,12 @@ private struct ClipTabs: View {
 /// How long the frame at the playhead stays on screen (every layer). Lit up when it's held, so a
 /// long frame is easy to spot.
 private struct HoldControl: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
 
-    private var hold: Int { state.currentFrame?.hold ?? 1 }
+    /// Of the marked frame: playing doesn't change it on every frame.
+    private var hold: Int {
+        state.frames.indices.contains(state.markedFrameIndex) ? state.frames[state.markedFrameIndex].hold : 1
+    }
 
     var body: some View {
         HStack(spacing: 6) {
@@ -637,7 +626,7 @@ private struct HoldControl: View {
 
 /// "12 fps · loop ⌄": the clip's speed, looping and pivot in one popover.
 private struct ClipSettingsButton: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     @State private var showing = false
 
     var body: some View {
@@ -683,7 +672,7 @@ private struct ClipSettingsButton: View {
 /// "+" over the layer names: a blank layer, one with the current layer's timing, a duplicate, or
 /// an image to trace over (a guide layer).
 private struct NewLayerMenu: View {
-    @ObservedObject var state: EditorState
+    @Bindable var state: EditorState
     @State private var pickingPhoto = false
     @State private var photo: PhotosPickerItem?
     @State private var importingFile = false
@@ -737,5 +726,60 @@ private struct NewLayerMenu: View {
             return
         }
         state.importImageLayer(image, name: name)
+    }
+}
+
+// The parts that follow the playhead while playing, each its own view so the rest of the timeline
+// stays put.
+
+/// Frame / total.
+private struct FrameCounter: View {
+    @Bindable var state: EditorState
+    let font: Font
+
+    var body: some View {
+        // Verbatim: nothing to translate, and it changes on every frame while playing.
+        Text(verbatim: "\(state.frameIndex + 1) / \(state.frames.count)")
+            .font(font)
+            .foregroundStyle(Theme.textDim)
+    }
+}
+
+/// The band over the frame at the playhead.
+private struct Playhead: View {
+    @Bindable var state: EditorState
+    let tick: CGFloat
+    let height: CGFloat
+
+    var body: some View {
+        let frames = state.frames
+        let i = min(state.frameIndex, max(0, frames.count - 1))
+        let x = frames.prefix(i).reduce(0) { $0 + tick * CGFloat($1.hold) }
+        let w = frames.indices.contains(i) ? tick * CGFloat(frames[i].hold) : tick
+        Rectangle()
+            .fill(Theme.accent.opacity(0.10))
+            .frame(width: w, height: height)
+            .overlay(alignment: .leading) { Rectangle().fill(Theme.accent).frame(width: 2) }
+            .offset(x: x)
+            .allowsHitTesting(false)
+    }
+}
+
+/// Keeps the frame at the playhead in view.
+private struct FollowPlayhead: View {
+    @Bindable var state: EditorState
+    let proxy: ScrollViewProxy
+
+    var body: some View {
+        Color.clear
+            .onChange(of: state.frameIndex) { _, _ in
+                guard let f = state.currentFrame else { return }
+                // Playing, it keeps up without an animation running all the time.
+                if state.isPlaying {
+                    proxy.scrollTo(f.id, anchor: .center)
+                } else {
+                    withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(f.id, anchor: .center) }
+                }
+            }
     }
 }
