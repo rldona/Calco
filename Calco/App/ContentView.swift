@@ -105,6 +105,7 @@ struct ContentView: View {
                 if state.showPivot { PivotOverlay(state: state) }
             }
             .overlay { SelectionOverlay(state: state) }
+            .overlay { ShapeDraftOverlay(state: state) }
             .overlay(alignment: .bottom) {
                 if state.tool == .move, let id = state.moveBlockedLayer,
                    let layer = state.layers.first(where: { $0.id == id }) {
@@ -264,6 +265,9 @@ struct ZenBar: View {
             RailButton(icon: "lasso", label: "Lasso", active: state.tool == .lasso, size: 34) { state.tool = .lasso }
             RailButton(icon: "arrow.up.and.down.and.arrow.left.and.right", label: "Move", active: state.tool == .move, size: 34) {
                 if state.tool == .move { state.liftForMove() } else { state.tool = .move }
+            }
+            RailButton(icon: state.shapeOptions.kind.icon, label: "Shapes", active: state.tool == .shape, size: 34) {
+                state.tool = .shape
             }
             ColorSwatch(state: state, editing: $editingColor, diameter: 20)
             Divider().overlay(Theme.hairline).frame(height: 20).padding(.horizontal, 2)

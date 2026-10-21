@@ -64,7 +64,7 @@ final class CanvasRenderer {
     }
 
     /// Fill and eyedropper never reach `paint`; they act on a tap (see CanvasUIView).
-    enum Tool { case brush, eraser, fill, eyedropper, lasso, move }
+    enum Tool { case brush, eraser, fill, eyedropper, lasso, move, shape }
 
     /// Where new paint goes on the layer: over what's there, under it (colour under line art), or
     /// only on what's already drawn, keeping its transparency (shading).

@@ -20,6 +20,8 @@
 "%lld fps" = "%lld fps";
 "%lld frames" = "%lld fotogramas";
 "%lld pixels per unit" = "%lld píxeles por unidad";
+"%lld points" = "%lld puntas";
+"%lld sides" = "%lld lados";
 "%lld strokes" = "%lld trazos";
 "1 clip" = "1 clip";
 "1 clip ·" = "1 clip ·";
@@ -48,6 +50,7 @@
 "Another clip (crouch, dash…)" = "Otro clip (agacharse, esquivar…)";
 "Apply Selection" = "Aplicar selección";
 "Apply selection" = "Aplicar selección";
+"Arrow" = "Flecha";
 "Ballpoint" = "Bolígrafo";
 "Before you export" = "Antes de exportar";
 "Behind" = "Detrás";
@@ -65,6 +68,7 @@
 "Cancel Selection" = "Cancelar selección";
 "Cancel selection" = "Cancelar selección";
 "Charcoal" = "Carboncillo";
+"Circle" = "Círculo";
 "Clean line that thins with pressure" = "Línea limpia, afina con la presión";
 "Clear Layer" = "Vaciar capa";
 "Clear drawing" = "Vaciar dibujo";
@@ -90,6 +94,7 @@
 "Current layer only" = "Solo la capa actual";
 "Custom" = "Otro";
 "Cut" = "Cortar";
+"Dashed" = "Discontinuo";
 "Delete" = "Eliminar";
 "Delete %@" = "Eliminar %@";
 "Delete %@?" = "¿Eliminar %@?";
@@ -102,6 +107,8 @@
 "Delete selection" = "Eliminar selección";
 "Delete…" = "Eliminar…";
 "Done" = "OK";
+"Dotted" = "Puntos";
+"Drag from corner to corner. Near even, it clicks into a square or a circle; lines click every 45°. In the bar's colour." = "Arrastra de esquina a esquina. Cerca de 1:1 encaja en cuadrado o círculo; las líneas, cada 45°. Con el color de la barra.";
 "Drag up or down to resize. Double tap for the automatic height." = "Arrastra arriba o abajo para cambiar el tamaño. Doble toque para la altura automática.";
 "Draw" = "Dibujo";
 "Drawing length" = "Duración del dibujo";
@@ -118,10 +125,12 @@
 "Duplicate frame" = "Duplicar fotograma";
 "Duplicate profile" = "Duplicar perfil";
 "Duplicate split halfway" = "Duplicar partiendo a mitad";
+"Ellipse" = "Elipse";
 "Empty layer" = "Capa vacía";
 "Eraser" = "Goma";
 "Eraser size" = "Tamaño de la goma";
 "Eraser tip" = "Punta de la goma";
+"Even" = "Regular";
 "Every clip" = "Todos los clips";
 "Export" = "Exportar";
 "Export %@" = "Exportar %@";
@@ -135,6 +144,8 @@
 "Eyedropper" = "Cuentagotas";
 "File error" = "Error de archivo";
 "Fill" = "Relleno";
+"Fill only" = "Solo relleno";
+"Filled" = "Relleno";
 "Fine and steady" = "Fino y constante";
 "Fingers still zoom, pan and undo. Double tap or squeeze the Pencil does what you chose in Settings → Apple Pencil." = "Los dedos siguen sirviendo para ampliar, desplazar y deshacer. Tocar dos veces o apretar el Pencil hace lo que elegiste en Ajustes → Apple Pencil.";
 "Fit Canvas" = "Ajustar lienzo";
@@ -225,6 +236,7 @@
 "New project" = "Nuevo proyecto";
 "New project…" = "Nuevo proyecto…";
 "Next Frame" = "Fotograma siguiente";
+"No fill" = "Sin relleno";
 "Nothing to fix" = "Nada que corregir";
 "OK" = "OK";
 "Off" = "No";
@@ -241,6 +253,7 @@
 "Open" = "Abrir";
 "Open from Files" = "Abrir desde Archivos";
 "Open from Files…" = "Abrir desde Archivos…";
+"Outline" = "Trazo";
 "Over what's already on the layer." = "Encima de lo que ya hay en la capa.";
 "Own drawing" = "Dibujo propio";
 "PNG + SpriteFrames .tres with one animation per clip, %lld × %lld px frames. Keep both files together; set the AnimatedSprite2D offset for the pivot." = "PNG + SpriteFrames .tres con una animación por clip, fotogramas de %lld × %lld px. Mantén los dos archivos juntos; ajusta el offset del AnimatedSprite2D para el pivote.";
@@ -261,11 +274,13 @@
 "Play from this frame" = "Reproducir desde este fotograma";
 "Play up to this frame" = "Reproducir hasta este fotograma";
 "Play whole clip" = "Reproducir todo el clip";
+"Polygon" = "Polígono";
 "Power-of-two sheet" = "Hoja en potencia de dos";
 "Preferences" = "Preferencias";
 "Preferences…" = "Preferencias…";
 "Previous Frame" = "Fotograma anterior";
 "Project name" = "Nombre del proyecto";
+"Rectangle" = "Rectángulo";
 "Redo" = "Rehacer";
 "Reference" = "Referencia";
 "Rename" = "Renombrar";
@@ -282,6 +297,7 @@
 "Retro, few poses" = "Retro, pocas poses";
 "Rotate selection" = "Girar selección";
 "Rough, for quick masses" = "Áspero, para manchar rápido";
+"Rounded rectangle" = "Rectángulo redondeado";
 "Rub out with the edge of any brush: a soft airbrush, a grainy pencil…" = "Borra con la punta de cualquier pincel: un aerógrafo suave, un lápiz con grano…";
 "Same timing as %@, blank" = "Mismo ritmo que %@, vacía";
 "Save" = "Guardar";
@@ -297,6 +313,8 @@
 "Selection anchor" = "Ancla de la selección";
 "Set pixels per unit" = "Fijar píxeles por unidad";
 "Settings" = "Ajustes";
+"Shape" = "Forma";
+"Shapes" = "Formas";
 "Share %@" = "Compartir %@";
 "Share %lld files" = "Compartir %lld archivos";
 "Share PNG + JSON" = "Compartir PNG + JSON";
@@ -312,10 +330,13 @@
 "Smaller" = "Más pequeño";
 "Smoothing" = "Suavizado";
 "Soft edge, tapering tip" = "Borde suave, punta que afina";
+"Solid" = "Continuo";
 "Speed" = "Velocidad";
 "Split drawing halfway" = "Partir el dibujo a mitad";
 "Sprite sheet + JSON" = "Hoja de sprites + JSON";
 "Sprite size" = "Tamaño del sprite";
+"Square" = "Cuadrado";
+"Star" = "Estrella";
 "Start with these clips" = "Empezar con estos clips";
 "Start your first animation" = "Empieza tu primera animación";
 "Starts with one Idle clip." = "Empieza con un clip Idle.";
@@ -330,8 +351,10 @@
 "Taps add strokes to what you're moving, or take them out" = "Cada toque añade un trazo a lo que mueves, o lo quita";
 "The usual for games" = "Lo habitual en juegos";
 "The whole drawing" = "Todo el dibujo";
+"Thickness" = "Grosor";
 "This project: brush, eraser, fill and lasso with hard edges, every pixel fully on or off." = "Este proyecto: pincel, goma, relleno y lazo con bordes duros, cada píxel pintado o vacío del todo.";
 "Timeline height" = "Altura de la línea de tiempo";
+"Triangle" = "Triángulo";
 "Trim transparent borders" = "Recortar bordes transparentes";
 "Under what's already on the layer: colour under line art without touching the lines." = "Debajo de lo que ya hay en la capa: colorear bajo la línea sin tocarla.";
 "Undo" = "Deshacer";

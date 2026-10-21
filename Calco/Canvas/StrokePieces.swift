@@ -89,6 +89,8 @@ struct StrokeRecipe: Equatable {
     var tip: CanvasRenderer.BrushTip
     var opacity: Float
     var hard: Bool
+    /// A shape's inside, painted under its outline in the same colour (canvas pixels).
+    var fill: [SIMD2<Float>]? = nil
 
     /// The stamps moved by `t` (canvas space). The line keeps its weight under a stretch: each
     /// stamp's radius scales by how much `t` scales area, the geometric mean of the two axes.
@@ -98,6 +100,10 @@ struct StrokeRecipe: Equatable {
         out.stamps = stamps.map { s in
             let p = CGPoint(x: CGFloat(s.position.x), y: CGFloat(s.position.y)).applying(t)
             return CanvasRenderer.Stamp(position: SIMD2(Float(p.x), Float(p.y)), radius: s.radius * k, alpha: s.alpha)
+        }
+        out.fill = fill?.map { v in
+            let p = CGPoint(x: CGFloat(v.x), y: CGFloat(v.y)).applying(t)
+            return SIMD2(Float(p.x), Float(p.y))
         }
         return out
     }
@@ -206,11 +212,16 @@ enum StrokePieces {
     }
 
     /// A recipe: colour (3 floats), hardness, grain, grain scale, builds up, opacity, hard, stamp
-    /// count, then each stamp's x, y, radius and alpha.
+    /// count, then each stamp's x, y, radius and alpha; then, for a filled shape, the number of
+    /// corners of its inside and each one's x and y.
     private static func encode(_ r: StrokeRecipe) -> Data {
         var words: [UInt32] = [r.color.x, r.color.y, r.color.z, r.tip.hardness, r.tip.grain, r.tip.grainScale].map(\.bitPattern)
         words += [r.tip.buildsUp ? 1 : 0, r.opacity.bitPattern, r.hard ? 1 : 0, UInt32(r.stamps.count)]
         for s in r.stamps { words += [s.position.x, s.position.y, s.radius, s.alpha].map(\.bitPattern) }
+        if let fill = r.fill {
+            words.append(UInt32(fill.count))
+            for p in fill { words += [p.x.bitPattern, p.y.bitPattern] }
+        }
         return words.map(\.littleEndian).withUnsafeBytes { Data($0) }
     }
 
@@ -222,13 +233,20 @@ enum StrokePieces {
         }
         let f = { (i: Int) in Float(bitPattern: w[i]) }
         let n = Int(w[9])
-        guard w.count == 10 + n * 4 else { return nil }
+        guard w.count >= 10 + n * 4 else { return nil }
+        var fill: [SIMD2<Float>]?
+        let at = 10 + n * 4
+        if w.count > at {
+            let m = Int(w[at])
+            guard w.count == at + 1 + m * 2 else { return nil }
+            fill = (0..<m).map { SIMD2(f(at + 1 + $0 * 2), f(at + 2 + $0 * 2)) }
+        }
         let stamps = (0..<n).map { i in
             CanvasRenderer.Stamp(position: SIMD2(f(10 + i * 4), f(11 + i * 4)), radius: f(12 + i * 4), alpha: f(13 + i * 4))
         }
         return StrokeRecipe(stamps: stamps, color: SIMD3(f(0), f(1), f(2)),
                             tip: .init(hardness: f(3), grain: f(4), grainScale: f(5), buildsUp: w[6] != 0),
-                            opacity: f(7), hard: w[8] != 0)
+                            opacity: f(7), hard: w[8] != 0, fill: fill)
     }
 
     static func decode(_ data: Data) -> [StrokePiece]? {

@@ -74,8 +74,10 @@ final class StrokePiecesTests: XCTestCase {
                                     color: SIMD3(0.1, 0.2, 0.3), tip: .init(hardness: 0.7, grain: 0.5, grainScale: 1.6, buildsUp: true),
                                     opacity: 0.6, hard: false)
         let plain = try XCTUnwrap(StrokePiece(canvas: block(10, 10, x: 5, y: 5, w: 2, h: 2), width: 10, height: 10))
-        let data = try XCTUnwrap(StrokePieces.encode([piece, plain]))
-        XCTAssertEqual(StrokePieces.decode(data), [piece, plain])
+        var shape = piece
+        shape.recipe?.fill = [SIMD2(1, 1), SIMD2(8, 1), SIMD2(4.5, 7)]
+        let data = try XCTUnwrap(StrokePieces.encode([piece, plain, shape]))
+        XCTAssertEqual(StrokePieces.decode(data), [piece, plain, shape])
     }
 
     func testARecipeStretchedKeepsItsLineWeight() {

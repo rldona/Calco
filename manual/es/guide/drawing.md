@@ -12,6 +12,7 @@ De arriba abajo:
 - **Cuentagotas** (I)
 - **Lazo** (L)
 - **Mover** (V)
+- **Formas** (U)
 - **Color**: toca para la paleta y el selector de color.
 - **Tamaño**: arrastra la barra, o toca el número para valores exactos. `[` y `]` con teclado.
 - **Deshacer / Rehacer**: también tocando con dos y tres dedos en el lienzo.
@@ -114,6 +115,20 @@ Al mover, girar y escalar, la forma **se engancha** a su sitio de inicio, recta 
 - Los trazos movidos siguen siendo trazos: puedes volver a cogerlos.
 - La **goma** recorta los trazos por los que pasa. Un **relleno**, el **lazo** o pegar funden el dibujo, que entonces se separa en sus formas sueltas.
 - En una capa **bloqueada**, como una [imagen importada](./layers#imagenes-de-referencia), Mover ofrece **Desbloquear y mover**, y la vuelve a bloquear al terminar.
+
+## Formas
+
+**Formas** dibuja líneas, flechas, rectángulos, elipses, triángulos, polígonos, estrellas y rectángulos redondeados. El icono de la barra muestra la forma elegida; tócalo otra vez para sus opciones:
+
+- **Forma**, y los **lados** del polígono o las **puntas** de la estrella.
+- **Trazo**: continuo, discontinuo o por puntos.
+- **Grosor**: también con la barra de tamaño mientras Formas está elegida.
+- **Relleno**: sin relleno, relleno o solo relleno.
+- **Pincel**: el entintador, para una línea limpia, o el pincel que tengas elegido (un cuadrado a lápiz, con grano).
+
+Arrastra de esquina a esquina sobre el lienzo; la forma sale con el color de la barra al levantar el dedo. Cerca de 1:1 **encaja** en un cuadrado o un círculo perfecto, y las líneas y flechas cada 45°, con un toque háptico; la etiqueta de debajo dice la medida.
+
+Cada forma es un deshacer, y una pieza de su dibujo: con **Mover**, un toque la coge entera y sigue nítida al escalarla, estirarla o girarla.
 
 ## Pixel art
 

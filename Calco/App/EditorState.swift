@@ -93,6 +93,18 @@ final class EditorState {
     var syncLayers = false { didSet { saveToolSettings() } }
     /// How big a break in a line the fill bucket bridges. Remembered across launches.
     var fillGaps: FillGaps = .small { didSet { saveToolSettings() } }
+    /// The Shapes tool: which shape, its outline, fill and size.
+    var shapeOptions = ShapeOptions() { didSet { saveToolSettings() } }
+    /// The shape being dragged out, from where the finger went down to where it is (canvas
+    /// pixels), and what it clicked into; drawn over the canvas until the finger lifts.
+    var shapeDraft: ShapeDraft?
+    struct ShapeDraft: Equatable {
+        var from: CGPoint
+        var to: CGPoint
+        var snap: ShapeGeometry.Snap
+    }
+    /// A shape just painted, waiting to be kept as a piece when the stroke ends.
+    @ObservationIgnored private var pendingShape: StrokeRecipe?
     /// Brush colour, straight RGBA. Always opaque for now: overlapping stamps would build up any translucency.
     var color = SIMD4<Float>(0, 0, 0, 1) { didSet { saveToolSettings() } }
     static let sizeRange: ClosedRange<Float> = 1...64
@@ -1582,6 +1594,16 @@ final class EditorState {
         let stamps = pendingStamps
         pendingStamps = []
         let w = renderer.canvasSize.x, h = renderer.canvasSize.y
+        if let shape = pendingShape {
+            // A shape is a piece of its own, painted again from its recipe wherever Move takes it.
+            pendingShape = nil
+            guard paintMode == .front else { strokes[key] = nil; return }
+            var pieces = strokes[key] ?? before.flatMap { renderer.readbackBytes($0) }
+                .map { StrokePieces.shapes(of: $0, width: w, height: h) } ?? []
+            if let piece = paint(shape) { pieces.append(piece) }
+            strokes[key] = pieces
+            return
+        }
         guard !stamps.isEmpty else { strokes[key] = nil; return }
         switch tool {
         case .brush where paintMode == .front:
@@ -1614,10 +1636,60 @@ final class EditorState {
     }
 
     /// `recipe`'s stroke over `base` (nil = blank) into `target`, as the brush laid it.
-    private func paintRecipe(_ recipe: StrokeRecipe, stroke: MTLTexture, base: MTLTexture?, into target: MTLTexture) {
-        renderer.clear(stroke)
+    private func paintRecipe(_ recipe: StrokeRecipe, stroke: MTLTexture, base: MTLTexture?, into target: MTLTexture,
+                             mode: CanvasRenderer.PaintMode = .front) {
+        if let fill = recipe.fill, fill.count >= 3 {
+            renderer.upload(bytes: Self.fillPixels(fill, color: recipe.color, hard: recipe.hard,
+                                                   width: renderer.canvasSize.x, height: renderer.canvasSize.y),
+                            into: stroke)
+        } else {
+            renderer.clear(stroke)
+        }
         renderer.paintStroke(recipe.stamps, into: stroke, color: recipe.color, tip: recipe.tip, hard: recipe.hard)
-        renderer.compositeStroke(stroke, base: base, into: target, opacity: recipe.opacity, mode: .front, erase: false)
+        renderer.compositeStroke(stroke, base: base, into: target, opacity: recipe.opacity, mode: mode, erase: false)
+    }
+
+    /// A shape's inside in one colour (premultiplied), the rest clear.
+    private static func fillPixels(_ polygon: [SIMD2<Float>], color: SIMD3<Float>, hard: Bool,
+                                   width w: Int, height h: Int) -> [UInt8] {
+        let points = polygon.map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) }
+        let coverage = SelectionPixels.rasterize(points, width: w, height: h, hard: hard)
+        var px = [UInt8](repeating: 0, count: w * h * 4)
+        let c = color * 255
+        for i in coverage.indices where coverage[i] != 0 {
+            let a = Float(coverage[i]) / 255
+            px[i * 4] = UInt8(c.x * a + 0.5); px[i * 4 + 1] = UInt8(c.y * a + 0.5)
+            px[i * 4 + 2] = UInt8(c.z * a + 0.5); px[i * 4 + 3] = coverage[i]
+        }
+        return px
+    }
+
+    // MARK: - Shapes
+
+    /// The shape from `a` to `b` with the Shapes tool's options, as a stroke recipe in the current
+    /// colour; nil when it's too small to draw.
+    func shapeRecipe(from a: CGPoint, to b: CGPoint) -> StrokeRecipe? {
+        guard hypot(b.x - a.x, b.y - a.y) >= 2 else { return nil }
+        let o = shapeOptions
+        let brush = o.useBrush ? self.brush : .inker
+        let outline = o.fill == .only && o.canFill ? []
+            : ShapeGeometry.stamps(along: ShapeGeometry.paths(o, from: a, to: b), radius: o.size,
+                                   spacing: brush.spacing, outline: o.outline, alpha: brush.flow)
+        let fill = o.fill == .none ? nil
+            : ShapeGeometry.fillPolygon(o, from: a, to: b)?.map { SIMD2(Float($0.x), Float($0.y)) }
+        guard !outline.isEmpty || fill != nil else { return nil }
+        return StrokeRecipe(stamps: outline, color: brush.fixedColor ?? SIMD3(color.x, color.y, color.z),
+                            tip: .init(brush), opacity: o.useBrush ? brushOpacity : 1, hard: project.pixelArt, fill: fill)
+    }
+
+    /// Paints the shape from `a` to `b` on the drawing at the playhead: one undo step, and a piece
+    /// Move picks with one tap and keeps sharp.
+    func drawShape(from a: CGPoint, to b: CGPoint) {
+        shapeDraft = nil
+        guard let recipe = shapeRecipe(from: a, to: b), let target = beginStroke(), let stroke = strokeTexture else { return }
+        paintRecipe(recipe, stroke: stroke, base: strokeBase, into: target, mode: paintMode)
+        pendingShape = recipe
+        strokeEnded()
     }
 
     private func recipeTexture(_ slot: ReferenceWritableKeyPath<EditorState, MTLTexture?>) -> MTLTexture? {
@@ -2002,10 +2074,10 @@ final class EditorState {
 
     /// Size of whichever tool is active.
     var toolSize: Float {
-        get { tool == .eraser ? eraserSize : brushSize }
+        get { tool == .eraser ? eraserSize : tool == .shape ? shapeOptions.size : brushSize }
         set {
             let v = min(max(newValue.rounded(), Self.sizeRange.lowerBound), Self.sizeRange.upperBound)
-            if tool == .eraser { eraserSize = v } else { brushSize = v }
+            if tool == .eraser { eraserSize = v } else if tool == .shape { shapeOptions.size = v } else { brushSize = v }
         }
     }
 
@@ -2030,6 +2102,7 @@ final class EditorState {
         static let syncLayers = "timeline.syncLayers"
         static let paintMode = "tool.paintMode"
         static let pencilOnly = "tool.pencilOnly"
+        static let shapes = "tool.shapes"
     }
 
     @ObservationIgnored private var loadingToolSettings = false
@@ -2062,6 +2135,10 @@ final class EditorState {
         if let v = defaults.object(forKey: ToolKey.syncLayers) as? Bool { syncLayers = v }
         if let raw = defaults.string(forKey: ToolKey.paintMode), let m = CanvasRenderer.PaintMode(rawValue: raw) { paintMode = m }
         pencilOnly = defaults.object(forKey: ToolKey.pencilOnly) as? Bool ?? UIPencilInteraction.prefersPencilOnlyDrawing
+        if let data = defaults.data(forKey: ToolKey.shapes), var o = try? JSONDecoder().decode(ShapeOptions.self, from: data) {
+            o.size = min(max(o.size, range.lowerBound), range.upperBound)
+            shapeOptions = o
+        }
     }
 
     private func saveToolSettings() {
@@ -2079,6 +2156,7 @@ final class EditorState {
         defaults.set(syncLayers, forKey: ToolKey.syncLayers)
         defaults.set(paintMode.rawValue, forKey: ToolKey.paintMode)
         defaults.set(pencilOnly, forKey: ToolKey.pencilOnly)
+        defaults.set(try? JSONEncoder().encode(shapeOptions), forKey: ToolKey.shapes)
     }
 
     /// Apple Pencil double tap / squeeze set to "switch to eraser": eraser, and back to what you had.

@@ -17,8 +17,8 @@ final class CanvasUIView: UIView {
     private var builder = StrokeBuilder()
     private var activeTouch: UITouch?
     /// What the active touch is doing: painting, a tap for fill / eyedropper (acted on when it
-    /// lifts), or drawing a lasso.
-    private enum Mode { case stroke, tap, lasso, moveDrag }
+    /// lifts), drawing a lasso, or dragging out a shape.
+    private enum Mode { case stroke, tap, lasso, moveDrag, shape }
     /// Two-finger gestures, before snapping (see `pinched`, `rotated`, `panned`).
     fileprivate var scaleIntent: CGFloat = 1
     fileprivate var rotationIntent: CGFloat = 0
@@ -145,6 +145,13 @@ final class CanvasUIView: UIView {
             activeTouch = t
             mode = .lasso
             state.lassoPoints = [canvasPoint(t, in: state)]
+        case .shape:
+            state.commitSelection()
+            guard state.currentLayer?.locked == false else { return }
+            activeTouch = t
+            mode = .shape
+            let p = canvasPoint(t, in: state)
+            state.shapeDraft = .init(from: p, to: p, snap: .none)
         case .brush, .eraser:
             guard let target = state.beginStroke() else { return }
             activeTouch = t
@@ -159,6 +166,14 @@ final class CanvasUIView: UIView {
         guard let t = activeTouch, touches.contains(t), let state else { return }
         switch mode {
         case .stroke: feed(touch: t, event: event)
+        case .shape:
+            guard var draft = state.shapeDraft else { break }
+            let (end, snap) = ShapeGeometry.snapped(state.shapeOptions.kind, from: draft.from, to: canvasPoint(t, in: state))
+            // A light tap when it clicks into a square, a circle or a 45° line.
+            if snap != .none && snap != draft.snap { haptics.impactOccurred() }
+            draft.to = end
+            draft.snap = snap
+            state.shapeDraft = draft
         case .lasso:
             for s in event?.coalescedTouches(for: t) ?? [t] {
                 let p = canvasPoint(s, in: state)
@@ -198,6 +213,8 @@ final class CanvasUIView: UIView {
             }
         case .lasso:
             state.liftSelection(state.lassoPoints)
+        case .shape:
+            if let draft = state.shapeDraft { state.drawShape(from: draft.from, to: draft.to) }
         case .stroke:
             feed(touch: t, event: event)
             endStroke()
@@ -211,6 +228,7 @@ final class CanvasUIView: UIView {
         switch mode {
         case .tap, .moveDrag: moveStart = nil
         case .lasso: state?.lassoPoints = []
+        case .shape: state?.shapeDraft = nil
         case .stroke:
             strokeTarget = nil
             state?.cancelStroke()

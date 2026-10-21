@@ -28,6 +28,7 @@ With a hardware keyboard, hold **⌘** to see every shortcut in iPadOS.
 | I | Eyedropper |
 | L | Lasso |
 | V | Move |
+| U | Shapes |
 | [ / ] | Smaller / bigger |
 | Return / Esc | Apply / cancel selection |
 | ⇧H | Flip selection |

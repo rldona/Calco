@@ -15,6 +15,7 @@ struct ToolRail: View {
     @State private var editingBrush = false
     @State private var editingEraser = false
     @State private var editingLasso = false
+    @State private var editingShape = false
 
     var body: some View {
         Group {
@@ -69,6 +70,11 @@ struct ToolRail: View {
             RailButton(icon: "arrow.up.and.down.and.arrow.left.and.right", label: "Move", active: state.tool == .move, size: size) {
                 if state.tool == .move { state.liftForMove() } else { state.tool = .move }
             }
+            // Shows the shape it draws; tap again for the shapes and their outline and fill.
+            RailButton(icon: state.shapeOptions.kind.icon, label: "Shapes", active: state.tool == .shape, size: size) {
+                if state.tool == .shape { editingShape = true } else { state.tool = .shape }
+            }
+            .popover(isPresented: $editingShape, arrowEdge: edge) { ShapePanel(state: state) }
 
             if axis == .vertical {
                 Divider().overlay(Theme.hairline).padding(.horizontal, 8).padding(.vertical, compact ? 2 : 4)

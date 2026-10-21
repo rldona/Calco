@@ -8,6 +8,7 @@ A release is made by pushing a tag `vX.Y.Z`: the release workflow tests and buil
 
 ### Added
 
+- **Shapes** (U): lines, arrows, rectangles, ellipses, triangles, polygons, stars and rounded rectangles, solid, dashed or dotted, with or without a fill, in the inker's clean line or the chosen brush. Dragging clicks into a perfect square or circle, and lines every 45°, with a haptic tap. Each shape is one undo and a piece Move picks with one tap and keeps sharp.
 - **Resizable timeline**: drag the grip above it to make the layer grid taller (rows grow up to 36 pt); the height is remembered, and a double tap returns to the automatic height.
 - **Import an image as a layer** (New layer → Image from Photos / Files): it goes under every layer, fitted to the canvas and held through the whole clip, at 40 %, locked and marked as a **guide**, which is shown in the editor but never exported and isn't an outline for the fill. Any layer can be made a guide, or a guide part of the sprite, from its menu.
 

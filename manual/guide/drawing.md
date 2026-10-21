@@ -12,6 +12,7 @@ From top to bottom:
 - **Eyedropper** (I)
 - **Lasso** (L)
 - **Move** (V)
+- **Shapes** (U)
 - **Colour**: tap for the palette and the colour picker.
 - **Size**: drag the slider, or tap the number for exact values. `[` and `]` on a keyboard.
 - **Undo / Redo**: also two-finger and three-finger taps on the canvas.
@@ -114,6 +115,20 @@ Moving, rotating and scaling **click back** into the starting place, upright (or
 - Moved strokes stay strokes: you can pick them again later.
 - The **eraser** trims the strokes it crosses. A **fill**, the **lasso** or a paste merge the drawing, which then splits into its separate shapes.
 - On a **locked** layer, such as an [imported image](./layers#reference-images), Move offers **Unlock and move**, and locks it again when you're done.
+
+## Shapes
+
+**Shapes** draws lines, arrows, rectangles, ellipses, triangles, polygons, stars and rounded rectangles. Its icon in the bar shows the shape chosen; tap it again for its options:
+
+- **Shape**, and the polygon's **sides** or the star's **points**.
+- **Outline**: solid, dashed or dotted.
+- **Thickness**: also with the size slider while Shapes is chosen.
+- **Fill**: no fill, filled, or fill only.
+- **Brush**: the inker, for a clean line, or the brush you have chosen (a pencil square, with grain).
+
+Drag from corner to corner on the canvas; the shape comes out in the bar's colour when you lift. Near 1:1 it **clicks** into a perfect square or circle, and lines and arrows every 45°, with a light haptic tap; the chip under it gives the size.
+
+Each shape is one undo, and a piece of its drawing: with **Move**, one tap picks it all up, and it stays sharp when scaled, stretched or turned.
 
 ## Pixel art
 
