@@ -64,7 +64,7 @@ final class CanvasRenderer {
     }
 
     /// Fill and eyedropper never reach `paint`; they act on a tap (see CanvasUIView).
-    enum Tool { case brush, eraser, fill, eyedropper, lasso, move, shape }
+    enum Tool { case brush, eraser, fill, eyedropper, lasso, move, shape, pen, smudge }
 
     /// Where new paint goes on the layer: over what's there, under it (colour under line art), or
     /// only on what's already drawn, keeping its transparency (shading).
@@ -89,6 +89,7 @@ final class CanvasRenderer {
     private let eraserPipeline: MTLRenderPipelineState
     /// Stamps into a stroke's own texture: adding up, or keeping the strongest.
     private let strokeMaxPipeline: MTLRenderPipelineState
+    private let smudgePipeline: MTLRenderPipelineState
     /// A finished-so-far stroke onto its layer: in front, behind, inside, or erasing.
     private let strokeFrontPipeline: MTLRenderPipelineState
     private let strokeBehindPipeline: MTLRenderPipelineState
@@ -180,6 +181,12 @@ final class CanvasRenderer {
 
         do {
             strokeMaxPipeline = try device.makeRenderPipelineState(descriptor: strokeMax)
+            // Smudge dabs write what they work out, no blending: they read the layer from a copy.
+            let smudge = MTLRenderPipelineDescriptor()
+            smudge.vertexFunction = brush.vertexFunction
+            smudge.fragmentFunction = lib.makeFunction(name: "smudge_fragment")
+            smudge.colorAttachments[0].pixelFormat = Self.layerFormat
+            smudgePipeline = try device.makeRenderPipelineState(descriptor: smudge)
             strokeFrontPipeline = try device.makeRenderPipelineState(descriptor: strokeComposite { _ in })
             strokeBehindPipeline = try device.makeRenderPipelineState(descriptor: strokeComposite {
                 $0.sourceRGBBlendFactor = .oneMinusDestinationAlpha; $0.sourceAlphaBlendFactor = .oneMinusDestinationAlpha
@@ -295,6 +302,63 @@ final class CanvasRenderer {
         enc.setFragmentBytes(&uniforms, length: MemoryLayout<StampUniforms>.stride, index: 1)
         enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: stamps.count)
         enc.endEncoding()
+        cmd.commit()
+    }
+
+    /// How the Smudge tool works the paint under it.
+    enum SmudgeMode: String, Codable, CaseIterable, Identifiable {
+        case smudge, blur, motion
+        var id: String { rawValue }
+    }
+
+    private struct SmudgeUniforms {
+        var canvasSize: SIMD2<Float>
+        var delta: SIMD2<Float>
+        var strength: Float
+        var hardness: Float
+        var reach: Float
+        var mode: Int32
+    }
+
+    /// Smudge dabs on `target`, one after the other: each copies the paint around it into
+    /// `scratch` (same size as the layer), then redraws its disc from there. `deltas` is how far
+    /// the finger moved before each dab.
+    func smudge(_ dabs: [Stamp], deltas: [SIMD2<Float>], in target: MTLTexture, scratch: MTLTexture,
+                mode: SmudgeMode, strength: Float, hardness: Float) {
+        guard !dabs.isEmpty, dabs.count == deltas.count, let cmd = queue.makeCommandBuffer() else { return }
+        let size = SIMD2<Float>(Float(canvasSize.x), Float(canvasSize.y))
+        var stampUniforms = StampUniforms(canvasSize: size, color: SIMD4(0, 0, 0, 1))
+        for (dab, delta) in zip(dabs, deltas) {
+            let reach: Float = mode == .smudge ? 0 : mode == .blur ? max(1.5, dab.radius * 0.35) : max(3, dab.radius * 1.2)
+            // Everything this dab may read: its disc, where it came from, and how far it reaches.
+            let margin = dab.radius + simd_length(delta) + reach * 2 + 2
+            let x0 = max(0, Int((dab.position.x - margin).rounded(.down)))
+            let y0 = max(0, Int((dab.position.y - margin).rounded(.down)))
+            let x1 = min(canvasSize.x, Int((dab.position.x + margin).rounded(.up)))
+            let y1 = min(canvasSize.y, Int((dab.position.y + margin).rounded(.up)))
+            guard x1 > x0, y1 > y0, let blit = cmd.makeBlitCommandEncoder() else { continue }
+            let origin = MTLOrigin(x: x0, y: y0, z: 0)
+            blit.copy(from: target, sourceSlice: 0, sourceLevel: 0, sourceOrigin: origin,
+                      sourceSize: MTLSize(width: x1 - x0, height: y1 - y0, depth: 1),
+                      to: scratch, destinationSlice: 0, destinationLevel: 0, destinationOrigin: origin)
+            blit.endEncoding()
+
+            let pass = MTLRenderPassDescriptor()
+            pass.colorAttachments[0].texture = target
+            pass.colorAttachments[0].loadAction = .load
+            pass.colorAttachments[0].storeAction = .store
+            guard let enc = cmd.makeRenderCommandEncoder(descriptor: pass) else { continue }
+            var stamp = dab
+            var u = SmudgeUniforms(canvasSize: size, delta: delta, strength: strength, hardness: hardness,
+                                   reach: reach, mode: Int32(SmudgeMode.allCases.firstIndex(of: mode) ?? 0))
+            enc.setRenderPipelineState(smudgePipeline)
+            enc.setVertexBytes(&stamp, length: MemoryLayout<Stamp>.stride, index: 0)
+            enc.setVertexBytes(&stampUniforms, length: MemoryLayout<StampUniforms>.stride, index: 1)
+            enc.setFragmentBytes(&u, length: MemoryLayout<SmudgeUniforms>.stride, index: 1)
+            enc.setFragmentTexture(scratch, index: 0)
+            enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: 1)
+            enc.endEncoding()
+        }
         cmd.commit()
     }
 

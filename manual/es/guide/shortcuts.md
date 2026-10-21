@@ -29,6 +29,8 @@ Con un teclado físico, mantén pulsado **⌘** para ver todos los atajos en iPa
 | L | Lazo |
 | V | Mover |
 | U | Formas |
+| P | Pluma |
+| S | Dedo |
 | [ / ] | Más pequeño / más grande |
 | Retorno / Esc | Aplicar / cancelar selección |
 | ⇧H | Voltear selección |

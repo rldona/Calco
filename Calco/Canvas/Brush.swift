@@ -57,6 +57,10 @@ struct Brush: Identifiable, Equatable {
                                 opacityPressure: 0.8, hardness: 0, flow: 0.08, buildsUp: true, spacing: 0.1)
     static let flat = Brush(id: "flat", icon: "paintbrush", section: .color, defaultSize: 12, sizePressure: 0)
 
+    /// The Smudge tool's own tip: soft, and pressing harder works the paint more.
+    static let smudgeTip = Brush(id: "smudge", icon: "hand.point.up.left", section: .color, defaultSize: 16,
+                                 sizePressure: 0.3, opacityPressure: 0.7, hardness: 0.2, spacing: 0.12)
+
     static let all: [Brush] = [.inker, .ballpoint, .marker, .pencil, .bluePencil, .charcoal,
                                .paintbrush, .airbrush, .flat]
 
@@ -72,6 +76,7 @@ struct Brush: Identifiable, Equatable {
         case "paintbrush": String(localized: "Paintbrush", bundle: AppLanguage.bundle)
         case "airbrush": String(localized: "Airbrush", bundle: AppLanguage.bundle)
         case "flat": String(localized: "Flat", bundle: AppLanguage.bundle)
+        case "smudge": String(localized: "Soft", bundle: AppLanguage.bundle)
         default: String(localized: "Inker", bundle: AppLanguage.bundle)
         }
     }

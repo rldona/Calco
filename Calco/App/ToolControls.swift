@@ -16,6 +16,8 @@ struct ToolRail: View {
     @State private var editingEraser = false
     @State private var editingLasso = false
     @State private var editingShape = false
+    @State private var editingPen = false
+    @State private var editingSmudge = false
 
     var body: some View {
         Group {
@@ -34,6 +36,9 @@ struct ToolRail: View {
         .calcoPanel(padding: 5)
         .onChange(of: state.colorPickerRequest) { editingColor = true }
     }
+
+    static let penIcon = "point.topleft.down.to.point.bottomright.curvepath"
+    static let smudgeIcon = "hand.point.up.left"
 
     /// Popovers point away from the rail: right of it on the side, below it on top.
     private var edge: Edge { axis == .vertical ? .leading : .top }
@@ -75,6 +80,16 @@ struct ToolRail: View {
                 if state.tool == .shape { editingShape = true } else { state.tool = .shape }
             }
             .popover(isPresented: $editingShape, arrowEdge: edge) { ShapePanel(state: state) }
+            // Points joined by lines and curves; tap again for its outline and fill.
+            RailButton(icon: Self.penIcon, label: "Pen", active: state.tool == .pen, size: size) {
+                if state.tool == .pen { editingPen = true } else { state.tool = .pen }
+            }
+            .popover(isPresented: $editingPen, arrowEdge: edge) { ShapePanel(state: state, pen: true) }
+            // Smudge, blur or motion; tap again for which and how strongly.
+            RailButton(icon: Self.smudgeIcon, label: "Smudge", active: state.tool == .smudge, size: size) {
+                if state.tool == .smudge { editingSmudge = true } else { state.tool = .smudge }
+            }
+            .popover(isPresented: $editingSmudge, arrowEdge: edge) { SmudgePanel(state: state) }
 
             if axis == .vertical {
                 Divider().overlay(Theme.hairline).padding(.horizontal, 8).padding(.vertical, compact ? 2 : 4)

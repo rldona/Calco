@@ -13,6 +13,8 @@ From top to bottom:
 - **Lasso** (L)
 - **Move** (V)
 - **Shapes** (U)
+- **Pen** (P)
+- **Smudge** (S)
 - **Colour**: tap for the palette and the colour picker.
 - **Size**: drag the slider, or tap the number for exact values. `[` and `]` on a keyboard.
 - **Undo / Redo**: also two-finger and three-finger taps on the canvas.
@@ -129,6 +131,31 @@ Moving, rotating and scaling **click back** into the starting place, upright (or
 Drag from corner to corner on the canvas; the shape comes out in the bar's colour when you lift. Near 1:1 it **clicks** into a perfect square or circle, and lines and arrows every 45°, with a light haptic tap; the chip under it gives the size.
 
 Each shape is one undo, and a piece of its drawing: with **Move**, one tap picks it all up, and it stays sharp when scaled, stretched or turned.
+
+## Pen
+
+The **Pen** draws by joining points:
+
+- **Tap** to place a point; a straight line joins it to the one before.
+- **Drag as you place a point**, or pull it afterwards, to curve it: two handles come out that shape the curve on each side. Pull a handle to change it; on a curved point both turn together.
+- **Tap the line** to add a point there and curve from that spot.
+- **Tap the first point** to close the path.
+
+While the path is open, the bar under the canvas turns the picked point into a **Corner** or a **Curve**, closes or opens the path, **deletes the point**, cancels (✕) or finishes it (✓, **Done**). Changing tool, frame or layer finishes it too.
+
+The outline, thickness, fill (on closed paths) and brush are the **Shapes** ones: tap the Pen again for its options.
+
+A path **can be edited again**: with the Pen, tap it and its points come back. It's a piece of the drawing, so **Move** picks it up whole and it stays sharp when scaled or turned.
+
+## Smudge
+
+**Smudge** works the paint already on the layer:
+
+- **Smear** drags it along with your finger.
+- **Blur** softens it where you go over it.
+- **Motion** blurs it along the way you move, like a trail.
+
+Tap Smudge again for the mode, the **strength** and the **tip** (soft, or the chosen brush's). The size is the bar's, and pressing harder with the Pencil works the paint more. Whatever Smudge goes over is no longer a stroke Move remembers: it stays as pixels.
 
 ## Pixel art
 

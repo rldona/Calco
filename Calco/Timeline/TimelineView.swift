@@ -11,6 +11,10 @@ struct TimelineView: View {
     @Bindable var state: EditorState
     @State private var labeling = false
     @State private var labelText = ""
+    /// Dragging along the frame numbers: the frames flip by under the finger, and the sheet holds
+    /// still instead of following the playhead.
+    @State private var scrubbing = false
+    private static let tick = UISelectionFeedbackGenerator()
 
     /// Width of one tick (one `hold` unit).
     private let tick: CGFloat = 58
@@ -143,7 +147,7 @@ struct TimelineView: View {
                             .coordinateSpace(name: Self.sheet)
                             .padding(.trailing, 8)
                         }
-                        .background { FollowPlayhead(state: state, proxy: proxy) }
+                        .background { FollowPlayhead(state: state, proxy: proxy, holdStill: scrubbing) }
                     }
                 }
             }
@@ -170,6 +174,18 @@ struct TimelineView: View {
             if x < edge { return i }
         }
         return max(0, state.frames.count - 1)
+    }
+
+    /// Scrubbing: the frame under `x` (in the sheet's coordinates) becomes the current one.
+    private func scrub(toX x: CGFloat) {
+        if !scrubbing {
+            scrubbing = true
+            if state.isPlaying { state.togglePlayback() }
+        }
+        let i = frameIndex(atX: max(0, x))
+        guard i != state.frameIndex else { return }
+        state.frameIndex = i
+        Self.tick.selectionChanged()
     }
 
     /// A drawing's right edge dragged to `dragX`: it lasts up to there, pushing what follows.
@@ -253,15 +269,20 @@ struct TimelineView: View {
                     .contentShape(Rectangle())
                     .onTapGesture { state.frameIndex = i }
                     // Hold the number, then drag: the frame (all its layers) moves along the sheet.
-                    .gesture(LongPressGesture(minimumDuration: 0.25)
+                    // Drag straight away instead: scrub, the frames flip by as fast or as slow as
+                    // the finger (or the Pencil) goes, a light tick on each.
+                    .highPriorityGesture(LongPressGesture(minimumDuration: 0.25)
                         .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.sheet)))
                         .onChanged { value in
                             guard case .second(true, let drag?) = value else { return }
                             state.moveFrame(id: frame.id, to: frameIndex(atX: drag.location.x))
                         }
-                        .onEnded { _ in state.endCoalescing() })
+                        .onEnded { _ in state.endCoalescing() }
+                        .exclusively(before: DragGesture(minimumDistance: 3, coordinateSpace: .named(Self.sheet))
+                            .onChanged { g in scrub(toX: g.location.x) }
+                            .onEnded { _ in scrubbing = false }))
                     .accessibilityLabel("Frame \(i + 1)")
-                    .accessibilityHint("Hold and drag to move the frame")
+                    .accessibilityHint("Drag along the numbers to flip through the frames; hold and drag to move the frame")
                     .id(frame.id)
             }
         }
@@ -769,11 +790,13 @@ private struct Playhead: View {
 private struct FollowPlayhead: View {
     @Bindable var state: EditorState
     let proxy: ScrollViewProxy
+    /// Scrubbing: the numbers stay under the finger.
+    let holdStill: Bool
 
     var body: some View {
         Color.clear
             .onChange(of: state.frameIndex) { _, _ in
-                guard let f = state.currentFrame else { return }
+                guard !holdStill, let f = state.currentFrame else { return }
                 // Playing, it keeps up without an animation running all the time.
                 if state.isPlaying {
                     proxy.scrollTo(f.id, anchor: .center)

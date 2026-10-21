@@ -49,6 +49,14 @@ Turn the iPad upright and the animation rail lies down between the canvas and th
 
 Over the layer names, **+** adds a layer and the stack icon opens the layers panel; see [Layers](./layers).
 
+### Frame numbers
+
+The frame numbers run above the cells:
+
+- **Tap a number** to go to that frame.
+- **Drag along the numbers**, with a finger or the Pencil, to flip the frames by under it, as fast or as slow as you move, with a light haptic tap on each. You see the motion at your own pace, without playing. The timeline holds still while you drag.
+- **Hold a number and drag** to move the frame, all its layers with it.
+
 ### Cells
 
 Each layer row is a strip of **cells**. A cell is one drawing, and its width is how long it lasts.

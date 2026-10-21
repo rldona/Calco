@@ -57,6 +57,8 @@
 "Bigger" = "Más grande";
 "Blank inbetween halfway" = "Intermedio vacío a mitad";
 "Blue pencil" = "Lápiz azul";
+"Blur" = "Desenfocar";
+"Blurs the paint along the way you move, like a trail." = "Emborrona la pintura en la dirección en que mueves el dedo, como una estela.";
 "Bold, even within a stroke" = "Grueso, sin capas dentro del trazo";
 "Bridges small breaks in a line so the paint doesn't leak out. Uses every visible layer as the outline." = "Cierra pequeños huecos en la línea para que la pintura no se salga. Usa todas las capas visibles como contorno.";
 "Brush" = "Pincel";
@@ -66,6 +68,7 @@
 "Calco is in English unless you choose otherwise. Your projects, layer and clip names don't change." = "Calco está en inglés salvo que elijas otro idioma. Tus proyectos y los nombres de capas y clips no cambian.";
 "Cancel" = "Cancelar";
 "Cancel Selection" = "Cancelar selección";
+"Cancel path" = "Cancelar trazado";
 "Cancel selection" = "Cancelar selección";
 "Charcoal" = "Carboncillo";
 "Circle" = "Círculo";
@@ -78,12 +81,14 @@
 "Clip settings" = "Ajustes del clip";
 "Clips" = "Clips";
 "Close gaps" = "Cerrar huecos";
+"Close path" = "Cerrar trazado";
 "Colour" = "Color";
 "Continue" = "Continuar";
 "Continue %@" = "Continuar %@";
 "Copy" = "Copiar";
 "Copy drawing here" = "Copiar dibujo aquí";
 "Copy or cut from the bar above a selection. Paste lands where it was copied, on whichever frame and layer you're on." = "Copia o corta desde la barra que aparece sobre una selección. Lo pegado aparece donde se copió, en el fotograma y la capa en que estés.";
+"Corner" = "Esquina";
 "Couldn't create %@.\n%@" = "No se pudo crear %@.\n%@";
 "Couldn't export %@.\n%@" = "No se pudo exportar %@.\n%@";
 "Couldn't export with %@.\n%@" = "No se pudo exportar con %@.\n%@";
@@ -92,6 +97,7 @@
 "Couldn't save %@.\n%@" = "No se pudo guardar %@.\n%@";
 "Create and start drawing" = "Crear y empezar a dibujar";
 "Current layer only" = "Solo la capa actual";
+"Curve" = "Curva";
 "Custom" = "Otro";
 "Cut" = "Cortar";
 "Dashed" = "Discontinuo";
@@ -103,13 +109,16 @@
 "Delete drawing" = "Eliminar dibujo";
 "Delete frame" = "Eliminar fotograma";
 "Delete layer…" = "Eliminar capa…";
+"Delete point" = "Borrar punto";
 "Delete profile" = "Eliminar perfil";
 "Delete selection" = "Eliminar selección";
 "Delete…" = "Eliminar…";
 "Done" = "OK";
 "Dotted" = "Puntos";
+"Drag along the numbers to flip through the frames; hold and drag to move the frame" = "Arrastra por los números para pasar los fotogramas; mantén pulsado y arrastra para mover el fotograma";
 "Drag from corner to corner. Near even, it clicks into a square or a circle; lines click every 45°. In the bar's colour." = "Arrastra de esquina a esquina. Cerca de 1:1 encaja en cuadrado o círculo; las líneas, cada 45°. Con el color de la barra.";
 "Drag up or down to resize. Double tap for the automatic height." = "Arrastra arriba o abajo para cambiar el tamaño. Doble toque para la altura automática.";
+"Drags the paint along with your finger." = "Arrastra la pintura con el dedo.";
 "Draw" = "Dibujo";
 "Drawing length" = "Duración del dibujo";
 "Drawings after" = "Dibujos después";
@@ -176,7 +185,6 @@
 "Hold" = "Mantener";
 "Hold Longer" = "Mantener más";
 "Hold Shorter" = "Mantener menos";
-"Hold and drag to move the frame" = "Mantén pulsado y arrastra para mover el fotograma";
 "Hold previous drawing" = "Mantener el dibujo anterior";
 "Image from Files…" = "Imagen desde Archivos…";
 "Image from Photos…" = "Imagen desde Fotos…";
@@ -210,8 +218,10 @@
 "Masked to the layer below; tap to stop" = "Enmascarada con la capa de abajo; toca para quitarlo";
 "Medium" = "Medio";
 "Milliseconds from the Pencil to the screen, in the top bar. For checking performance." = "Milisegundos del Pencil a la pantalla, en la barra superior. Para comprobar el rendimiento.";
+"Mode" = "Modo";
 "More" = "Más";
 "More drawing actions" = "Más acciones del dibujo";
+"Motion" = "Movimiento";
 "Move" = "Mover";
 "Move Frame Earlier" = "Mover fotograma antes";
 "Move Frame Later" = "Mover fotograma después";
@@ -253,6 +263,7 @@
 "Open" = "Abrir";
 "Open from Files" = "Abrir desde Archivos";
 "Open from Files…" = "Abrir desde Archivos…";
+"Open path" = "Abrir trazado";
 "Outline" = "Trazo";
 "Over what's already on the layer." = "Encima de lo que ya hay en la capa.";
 "Own drawing" = "Dibujo propio";
@@ -263,6 +274,7 @@
 "Paper grain; tilt it to shade" = "Grano de papel; inclínalo para sombrear";
 "Paste" = "Pegar";
 "Pause" = "Pausa";
+"Pen" = "Pluma";
 "Pencil" = "Lápiz";
 "Pencil pressure changes size" = "La presión del Pencil cambia el tamaño";
 "Pick a profile" = "Elige un perfil";
@@ -278,6 +290,7 @@
 "Power-of-two sheet" = "Hoja en potencia de dos";
 "Preferences" = "Preferencias";
 "Preferences…" = "Preferencias…";
+"Pressing harder works the paint more. The size is the bar's." = "Cuanto más aprietas, más trabaja la pintura. El tamaño es el de la barra.";
 "Previous Frame" = "Fotograma anterior";
 "Project name" = "Nombre del proyecto";
 "Rectangle" = "Rectángulo";
@@ -328,8 +341,12 @@
 "Sketch" = "Boceto";
 "Small" = "Pequeño";
 "Smaller" = "Más pequeño";
+"Smear" = "Difuminar";
 "Smoothing" = "Suavizado";
+"Smudge" = "Dedo";
+"Soft" = "Suave";
 "Soft edge, tapering tip" = "Borde suave, punta que afina";
+"Softens the paint where you go over it." = "Suaviza la pintura por donde pasas.";
 "Solid" = "Continuo";
 "Speed" = "Velocidad";
 "Split drawing halfway" = "Partir el dibujo a mitad";
@@ -348,12 +365,14 @@
 "Stretch width" = "Estirar a lo ancho";
 "Stroke %lld of %lld here · tap again for the one below" = "Trazo %lld de %lld aquí · toca otra vez para el de debajo";
 "Sync Layers" = "Sincronizar capas";
+"Tap to place points; drag as you place one, or pull a point, to curve it. Tap the line to add a point, the first point to close the path. The fill is for closed paths." = "Toca para poner puntos; arrastra al ponerlo, o tira de un punto, para curvarlo. Toca la línea para añadir un punto y el primer punto para cerrar el trazado. El relleno es para trazados cerrados.";
 "Taps add strokes to what you're moving, or take them out" = "Cada toque añade un trazo a lo que mueves, o lo quita";
 "The usual for games" = "Lo habitual en juegos";
 "The whole drawing" = "Todo el dibujo";
 "Thickness" = "Grosor";
 "This project: brush, eraser, fill and lasso with hard edges, every pixel fully on or off." = "Este proyecto: pincel, goma, relleno y lazo con bordes duros, cada píxel pintado o vacío del todo.";
 "Timeline height" = "Altura de la línea de tiempo";
+"Tip" = "Punta";
 "Triangle" = "Triángulo";
 "Trim transparent borders" = "Recortar bordes transparentes";
 "Under what's already on the layer: colour under line art without touching the lines." = "Debajo de lo que ya hay en la capa: colorear bajo la línea sin tocarla.";

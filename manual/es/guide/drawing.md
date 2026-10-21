@@ -13,6 +13,8 @@ De arriba abajo:
 - **Lazo** (L)
 - **Mover** (V)
 - **Formas** (U)
+- **Pluma** (P)
+- **Dedo** (S)
 - **Color**: toca para la paleta y el selector de color.
 - **Tamaño**: arrastra la barra, o toca el número para valores exactos. `[` y `]` con teclado.
 - **Deshacer / Rehacer**: también tocando con dos y tres dedos en el lienzo.
@@ -129,6 +131,31 @@ Al mover, girar y escalar, la forma **se engancha** a su sitio de inicio, recta 
 Arrastra de esquina a esquina sobre el lienzo; la forma sale con el color de la barra al levantar el dedo. Cerca de 1:1 **encaja** en un cuadrado o un círculo perfecto, y las líneas y flechas cada 45°, con un toque háptico; la etiqueta de debajo dice la medida.
 
 Cada forma es un deshacer, y una pieza de su dibujo: con **Mover**, un toque la coge entera y sigue nítida al escalarla, estirarla o girarla.
+
+## Pluma
+
+La **Pluma** dibuja uniendo puntos:
+
+- **Toca** para poner un punto; se une al anterior con una recta.
+- **Arrastra al poner un punto**, o tira después de él, para curvarlo: salen dos manejadores que dan la forma a la curva a cada lado. Tira de un manejador para cambiarla; en un punto curvo los dos giran juntos.
+- **Toca la línea** para añadir un punto ahí y curvar desde ese sitio.
+- **Toca el primer punto** para cerrar el trazado.
+
+Mientras el trazado está abierto, la barra de debajo del lienzo pasa el punto elegido a **Esquina** o **Curva**, cierra o abre el trazado, **borra el punto**, cancela (✕) o termina (✓, **Hecho**). Cambiar de herramienta, de fotograma o de capa también lo termina.
+
+El trazo, el grosor, el relleno (en trazados cerrados) y el pincel son los de **Formas**: toca otra vez la Pluma para sus opciones.
+
+Un trazado **se puede volver a editar**: con la Pluma, tócalo y vuelven sus puntos. Es una pieza del dibujo, así que con **Mover** se coge entero y sigue nítido al escalarlo o girarlo.
+
+## Dedo
+
+El **Dedo** trabaja la pintura que ya hay en la capa:
+
+- **Difuminar** la arrastra con el dedo.
+- **Desenfocar** la suaviza por donde pasas.
+- **Movimiento** la emborrona en la dirección en que mueves el dedo, como una estela.
+
+Toca otra vez el Dedo para elegir el modo, la **fuerza** y la **punta** (suave, o la del pincel elegido). El tamaño es el de la barra, y cuanto más aprietas con el Pencil, más trabaja la pintura. Lo que pasa por el Dedo deja de ser un trazo que Mover recuerda: queda como píxeles.
 
 ## Pixel art
 

@@ -163,9 +163,12 @@ enum ShapeGeometry {
                 step = max(r * CGFloat(spacing), 0.3)
             case .dashed:
                 step = max(r * CGFloat(spacing), 0.3)
-                // A dash 4 widths long and a gap of 3, stretched so a whole number fit.
-                let period = total / max(1, (total / (r * 14)).rounded())
-                isOn = { d in d.truncatingRemainder(dividingBy: period) < period * 4 / 7 }
+                // A dash 4 widths long and a gap of 3, stretched so a whole number fit; an open
+                // line also ends on a dash, not on a gap.
+                let on: CGFloat = 4 / 7
+                let period = path.closed ? total / max(1, (total / (r * 14)).rounded())
+                    : total / (max(0, ((total - r * 8) / (r * 14)).rounded()) + on)
+                isOn = { d in d.truncatingRemainder(dividingBy: period) <= period * on + 0.001 }
             case .dotted:
                 step = total / max(1, (total / (r * 3)).rounded())
             }

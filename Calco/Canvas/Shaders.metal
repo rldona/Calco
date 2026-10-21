@@ -178,3 +178,54 @@ fragment float4 checker_fragment(CompositeVertexOut in [[stage_in]],
     float g = mix(0.78, 0.88, odd);
     return float4(g, g, g, 1.0);
 }
+
+// ---------------------------------------------------------------------------
+// Smudge: each dab redraws its disc from a copy of the layer under it, mixed by coverage and
+// strength with: the paint where the finger came from (smudge), the paint around (blur), or the
+// paint along the way it's moving (motion).
+// ---------------------------------------------------------------------------
+
+struct SmudgeUniforms {
+    float2 canvasSize;
+    float2 delta;      // canvas pixels the finger moved since the last dab
+    float  strength;   // 0–1
+    float  hardness;
+    float  reach;      // blur / motion length in canvas pixels
+    int    mode;       // 0 smudge, 1 blur, 2 motion
+};
+
+fragment float4 smudge_fragment(StampVertexOut in [[stage_in]],
+                                texture2d<float> src [[texture(0)]],
+                                constant SmudgeUniforms &u [[buffer(1)]])
+{
+    constexpr sampler s(filter::linear, address::clamp_to_zero);
+    float2 px = in.position.xy;
+    float4 here = src.sample(s, px / u.canvasSize);
+    float4 other = here;
+    if (u.mode == 0) {
+        other = src.sample(s, (px - u.delta) / u.canvasSize);
+    } else if (u.mode == 1) {
+        // A soft disc of 25 taps.
+        float4 sum = 0; float total = 0;
+        for (int y = -2; y <= 2; y++) {
+            for (int x = -2; x <= 2; x++) {
+                float2 o = float2(x, y) * (u.reach * 0.5);
+                float w = exp(-dot(float2(x, y), float2(x, y)) * 0.35);
+                sum += src.sample(s, (px + o) / u.canvasSize) * w;
+                total += w;
+            }
+        }
+        other = sum / total;
+    } else {
+        // Along the way the finger moves, behind it: a trail.
+        float len = length(u.delta);
+        float2 dir = len > 0.001 ? u.delta / len : float2(1, 0);
+        float4 sum = 0;
+        for (int k = 0; k < 12; k++) {
+            sum += src.sample(s, (px - dir * (u.reach * float(k) / 11.0)) / u.canvasSize);
+        }
+        other = sum / 12.0;
+    }
+    float cov = stampCoverage(in.local, 0.0, u.hardness) * in.alpha;
+    return mix(here, other, clamp(u.strength * cov, 0.0, 1.0));
+}

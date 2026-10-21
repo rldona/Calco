@@ -49,6 +49,14 @@ Con el iPad en vertical, el riel de animación se tumba entre el lienzo y la lí
 
 Sobre los nombres de las capas, **+** añade una capa y el icono de la pila abre el panel de capas; ver [Capas](./layers).
 
+### Números de fotograma
+
+Encima de las celdas van los números de los fotogramas:
+
+- **Toca un número** para ir a ese fotograma.
+- **Arrastra por los números**, con el dedo o el Pencil, para pasar los fotogramas bajo el dedo, tan rápido o tan despacio como lo muevas, con un toque háptico en cada uno. Así ves el movimiento a tu ritmo sin reproducir. La línea de tiempo se queda quieta mientras arrastras.
+- **Mantén pulsado un número y arrastra** para mover el fotograma, con todas sus capas.
+
 ### Celdas
 
 Cada fila de capa es una tira de **celdas**. Una celda es un dibujo, y su ancho es lo que dura.

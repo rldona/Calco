@@ -17,8 +17,12 @@ final class CanvasUIView: UIView {
     private var builder = StrokeBuilder()
     private var activeTouch: UITouch?
     /// What the active touch is doing: painting, a tap for fill / eyedropper (acted on when it
-    /// lifts), drawing a lasso, or dragging out a shape.
-    private enum Mode { case stroke, tap, lasso, moveDrag, shape }
+    /// lifts), drawing a lasso, dragging out a shape, or working a Pen path.
+    private enum Mode { case stroke, tap, lasso, moveDrag, shape, pen }
+    /// The Pen: what the touch grabbed, where it went down (view points), and whether it moved.
+    private var penGrab: EditorState.PenGrab?
+    private var penStart: CGPoint = .zero
+    private var penMoved = false
     /// Two-finger gestures, before snapping (see `pinched`, `rotated`, `panned`).
     fileprivate var scaleIntent: CGFloat = 1
     fileprivate var rotationIntent: CGFloat = 0
@@ -152,7 +156,13 @@ final class CanvasUIView: UIView {
             mode = .shape
             let p = canvasPoint(t, in: state)
             state.shapeDraft = .init(from: p, to: p, snap: .none)
-        case .brush, .eraser:
+        case .pen:
+            activeTouch = t
+            mode = .pen
+            penStart = t.location(in: self)
+            penMoved = false
+            penGrab = state.penTouchDown(at: canvasPoint(t, in: state), tolerance: penTolerance(state))
+        case .brush, .eraser, .smudge:
             guard let target = state.beginStroke() else { return }
             activeTouch = t
             mode = .stroke
@@ -166,6 +176,12 @@ final class CanvasUIView: UIView {
         guard let t = activeTouch, touches.contains(t), let state else { return }
         switch mode {
         case .stroke: feed(touch: t, event: event)
+        case .pen:
+            let v = t.location(in: self)
+            if hypot(v.x - penStart.x, v.y - penStart.y) > 4 { penMoved = true }
+            if penMoved, let grab = penGrab {
+                state.penDrag(grab, to: canvasPoint(t, in: state), tolerance: penTolerance(state))
+            }
         case .shape:
             guard var draft = state.shapeDraft else { break }
             let (end, snap) = ShapeGeometry.snapped(state.shapeOptions.kind, from: draft.from, to: canvasPoint(t, in: state))
@@ -215,6 +231,9 @@ final class CanvasUIView: UIView {
             state.liftSelection(state.lassoPoints)
         case .shape:
             if let draft = state.shapeDraft { state.drawShape(from: draft.from, to: draft.to) }
+        case .pen:
+            if let grab = penGrab { state.penTouchUp(grab, moved: penMoved) }
+            penGrab = nil
         case .stroke:
             feed(touch: t, event: event)
             endStroke()
@@ -229,10 +248,17 @@ final class CanvasUIView: UIView {
         case .tap, .moveDrag: moveStart = nil
         case .lasso: state?.lassoPoints = []
         case .shape: state?.shapeDraft = nil
+        case .pen: penGrab = nil
         case .stroke:
             strokeTarget = nil
             state?.cancelStroke()
         }
+    }
+
+    /// How near a point or the line counts as on it, in canvas pixels: a fingertip, whatever the zoom.
+    private func penTolerance(_ state: EditorState) -> CGFloat {
+        let t = state.canvasTransform.canvasToView(canvas: state.renderer.canvasSize, viewSize: bounds.size)
+        return 22 / max(hypot(t.a, t.b), 0.0001)
     }
 
     private func endStroke() {
@@ -252,7 +278,7 @@ final class CanvasUIView: UIView {
 
         builder.baseRadius = state.toolSize
         builder.use(state.activeBrush)
-        builder.smoothing = state.tool == .eraser ? 0 : state.smoothing
+        builder.smoothing = state.tool == .eraser || state.tool == .smudge ? 0 : state.smoothing
         var stamps: [CanvasRenderer.Stamp] = []
         for s in samples {
             let canvasPos = renderer.canvasPoint(fromViewPoint: s.preciseLocation(in: self),

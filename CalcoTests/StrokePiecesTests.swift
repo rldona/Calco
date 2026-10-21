@@ -76,8 +76,12 @@ final class StrokePiecesTests: XCTestCase {
         let plain = try XCTUnwrap(StrokePiece(canvas: block(10, 10, x: 5, y: 5, w: 2, h: 2), width: 10, height: 10))
         var shape = piece
         shape.recipe?.fill = [SIMD2(1, 1), SIMD2(8, 1), SIMD2(4.5, 7)]
-        let data = try XCTUnwrap(StrokePieces.encode([piece, plain, shape]))
-        XCTAssertEqual(StrokePieces.decode(data), [piece, plain, shape])
+        var pen = piece
+        var path = PenPath(nodes: [.init(point: CGPoint(x: 1, y: 2)), .init(point: CGPoint(x: 7.5, y: 3))])
+        path.pullHandles(of: 1, to: CGPoint(x: 9, y: 6))
+        pen.recipe?.pen = PenDrawing(path: path, style: ShapeOptions())
+        let data = try XCTUnwrap(StrokePieces.encode([piece, plain, shape, pen]))
+        XCTAssertEqual(StrokePieces.decode(data), [piece, plain, shape, pen])
     }
 
     func testARecipeStretchedKeepsItsLineWeight() {

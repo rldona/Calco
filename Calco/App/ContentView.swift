@@ -106,8 +106,12 @@ struct ContentView: View {
             }
             .overlay { SelectionOverlay(state: state) }
             .overlay { ShapeDraftOverlay(state: state) }
+            .overlay { PenOverlay(state: state) }
             .overlay(alignment: .bottom) {
-                if state.tool == .move, let id = state.moveBlockedLayer,
+                if state.penEditing != nil {
+                    PenBar(state: state)
+                        .padding(.bottom, state.bottomInset + 6)
+                } else if state.tool == .move, let id = state.moveBlockedLayer,
                    let layer = state.layers.first(where: { $0.id == id }) {
                     MoveLockedHint(state: state, layerName: layer.name)
                         .padding(.bottom, state.bottomInset + 6)
@@ -269,6 +273,8 @@ struct ZenBar: View {
             RailButton(icon: state.shapeOptions.kind.icon, label: "Shapes", active: state.tool == .shape, size: 34) {
                 state.tool = .shape
             }
+            RailButton(icon: ToolRail.penIcon, label: "Pen", active: state.tool == .pen, size: 34) { state.tool = .pen }
+            RailButton(icon: ToolRail.smudgeIcon, label: "Smudge", active: state.tool == .smudge, size: 34) { state.tool = .smudge }
             ColorSwatch(state: state, editing: $editingColor, diameter: 20)
             Divider().overlay(Theme.hairline).frame(height: 20).padding(.horizontal, 2)
             RailButton(icon: "arrow.down.right.and.arrow.up.left.circle", label: "Leave Zen mode", size: 34) {
