@@ -40,15 +40,32 @@ fi
 mkdir -p build
 
 VERSION="$(sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([^"]*\)"\{0,1\}/\1/p' project.yml | head -1)"
-echo "Building Calco $VERSION for ${UDID}…"
+echo "Building Calco $VERSION…"
+# For any iOS device, so the build doesn't wait for this iPad to be unlocked; only the install does.
 xcodebuild build -project Calco.xcodeproj -scheme Calco -configuration Release \
-  -destination "id=$UDID" -derivedDataPath "$DERIVED" \
+  -destination "generic/platform=iOS" -derivedDataPath "$DERIVED" \
   -allowProvisioningUpdates DEVELOPMENT_TEAM="$TEAM" \
   2>&1 | tee build/install-ipad.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
 grep -q "BUILD SUCCEEDED" build/install-ipad.log || { echo "The build failed: see build/install-ipad.log" >&2; exit 1; }
 
-echo "Installing…"
-xcrun devicectl device install app --device "$UDID" "$DERIVED/Build/Products/Release-iphoneos/Calco.app" >/dev/null
+echo "Installing on ${UDID}…"
+# A locked iPad refuses the install: give the person a moment to unlock it, then try again.
+for attempt in 1 2 3 4 5 6; do
+  if xcrun devicectl device install app --device "$UDID" "$DERIVED/Build/Products/Release-iphoneos/Calco.app" \
+       >build/install-ipad-device.log 2>&1; then
+    break
+  fi
+  if [ "$attempt" = 6 ]; then
+    echo "Couldn't install: see build/install-ipad-device.log" >&2
+    exit 1
+  fi
+  if grep -q "unlocked" build/install-ipad-device.log; then
+    echo "Unlock the iPad (and keep the screen on)… trying again in 10 s"
+  else
+    echo "The install failed, trying again in 10 s…"
+  fi
+  sleep 10
+done
 echo "Opening…"
 xcrun devicectl device process launch --device "$UDID" "$BUNDLE_ID" >/dev/null 2>&1 \
   || echo "Installed. If it doesn't open, unlock the iPad, or trust the developer in Settings → General → VPN & Device Management."
