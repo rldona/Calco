@@ -14,7 +14,7 @@ From top to bottom:
 | **Duplicate** | Copies the drawing into a new frame after it (⌘D). |
 | **Hold** | This layer keeps showing the drawing before. On a held cell it becomes **Own drawing** (new, or a copy), and on a [linked repeat](./cycles) it becomes **Unlink**. |
 | **Delete** | Deletes the drawing (⌫). The one before keeps showing; a frame left with nothing of its own goes away. |
-| **More** | Label the drawing, [split it halfway](./cycles#inbetween-halfway), [repeat drawings](./cycles), and the actions for the whole frame. |
+| **More** | Label the drawing, [split it halfway](./cycles#inbetween-halfway), [repeat drawings](./cycles), [tween a motion](./cycles#tween-a-motion), and the actions for the whole frame. |
 | **Onion** | The [onion skin](./onion-skin) on or off; the numbers under it open its settings. |
 | **Layer / All** | What the buttons act on: the current layer's drawing, or **whole frames**, every layer at once. |
 

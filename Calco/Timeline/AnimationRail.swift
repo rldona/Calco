@@ -352,6 +352,8 @@ private struct MoreMenuItems: View {
             }
         } label: { Label("Split drawing halfway", systemImage: "square.split.2x1") }
         .disabled(!state.canSplitCurrentDrawing)
+        Button { state.beginTween() } label: { Label("Tween motion…", systemImage: "point.bottomleft.forward.to.point.topright.scurvepath") }
+            .disabled(state.currentLayer?.locked != false || state.currentDrawingKey == nil)
         Button { repeating = true } label: { Label("Repeat drawings…", systemImage: "repeat") }
             .disabled(state.drawingsUpToPlayhead == 0)
         Section("Frame \(state.frameIndex + 1), all layers") {

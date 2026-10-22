@@ -167,8 +167,11 @@ struct SelectionOverlay: View {
 
         // Above the rotate knob, or under the box when there's no room above.
         let barAbove = box.minY - 92 >= 28
-        SelectionBar(state: state)
-            .position(x: box.midX, y: barAbove ? box.minY - 92 : box.maxY + 52)
+        // Not while placing a tween's end pose: its own bar applies or cancels it.
+        if state.tween == nil {
+            SelectionBar(state: state)
+                .position(x: box.midX, y: barAbove ? box.minY - 92 : box.maxY + 52)
+        }
 
         if sizing {
             SizeChip(width: sel.scaleX, height: sel.scaleY)

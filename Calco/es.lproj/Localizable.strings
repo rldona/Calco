@@ -62,11 +62,13 @@
 "Another clip (crouch, dash…)" = "Otro clip (agacharse, esquivar…)";
 "Apply Selection" = "Aplicar selección";
 "Apply selection" = "Aplicar selección";
+"Arc" = "Arco";
 "Arrow" = "Flecha";
 "Ballpoint" = "Bolígrafo";
 "Basics" = "Básicos";
 "Before you export" = "Antes de exportar";
 "Behind" = "Detrás";
+"Bend the arc" = "Curvar el arco";
 "Bigger" = "Más grande";
 "Blank inbetween halfway" = "Intermedio vacío a mitad";
 "Blue" = "Azul";
@@ -84,6 +86,7 @@
 "Cancel Selection" = "Cancelar selección";
 "Cancel path" = "Cancelar trazado";
 "Cancel selection" = "Cancelar selección";
+"Cancel tween" = "Cancelar interpolación";
 "Change everywhere" = "Cambiar en todo el proyecto";
 "Change everywhere…" = "Cambiar en todo el proyecto…";
 "Charcoal" = "Carboncillo";
@@ -154,6 +157,9 @@
 "Duplicate frame" = "Duplicar fotograma";
 "Duplicate profile" = "Duplicar perfil";
 "Duplicate split halfway" = "Duplicar partiendo a mitad";
+"Ease in" = "Entrada";
+"Ease out" = "Salida";
+"Easing" = "Suavizado";
 "Ellipse" = "Elipse";
 "Empty layer" = "Capa vacía";
 "Eraser" = "Goma";
@@ -246,6 +252,7 @@
 "Leave Zen mode" = "Salir del modo Zen";
 "Line" = "Línea";
 "Line's colour" = "El de la línea";
+"Linear" = "Lineal";
 "Look" = "Aspecto";
 "Loop" = "Bucle";
 "Marker" = "Rotulador";
@@ -355,6 +362,8 @@
 "Repeat drawings…" = "Repetir dibujos…";
 "Replace sequence" = "Reemplazar secuencia";
 "Replace sequence…" = "Reemplazar secuencia…";
+"Replaces %lld drawings" = "Sustituye %lld dibujos";
+"Replaces 1 drawing" = "Sustituye 1 dibujo";
 "Restore presets" = "Restaurar perfiles de serie";
 "Retro, few poses" = "Retro, pocas poses";
 "Rotate selection" = "Girar selección";
@@ -393,6 +402,7 @@
 "Small" = "Pequeño";
 "Smaller" = "Más pequeño";
 "Smear" = "Difuminar";
+"Smooth" = "Suave";
 "Smoothing" = "Suavizado";
 "Smudge" = "Dedo";
 "Soft" = "Suave";
@@ -431,6 +441,8 @@
 "Tip" = "Punta";
 "Triangle" = "Triángulo";
 "Trim transparent borders" = "Recortar bordes transparentes";
+"Tween" = "Interpolar";
+"Tween motion…" = "Interpolar movimiento…";
 "Under what's already on the layer: colour under line art without touching the lines." = "Debajo de lo que ya hay en la capa: colorear bajo la línea sin tocarla.";
 "Undo" = "Deshacer";
 "Unflip View" = "Deshacer volteo";

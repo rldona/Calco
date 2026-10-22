@@ -105,11 +105,16 @@ struct ContentView: View {
                 if state.showPivot { PivotOverlay(state: state) }
             }
             .overlay { SelectionOverlay(state: state) }
+            // Above the selection, so the arc's handle can be grabbed; nothing else catches touches.
+            .overlay { TweenOverlay(state: state) }
             .overlay { ShapeDraftOverlay(state: state) }
             .overlay { PenOverlay(state: state) }
             .overlay(alignment: .bottom) {
                 if state.penEditing != nil {
                     PenBar(state: state)
+                        .padding(.bottom, state.bottomInset + 6)
+                } else if state.tween != nil {
+                    TweenBar(state: state)
                         .padding(.bottom, state.bottomInset + 6)
                 } else if state.tool == .move, let id = state.moveBlockedLayer,
                    let layer = state.layers.first(where: { $0.id == id }) {

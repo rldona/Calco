@@ -35,6 +35,8 @@ final class EditorState {
     var layerIndex = 0 { didSet { if layerIndex != oldValue { selectionTargetChanged() } } }
     var tool: CanvasRenderer.Tool = .brush {
         didSet {
+            // A tween in progress is let go, as if cancelled, before the selection is dropped.
+            if tween != nil && tool != .move { cancelTween() }
             // A path being edited is off the drawing: put it back before anything else looks at
             // the drawing (Move would lift it without the path, and lose it).
             if tool != .pen && tool != .node { finishPen() }
@@ -508,6 +510,7 @@ final class EditorState {
     private func install(_ newProject: Project, images: [LayerKey: CGImage],
                          strokes loadedStrokes: [LayerKey: [StrokePiece]] = [:]) throws {
         selection = nil; selectionBefore = nil; selectionPreview = nil; lassoPoints = []
+        tween = nil; tweenStart = nil
         recipeStroke = nil; recipeScratch = nil; fillScratch = nil; smudgeScratch = nil; penEditing = nil; penBefore = nil
         strokes = loadedStrokes; movingPieces = nil; lastPick = nil; moveHint = nil; strokeTexture = nil; strokeBase = nil
         playRange = nil
@@ -1511,6 +1514,10 @@ final class EditorState {
                     out.append(.init(texture: texture, opacity: Float(layer.opacity), tint: tint ?? .zero,
                                      tintAmount: tint == nil ? 0 : 1, mask: mask))
                 }
+                // A tween's start pose stays in view, faint, under the end pose being placed.
+                if tween != nil, let sel = selection, sel.key == key, let start = tweenStart {
+                    out.append(.init(texture: start, opacity: Float(layer.opacity) * 0.35, tint: .zero, tintAmount: 0, mask: mask))
+                }
                 // A floating selection shows right above its own layer, where it'll land.
                 if let sel = selection, sel.key == key, let preview = selectionPreview {
                     out.append(.init(texture: preview, opacity: Float(layer.opacity), tint: .zero, tintAmount: 0, mask: mask))
@@ -2221,6 +2228,8 @@ final class EditorState {
     /// piece underneath; with `addingStrokes`, taps add pieces or take them out. A locked layer
     /// lifts nothing and sets `moveBlockedLayer`, so the editor can offer to unlock it.
     func liftForMove(at point: CGPoint? = nil) {
+        // Placing a tween's end pose: taps and drags move that pose, they don't pick anything.
+        guard tween == nil else { return }
         finishPen()
         let previous = movingPieces
         lassoPoints = []
@@ -2289,6 +2298,7 @@ final class EditorState {
 
     /// Frame or layer changed: drop what's floating; with Move, pick up the drawing that's now current.
     private func selectionTargetChanged() {
+        cancelTween()
         finishPen()
         commitSelection()
         moveBlockedLayer = nil
@@ -2609,6 +2619,116 @@ final class EditorState {
         if ![.fill, .shape, .pen, .node].contains(tool) { tool = .brush }
     }
 
+    // MARK: - Motion tween
+
+    /// A motion tween being set up: the drawing (or the strokes picked with Move) floats at its end
+    /// pose, and these say how the poses in between are made.
+    struct TweenSession: Equatable {
+        /// Frames after the start that get a pose; the last gets the end pose.
+        var count = 6
+        var easing = Tween.Easing.easeInOut
+        /// Along an arc instead of a straight line.
+        var curved = false
+        /// How far the arc's middle is from the straight line's (canvas pixels).
+        var bend = CGVector.zero
+        let startFrame: Int
+    }
+    private(set) var tween: TweenSession?
+    @ObservationIgnored private var tweenStart: MTLTexture?
+
+    /// Starts a motion tween from the drawing at the playhead (or the strokes already picked with
+    /// Move): it floats, ready to be put in its end pose.
+    func beginTween() {
+        guard !isPlaying, tween == nil, currentLayer?.locked == false, currentDrawingKey != nil else { return }
+        finishPen()
+        if !(tool == .move && selection != nil && movingPieces != nil) {
+            if tool == .move { liftForMove() } else { tool = .move }
+        }
+        guard let sel = selection, movingPieces != nil else { return }
+        tweenStart = renderer.makeLayerTexture()
+        if let start = tweenStart { renderer.upload(bytes: sel.lifted, into: start) }
+        tween = TweenSession(startFrame: frameIndex)
+        canvasVersion &+= 1
+    }
+
+    func updateTween(_ change: (inout TweenSession) -> Void) {
+        guard var t = tween else { return }
+        change(&t)
+        t.count = min(max(t.count, 1), 48)
+        tween = t
+    }
+
+    /// Lets the tween go: the drawing is left as it was.
+    func cancelTween() {
+        guard tween != nil else { return }
+        tween = nil
+        tweenStart = nil
+        cancelSelection()
+        canvasVersion &+= 1
+    }
+
+    /// The poses in between, for the overlay (not the start, not the end).
+    var tweenPoses: [FloatingSelection] {
+        guard let t = tween, let end = selection, t.count > 1 else { return [] }
+        return (1..<t.count).map { Tween.pose($0, of: t.count, to: end, easing: t.easing, bend: t.curved ? t.bend : .zero) }
+    }
+
+    /// Drawings the tween would replace: frames after the start where the layer has its own.
+    var tweenReplaces: Int {
+        guard let t = tween, let layer = selection?.key.layer else { return 0 }
+        return (1...t.count).map { t.startFrame + $0 }.filter { f in
+            frames.indices.contains(f) && !clip.isHeld(layer: layer, at: f)
+                && store.existingTexture(clip: clip.id, frame: frames[f].id, layer: layer) != nil
+        }.count
+    }
+
+    /// Paints the poses: on the frames after the start, the layer's drawing with the tweened
+    /// strokes in each pose (the rest of the drawing as it is), adding frames at the end if the
+    /// clip is too short. Pencil strokes are painted again in each pose, so they stay sharp. The
+    /// start drawing doesn't change. One undo step.
+    func applyTween() {
+        guard let session = tween, let end = selection, let moving = movingPieces, moving.key == end.key,
+              let pieces = strokes[end.key] else { cancelTween(); return }
+        let layerID = end.key.layer
+        let chosen = moving.indices.sorted(by: >)
+        let w = renderer.canvasSize.x, h = renderer.canvasSize.y
+        let bend = session.curved ? session.bend : .zero
+        tween = nil
+        tweenStart = nil
+        cancelSelection()
+
+        let targets = (1...session.count).map { session.startFrame + $0 }
+        let missing = max(0, targets.last! + 1 - frames.count)
+        let added = (0..<missing).map { _ in Frame(id: newFrameID(), hold: 1, held: layers.map(\.id).filter { $0 != layerID }) }
+        let ids = frames.map(\.id) + added.map(\.id)
+        let keys = targets.map { LayerKey(clip: clip.id, frame: ids[$0], layer: layerID) }
+            + added.flatMap { f in layers.map { LayerKey(clip: clip.id, frame: f.id, layer: $0.id) } }
+        recordUndo(textures: keys)
+        clip.frames += added
+        for (n, f) in targets.enumerated() {
+            let pose = Tween.pose(n + 1, of: session.count, to: end, easing: session.easing, bend: bend)
+            var out = pieces
+            for i in chosen where out.indices.contains(i) {
+                if let recipe = out[i].recipe {
+                    if let t = paint(recipe.transformed(pose.transform)) { out[i] = t } else { out.remove(at: i) }
+                } else if let t = out[i].transformed(pose.transform, canvasWidth: w, height: h, hard: project.pixelArt) {
+                    out[i] = t
+                } else {
+                    out.remove(at: i)
+                }
+            }
+            let key = LayerKey(clip: clip.id, frame: clip.frames[f].id, layer: layerID)
+            clip.frames[f].held.removeAll { $0 == layerID }
+            // A new texture, so the undo step keeps the drawing that was there.
+            guard let fresh = renderer.makeLayerTexture() else { continue }
+            renderer.upload(bytes: StrokePieces.composite(out, width: w, height: h), into: fresh)
+            store.set(fresh, for: key)
+            strokes[key] = out
+        }
+        isDirty = true
+        refreshClipThumbnails()
+    }
+
     // MARK: - Palette
 
     /// The current colour, added to the project's palette (named after its place in it).
@@ -2798,6 +2918,7 @@ final class EditorState {
     func undo() {
         cancelStroke()
         // With a selection floating or a path open, undo means "never mind".
+        if tween != nil { cancelTween(); return }
         if selection != nil { cancelSelection(); return }
         if penEditing != nil { cancelPen(); return }
         guard let s = undoStack.popLast() else { return }

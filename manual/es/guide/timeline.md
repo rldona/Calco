@@ -14,7 +14,7 @@ De arriba abajo:
 | **Duplicar** | Copia el dibujo en un fotograma nuevo después (⌘D). |
 | **Mantener** | Esta capa sigue mostrando el dibujo anterior. En una celda mantenida pasa a ser **Dibujo propio** (nuevo o copia), y en una [repetición enlazada](./cycles), **Desenlazar**. |
 | **Eliminar** | Elimina el dibujo (⌫). Se sigue viendo el anterior; un fotograma que se queda sin nada propio desaparece. |
-| **Más** | Etiquetar el dibujo, [partirlo a mitad](./cycles#intermedio-a-mitad), [repetir dibujos](./cycles) y las acciones del fotograma entero. |
+| **Más** | Etiquetar el dibujo, [partirlo a mitad](./cycles#intermedio-a-mitad), [repetir dibujos](./cycles), [interpolar un movimiento](./cycles#interpolar-un-movimiento) y las acciones del fotograma entero. |
 | **Cebolla** | Activa o desactiva el [papel cebolla](./onion-skin); los números de debajo abren sus ajustes. |
 | **Capa / Todas** | Sobre qué actúan los botones: el dibujo de la capa actual o **fotogramas enteros**, todas las capas a la vez. |
 

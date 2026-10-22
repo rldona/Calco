@@ -141,6 +141,9 @@ final class CanvasUIView: UIView {
         // Pencil only: a finger on the canvas is for gestures, never a mark.
         if state.pencilOnly && t.type != .pencil { return }
         switch state.tool {
+        case .move where state.tween != nil:
+            // Placing a tween's end pose: the handles on the selection do it; the canvas doesn't.
+            return
         case .fill, .eyedropper, .move:
             // Wait for the lift: if it turns into a pinch or two-finger tap, touchesCancelled drops it.
             activeTouch = t
