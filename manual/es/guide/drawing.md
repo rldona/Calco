@@ -16,7 +16,7 @@ De arriba abajo:
 - **Pluma** (P)
 - **Nodo** (A)
 - **Dedo** (S)
-- **Color**: toca para la paleta y el selector de color.
+- **Color**: toca para la [paleta del proyecto](#paleta-del-proyecto), los colores básicos y el selector de color.
 - **Tamaño**: arrastra la barra, o toca el número para valores exactos. `[` y `]` con teclado.
 - **Deshacer / Rehacer**: también tocando con dos y tres dedos en el lienzo.
 
@@ -169,6 +169,15 @@ El **Dedo** trabaja la pintura que ya hay en la capa:
 - **Movimiento** la emborrona en la dirección en que mueves el dedo, como una estela.
 
 Toca otra vez el Dedo para elegir el modo, la **fuerza** y la **punta** (suave, o la del pincel elegido). El tamaño es el de la barra, y cuanto más aprietas con el Pencil, más trabaja la pintura. Lo que pasa por el Dedo deja de ser un trazo que Mover recuerda: queda como píxeles.
+
+## Paleta del proyecto
+
+El panel de color empieza con los colores del proyecto, con nombre: la línea del personaje, el cuerpo, la cara… Toca uno para pintar con él.
+
+- **+** guarda el color actual en la paleta. Un proyecto sin paleta tiene **Desde los dibujos**, que toma los colores que más se usan en sus dibujos.
+- Mantén pulsado un color para **Renombrarlo**, **Duplicarlo como variante**, **Quitarlo** o **Cambiarlo en todo el proyecto…**: elige el color nuevo y cada píxel del antiguo pasa a ser el nuevo, en todos los dibujos de todos los clips, con los bordes suaves, incluso donde toca otro color. Los trazos recordados también cambian, así que siguen nítidos con Mover. Un solo deshacer lo devuelve todo.
+
+Sirve para cambiar la paleta de un personaje: duplica un proyecto o un clip, pasa el rojo del enemigo a azul y ya tienes un segundo enemigo. Las guías no se tocan. En los proyectos de pixel art solo cambia el color exacto.
 
 ## Pixel art
 

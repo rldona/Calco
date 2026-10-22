@@ -16,7 +16,7 @@ From top to bottom:
 - **Pen** (P)
 - **Node** (A)
 - **Smudge** (S)
-- **Colour**: tap for the palette and the colour picker.
+- **Colour**: tap for the [project palette](#project-palette), the basic colours and the colour picker.
 - **Size**: drag the slider, or tap the number for exact values. `[` and `]` on a keyboard.
 - **Undo / Redo**: also two-finger and three-finger taps on the canvas.
 
@@ -169,6 +169,15 @@ The bar under the canvas is the Pen's: how many nodes you have, **Corner** or **
 - **Motion** blurs it along the way you move, like a trail.
 
 Tap Smudge again for the mode, the **strength** and the **tip** (soft, or the chosen brush's). The size is the bar's, and pressing harder with the Pencil works the paint more. Whatever Smudge goes over is no longer a stroke Move remembers: it stays as pixels.
+
+## Project palette
+
+The colour panel starts with the project's own colours, named: the character's line, body, face… Tap one to paint with it.
+
+- **+** keeps the current colour in the palette. A project without a palette has **From the drawings**, which picks the colours its drawings are mostly made of.
+- Long-press a colour to **Rename** it, **Duplicate as variant**, **Remove** it, or **Change everywhere…**: pick the new colour and every pixel of the old one turns into it, in every drawing of every clip, soft edges included, even where it meets another colour. Remembered strokes change too, so they stay sharp with Move. One undo takes it all back.
+
+Good for a palette swap: duplicate a project or a clip, change the enemy's red to blue, and you have a second enemy. Guides are left alone. In pixel art projects only the exact colour changes.
 
 ## Pixel art
 

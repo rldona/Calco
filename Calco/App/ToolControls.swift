@@ -307,6 +307,8 @@ struct ColorPopover: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Colour").font(.headline)
+            ProjectPalette(state: state)
+            Text("Basics").font(.caption2.weight(.bold)).textCase(.uppercase).foregroundStyle(Theme.textFaint)
             LazyVGrid(columns: Array(repeating: GridItem(.fixed(40), spacing: 10), count: 4), spacing: 10) {
                 ForEach(Self.palette, id: \.self) { hex in
                     let c = SIMD4<Float>(hex: hex)
@@ -328,7 +330,132 @@ struct ColorPopover: View {
         }
         .buttonStyle(.plain)
         .padding(20)
-        .frame(width: 230)
+        .frame(width: 250)
+    }
+}
+
+/// The project's own colours, named, above the basics: tap one to paint with it, + to keep the
+/// current colour, and long-press one to rename it, change it everywhere, make a variant or
+/// remove it.
+private struct ProjectPalette: View {
+    @Bindable var state: EditorState
+    @State private var renaming: PaletteColor?
+    @State private var newName = ""
+    @State private var changing: PaletteColor?
+
+    private let columns = Array(repeating: GridItem(.fixed(40), spacing: 10), count: 4)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("\(state.project.name) palette").font(.caption2.weight(.bold)).textCase(.uppercase)
+                .foregroundStyle(Theme.textFaint).lineLimit(1)
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
+                ForEach(state.project.palette) { entry in swatch(entry) }
+                Button { state.addColorToPalette() } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Theme.accent)
+                        .frame(width: 40, height: 40)
+                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.accent, style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])))
+                }
+                .accessibilityLabel("Add the current colour to the palette")
+            }
+            if state.project.palette.isEmpty {
+                Button { state.suggestPalette() } label: {
+                    Label("From the drawings", systemImage: "wand.and.stars").font(.caption)
+                }
+                .buttonStyle(.bordered)
+                .help("Picks the colours the drawings are mostly made of")
+            }
+        }
+        .alert("Rename colour", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("Name", text: $newName)
+            Button("Rename") { if let r = renaming { state.renamePaletteColor(r.id, to: newName) } }
+            Button("Cancel", role: .cancel) {}
+        }
+        // A sheet, not a popover: from inside the colour popover the system picker couldn't open.
+        .sheet(item: $changing) { entry in PaletteChangeSheet(state: state, entry: entry) }
+    }
+
+    private func swatch(_ entry: PaletteColor) -> some View {
+        let rgb = entry.rgb
+        let on = simd_reduce_max(simd_abs(rgb - SIMD3(state.color.x, state.color.y, state.color.z))) < 1.5 / 255
+        return Button { state.setColor(SIMD4(rgb, 1)) } label: {
+            VStack(spacing: 3) {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(rgba: SIMD4(rgb, 1)))
+                    .frame(width: 40, height: 40)
+                    .overlay(RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(on ? Theme.accent : .white.opacity(0.2), lineWidth: on ? 3 : 1))
+                Text(entry.name).font(.system(size: 9)).foregroundStyle(Theme.textDim).lineLimit(1).frame(width: 46)
+            }
+        }
+        .accessibilityLabel(entry.name)
+        .contextMenu {
+            Button { changing = entry } label: {
+                Label("Change everywhere…", systemImage: "paintpalette")
+            }
+            Button { newName = entry.name; renaming = entry } label: { Label("Rename…", systemImage: "pencil") }
+            Button { state.duplicatePaletteColor(entry.id) } label: { Label("Duplicate as variant", systemImage: "plus.square.on.square") }
+            Button(role: .destructive) { state.removePaletteColor(entry.id) } label: { Label("Remove from palette", systemImage: "trash") }
+        }
+    }
+}
+
+/// Pick the new colour for a palette entry; Change everywhere repaints it in every drawing.
+private struct PaletteChangeSheet: View {
+    @Bindable var state: EditorState
+    let entry: PaletteColor
+    @State private var newColor: Color
+    @Environment(\.dismiss) private var dismiss
+
+    init(state: EditorState, entry: PaletteColor) {
+        self.state = state
+        self.entry = entry
+        _newColor = State(initialValue: Color(rgba: SIMD4(entry.rgb, 1)))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(entry.name).font(.headline)
+            HStack(spacing: 10) {
+                RoundedRectangle(cornerRadius: 8).fill(Color(rgba: SIMD4(entry.rgb, 1))).frame(width: 44, height: 44)
+                Image(systemName: "arrow.right").foregroundStyle(Theme.textDim)
+                RoundedRectangle(cornerRadius: 8).fill(newColor).frame(width: 44, height: 44)
+                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.accent, lineWidth: 2))
+                Spacer()
+                ColorPicker("Custom", selection: $newColor, supportsOpacity: false)
+                    .fixedSize()
+            }
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(36), spacing: 8), count: 8), spacing: 8) {
+                ForEach(state.project.palette.map(\.rgb).map { SIMD4($0, 1) } + ColorPopover.palette.map { SIMD4<Float>(hex: $0) },
+                        id: \.self) { c in
+                    Button { newColor = Color(rgba: c) } label: {
+                        RoundedRectangle(cornerRadius: 7).fill(Color(rgba: c)).frame(width: 36, height: 36)
+                            .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(.white.opacity(0.2)))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Text("Repaints every pixel of this colour, soft edges too, in every drawing of every clip. One undo.")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                let v = SIMD4<Float>(newColor)
+                state.changePaletteColorEverywhere(entry.id, to: SIMD3(v.x, v.y, v.z))
+                dismiss()
+            } label: {
+                Text("Change everywhere").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            Button("Cancel", role: .cancel) { dismiss() }
+                .frame(maxWidth: .infinity)
+        }
+        .padding(24)
+        .presentationDetents([.medium])
+        .frame(maxWidth: 420)
+        .tint(Theme.accent)
+        .preferredColorScheme(.dark)
     }
 }
 

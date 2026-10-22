@@ -5,6 +5,8 @@
 "%@ doesn't include any clip of %@." = "%@ no incluye ningún clip de %@.";
 "%@ is locked" = "%@ está bloqueada";
 "%@ opacity" = "Opacidad de %@";
+"%@ palette" = "Paleta de %@";
+"%@ variant" = "%@ variante";
 "%@ · %lld / %lld" = "%@ · %lld / %lld";
 "%@, %@" = "%@, %@";
 "%@, drawing %lld" = "%@, dibujo %lld";
@@ -44,6 +46,7 @@
 "Add frame" = "Añadir fotograma";
 "Add frame at the end" = "Añadir fotograma al final";
 "Add strokes" = "Añadir trazos";
+"Add the current colour to the palette" = "Añadir el color actual a la paleta";
 "Add the frames that are missing" = "Crear los fotogramas que falten";
 "Adding" = "Añadiendo";
 "Adds the last %lld drawings again after this one, linked: change one and every repeat changes. Unlink a repeat to make it its own drawing." = "Vuelve a poner los últimos %lld dibujos después de este, enlazados: si cambias uno, cambian todas las repeticiones. Desenlaza una repetición para que sea un dibujo propio.";
@@ -61,6 +64,7 @@
 "Apply selection" = "Aplicar selección";
 "Arrow" = "Flecha";
 "Ballpoint" = "Bolígrafo";
+"Basics" = "Básicos";
 "Before you export" = "Antes de exportar";
 "Behind" = "Detrás";
 "Bigger" = "Más grande";
@@ -80,6 +84,8 @@
 "Cancel Selection" = "Cancelar selección";
 "Cancel path" = "Cancelar trazado";
 "Cancel selection" = "Cancelar selección";
+"Change everywhere" = "Cambiar en todo el proyecto";
+"Change everywhere…" = "Cambiar en todo el proyecto…";
 "Charcoal" = "Carboncillo";
 "Circle" = "Círculo";
 "Clean line that thins with pressure" = "Línea limpia, afina con la presión";
@@ -93,6 +99,7 @@
 "Close gaps" = "Cerrar huecos";
 "Close path" = "Cerrar trazado";
 "Colour" = "Color";
+"Colour %lld" = "Color %lld";
 "Continue" = "Continuar";
 "Continue %@" = "Continuar %@";
 "Copy" = "Copiar";
@@ -142,6 +149,7 @@
 "Duplicate %@" = "Duplicar %@";
 "Duplicate Drawing" = "Duplicar dibujo";
 "Duplicate Frame" = "Duplicar fotograma";
+"Duplicate as variant" = "Duplicar como variante";
 "Duplicate drawing" = "Duplicar dibujo";
 "Duplicate frame" = "Duplicar fotograma";
 "Duplicate profile" = "Duplicar perfil";
@@ -191,6 +199,7 @@
 "Frames %lld × %lld px before trimming. Each clip is trimmed to the box its drawings use; the JSON keeps the pivot in place for Unity." = "Fotogramas de %lld × %lld px antes de recortar. Cada clip se recorta a la caja que usan sus dibujos; el JSON mantiene el pivote en su sitio para Unity.";
 "Frames %lld × %lld px." = "Fotogramas de %lld × %lld px.";
 "Free" = "Libre";
+"From the drawings" = "Desde los dibujos";
 "GIF" = "GIF";
 "Godot SpriteFrames" = "Godot SpriteFrames";
 "Green" = "Verde";
@@ -312,6 +321,7 @@
 "Pencil pressure changes size" = "La presión del Pencil cambia el tamaño";
 "Pick a profile" = "Elige un perfil";
 "Pick a sprite size and the clips you need. Everything saves here on its own." = "Elige un tamaño de sprite y los clips que necesites. Todo se guarda aquí solo.";
+"Picks the colours the drawings are mostly made of" = "Toma los colores que más se usan en los dibujos";
 "Pixel art" = "Pixel art";
 "Pixels" = "Píxeles";
 "Pixels per unit is written for calco-unity; leave it off to keep the texture's own setting." = "Los píxeles por unidad se escriben para calco-unity; déjalo desactivado para mantener el ajuste propio de la textura.";
@@ -330,12 +340,15 @@
 "Red" = "Rojo";
 "Redo" = "Rehacer";
 "Reference" = "Referencia";
+"Remove from palette" = "Quitar de la paleta";
 "Rename" = "Renombrar";
 "Rename %@…" = "Renombrar %@…";
 "Rename clip" = "Renombrar clip";
+"Rename colour" = "Renombrar color";
 "Rename layer" = "Renombrar capa";
 "Rename project" = "Renombrar proyecto";
 "Rename…" = "Renombrar…";
+"Repaints every pixel of this colour, soft edges too, in every drawing of every clip. One undo." = "Repinta cada píxel de este color, también los bordes suaves, en todos los dibujos de todos los clips. Se deshace de una vez.";
 "Repeat %lld drawings" = "Repetir %lld dibujos";
 "Repeat 1 drawing" = "Repetir 1 dibujo";
 "Repeat as a cycle" = "Repetir como ciclo";

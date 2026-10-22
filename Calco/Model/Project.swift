@@ -16,14 +16,16 @@ struct Project: Codable, Equatable {
     /// Hard-edged brush, eraser, fill and lasso: every pixel is fully on or off. Optional in the
     /// file, written only when true.
     var pixelArt = false
+    /// The character's colours, named. Optional in the file, written when there are any.
+    var palette: [PaletteColor] = []
 
     init(version: Int = Project.currentFormatVersion, name: String, canvas: CanvasSize, fps: Int = 12,
-         clips: [Clip] = [], references: [Reference] = [], pixelArt: Bool = false) {
+         clips: [Clip] = [], references: [Reference] = [], pixelArt: Bool = false, palette: [PaletteColor] = []) {
         self.version = version; self.name = name; self.canvas = canvas; self.fps = fps
-        self.clips = clips; self.references = references; self.pixelArt = pixelArt
+        self.clips = clips; self.references = references; self.pixelArt = pixelArt; self.palette = palette
     }
 
-    private enum CodingKeys: String, CodingKey { case version, name, canvas, fps, clips, references, pixelArt }
+    private enum CodingKeys: String, CodingKey { case version, name, canvas, fps, clips, references, pixelArt, palette }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -34,6 +36,7 @@ struct Project: Codable, Equatable {
         clips = try c.decodeIfPresent([Clip].self, forKey: .clips) ?? []
         references = try c.decodeIfPresent([Reference].self, forKey: .references) ?? []
         pixelArt = try c.decodeIfPresent(Bool.self, forKey: .pixelArt) ?? false
+        palette = try c.decodeIfPresent([PaletteColor].self, forKey: .palette) ?? []
     }
 
     func encode(to encoder: Encoder) throws {
@@ -45,7 +48,26 @@ struct Project: Codable, Equatable {
         try c.encode(clips, forKey: .clips)
         try c.encode(references, forKey: .references)
         if pixelArt { try c.encode(pixelArt, forKey: .pixelArt) }
+        if !palette.isEmpty { try c.encode(palette, forKey: .palette) }
     }
+}
+
+/// A named colour of the project's palette. `color` is "#RRGGBB".
+struct PaletteColor: Codable, Equatable, Identifiable {
+    var id: String
+    var name: String
+    var color: String
+
+    init(id: String = UUID().uuidString, name: String, color: String) {
+        self.id = id; self.name = name; self.color = color
+    }
+
+    init(id: String = UUID().uuidString, name: String, rgb: SIMD3<Float>) {
+        self.init(id: id, name: name, color: Palette.hex(rgb))
+    }
+
+    /// RGB 0–1; black if the string isn't a colour.
+    var rgb: SIMD3<Float> { Palette.rgb(color) ?? .zero }
 }
 
 struct CanvasSize: Codable, Equatable {

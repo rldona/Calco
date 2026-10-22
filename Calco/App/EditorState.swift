@@ -1,5 +1,6 @@
 import SwiftUI
 import Metal
+import simd
 
 struct OnionSkin: Equatable {
     var enabled = true
@@ -2606,6 +2607,137 @@ final class EditorState {
         // A colour is for painting: leave the eraser, but keep filling, or drawing shapes and paths
         // (an open path takes the colour), if that's what you were doing.
         if ![.fill, .shape, .pen, .node].contains(tool) { tool = .brush }
+    }
+
+    // MARK: - Palette
+
+    /// The current colour, added to the project's palette (named after its place in it).
+    func addColorToPalette(name: String? = nil) {
+        let rgb = SIMD3(color.x, color.y, color.z)
+        recordUndo()
+        let n = project.palette.count + 1
+        project.palette.append(PaletteColor(name: name ?? String(localized: "Colour \(n)", bundle: AppLanguage.bundle), rgb: rgb))
+        isDirty = true
+    }
+
+    func renamePaletteColor(_ id: String, to name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let i = project.palette.firstIndex(where: { $0.id == id }) else { return }
+        recordUndo()
+        project.palette[i].name = trimmed
+        isDirty = true
+    }
+
+    func removePaletteColor(_ id: String) {
+        guard let i = project.palette.firstIndex(where: { $0.id == id }) else { return }
+        recordUndo()
+        project.palette.remove(at: i)
+        isDirty = true
+    }
+
+    /// A copy of a palette colour right after it, to turn into a variant (the red enemy's blue).
+    func duplicatePaletteColor(_ id: String) {
+        guard let i = project.palette.firstIndex(where: { $0.id == id }) else { return }
+        recordUndo()
+        var copy = project.palette[i]
+        copy.id = UUID().uuidString
+        copy.name = String(localized: "\(copy.name) variant", bundle: AppLanguage.bundle)
+        project.palette.insert(copy, at: i + 1)
+        isDirty = true
+    }
+
+    func movePaletteColor(from: Int, to: Int) {
+        guard project.palette.indices.contains(from), (0...project.palette.count).contains(to), from != to else { return }
+        recordUndo()
+        let c = project.palette.remove(at: from)
+        project.palette.insert(c, at: to > from ? to - 1 : to)
+        isDirty = true
+    }
+
+    /// Every drawing of the project, guides left out (they're not the character).
+    private func allDrawingKeys() -> [LayerKey] {
+        project.clips.flatMap { clip in
+            clip.frames.flatMap { f in
+                clip.layers.filter { !$0.guide }.compactMap { l -> LayerKey? in
+                    let k = LayerKey(clip: clip.id, frame: f.id, layer: l.id)
+                    return store.existingTexture(clip: k.clip, frame: k.frame, layer: k.layer) == nil ? nil : k
+                }
+            }
+        }
+    }
+
+    /// Palette colour `id` becomes `rgb`, and so does every pixel of its old colour in every
+    /// drawing of every clip (soft edges included), and every remembered stroke painted in it.
+    /// One undo step. Returns how many drawings changed.
+    @discardableResult
+    func changePaletteColorEverywhere(_ id: String, to rgb: SIMD3<Float>) -> Int {
+        guard let i = project.palette.firstIndex(where: { $0.id == id }) else { return 0 }
+        let from = project.palette[i].rgb
+        let to = simd_clamp(rgb, .zero, .one)
+        stop()
+        finishPen()
+        commitSelection()
+        let hard = project.pixelArt
+        let tol = Float(Palette.tolerance(hard: hard) + 1) / 255
+        func same(_ c: SIMD3<Float>) -> Bool { simd_reduce_max(simd_abs(c - from)) <= tol }
+
+        // Work out every change first; record them all as one undo step, then apply.
+        var newPixels: [LayerKey: [UInt8]] = [:]
+        var newPieces: [LayerKey: [StrokePiece]] = [:]
+        for k in allDrawingKeys() {
+            if let t = store.existingTexture(clip: k.clip, frame: k.frame, layer: k.layer),
+               let px = renderer.readbackBytes(t),
+               let out = Palette.recolor(px, width: renderer.canvasSize.x, from: from, to: to, hard: hard) {
+                newPixels[k] = out
+            }
+            if var pieces = strokes[k] {
+                var touched = false
+                for j in pieces.indices {
+                    if let out = Palette.recolor(pieces[j].pixels, width: pieces[j].width, from: from, to: to, hard: hard) {
+                        pieces[j].pixels = out
+                        touched = true
+                    }
+                    if var r = pieces[j].recipe {
+                        if same(r.color) { r.color = to; touched = true }
+                        if let f = r.pen?.style.fillColor, same(f) { r.pen?.style.fillColor = to; touched = true }
+                        pieces[j].recipe = r
+                    }
+                }
+                if touched { newPieces[k] = pieces }
+            }
+        }
+        var saved: [LayerKey: MTLTexture?] = [:]
+        for k in newPixels.keys { saved.updateValue(store.raw(k), forKey: k) }
+        for k in newPieces.keys where saved[k] == nil { saved.updateValue(store.raw(k), forKey: k) }
+        coalesceTag = nil
+        push(snapshot(saved))
+
+        project.palette[i].color = Palette.hex(to)
+        for (k, px) in newPixels {
+            // A new texture, so the one in the undo step keeps the old pixels.
+            guard let fresh = renderer.makeLayerTexture() else { continue }
+            renderer.upload(bytes: px, into: fresh)
+            store.set(fresh, for: k)
+        }
+        for (k, p) in newPieces { strokes[k] = p }
+        if same(SIMD3(color.x, color.y, color.z)) { color = SIMD4(to, 1) }
+        isDirty = true
+        refreshClipThumbnails()
+        return newPixels.count
+    }
+
+    /// A palette from the colours the drawings are mostly made of, for a project without one.
+    func suggestPalette() {
+        let drawings = allDrawingKeys().compactMap { k in
+            store.existingTexture(clip: k.clip, frame: k.frame, layer: k.layer).flatMap { renderer.readbackBytes($0) }
+        }
+        let colors = Palette.dominantColors(drawings)
+        guard !colors.isEmpty else { return }
+        recordUndo()
+        project.palette += colors.enumerated().map { n, c in
+            PaletteColor(name: String(localized: "Colour \(project.palette.count + n + 1)", bundle: AppLanguage.bundle), rgb: c)
+        }
+        isDirty = true
     }
 
     // MARK: - Undo / redo
