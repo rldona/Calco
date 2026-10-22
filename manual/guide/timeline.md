@@ -56,6 +56,11 @@ The frame numbers run above the cells:
 - **Tap a number** to go to that frame.
 - **Drag along the numbers**, with a finger or the Pencil, to flip the frames by under it, as fast or as slow as you move, with a light haptic tap on each. You see the motion at your own pace, without playing. The timeline holds still while you drag.
 - **Hold a number and drag** to move the frame, all its layers with it.
+- **Tap a number twice** to pick that frame; then **drag along the numbers** to pick a range.
+
+### Several frames at once
+
+With frames picked, a bar under the canvas acts on all of them: **Copy**, **Cut**, **Paste** (after the playhead, each frame with its length), **Reverse** (play them backwards, for the way back of a cycle), **Duplicate** (right after them) and **Delete**. With **Layer** on the animation rail, they act on the current layer's drawings only (the legs, without the rest); with **All**, on whole frames. Each is one undo; **✕** lets go of the range. On a keyboard: ⌘C, ⌘X, ⌘V and ⌘⌫.
 
 ### Cells
 

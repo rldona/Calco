@@ -107,6 +107,7 @@
 "Continue %@" = "Continuar %@";
 "Copy" = "Copiar";
 "Copy drawing here" = "Copiar dibujo aquí";
+"Copy frames" = "Copiar fotogramas";
 "Copy or cut from the bar above a selection. Paste lands where it was copied, on whichever frame and layer you're on." = "Copia o corta desde la barra que aparece sobre una selección. Lo pegado aparece donde se copió, en el fotograma y la capa en que estés.";
 "Corner" = "Esquina";
 "Couldn't create %@.\n%@" = "No se pudo crear %@.\n%@";
@@ -121,14 +122,17 @@
 "Curve" = "Curva";
 "Custom" = "Otro";
 "Cut" = "Cortar";
+"Cut frames" = "Cortar fotogramas";
 "Dashed" = "Discontinuo";
 "Delete" = "Eliminar";
 "Delete %@" = "Eliminar %@";
 "Delete %@?" = "¿Eliminar %@?";
 "Delete Drawing" = "Eliminar dibujo";
 "Delete Frame" = "Eliminar fotograma";
+"Delete Frames" = "Eliminar fotogramas";
 "Delete drawing" = "Eliminar dibujo";
 "Delete frame" = "Eliminar fotograma";
+"Delete frames" = "Eliminar fotogramas";
 "Delete layer…" = "Eliminar capa…";
 "Delete nodes" = "Borrar nodos";
 "Delete point" = "Borrar punto";
@@ -155,6 +159,7 @@
 "Duplicate as variant" = "Duplicar como variante";
 "Duplicate drawing" = "Duplicar dibujo";
 "Duplicate frame" = "Duplicar fotograma";
+"Duplicate frames" = "Duplicar fotogramas";
 "Duplicate profile" = "Duplicar perfil";
 "Duplicate split halfway" = "Duplicar partiendo a mitad";
 "Ease in" = "Entrada";
@@ -204,6 +209,7 @@
 "Frames" = "Fotogramas";
 "Frames %lld × %lld px before trimming. Each clip is trimmed to the box its drawings use; the JSON keeps the pivot in place for Unity." = "Fotogramas de %lld × %lld px antes de recortar. Cada clip se recorta a la caja que usan sus dibujos; el JSON mantiene el pivote en su sitio para Unity.";
 "Frames %lld × %lld px." = "Fotogramas de %lld × %lld px.";
+"Frames %lld–%lld" = "Fotogramas %lld–%lld";
 "Free" = "Libre";
 "From the drawings" = "Desde los dibujos";
 "GIF" = "GIF";
@@ -322,6 +328,7 @@
 "Paintbrush" = "Pincel";
 "Paper grain; tilt it to shade" = "Grano de papel; inclínalo para sombrear";
 "Paste" = "Pegar";
+"Paste frames" = "Pegar fotogramas";
 "Pause" = "Pausa";
 "Pen" = "Pluma";
 "Pencil" = "Lápiz";
@@ -366,6 +373,7 @@
 "Replaces 1 drawing" = "Sustituye 1 dibujo";
 "Restore presets" = "Restaurar perfiles de serie";
 "Retro, few poses" = "Retro, pocas poses";
+"Reverse frames" = "Invertir fotogramas";
 "Rotate selection" = "Girar selección";
 "Rough, for quick masses" = "Áspero, para manchar rápido";
 "Rounded rectangle" = "Rectángulo redondeado";

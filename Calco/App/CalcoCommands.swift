@@ -30,9 +30,13 @@ struct CalcoCommands: Commands {
             Button("Preferences…") { state.showingPreferences = true }.keyboardShortcut(",")
         }
         CommandGroup(replacing: .pasteboard) {
-            Button("Cut") { state.cutSelection() }.keyboardShortcut("x").disabled(state.isInGallery)
-            Button("Copy") { state.copySelection() }.keyboardShortcut("c").disabled(state.isInGallery)
-            Button("Paste") { state.paste() }.keyboardShortcut("v").disabled(state.isInGallery || state.clipboard == nil)
+            // With frames picked in the timeline, the frames; otherwise the drawing or the selection.
+            Button("Cut") { state.frameRange != nil ? state.cutFrames() : state.cutSelection() }
+                .keyboardShortcut("x").disabled(state.isInGallery)
+            Button("Copy") { state.frameRange != nil ? state.copyFrames() : state.copySelection() }
+                .keyboardShortcut("c").disabled(state.isInGallery)
+            Button("Paste") { state.pasteMakesFrames ? state.pasteFrames() : state.paste() }
+                .keyboardShortcut("v").disabled(state.isInGallery || (state.clipboard == nil && state.frameClipboard == nil))
             Button("Select All") { state.selectAll() }.keyboardShortcut("a").disabled(state.isInGallery)
         }
         CommandGroup(replacing: .undoRedo) {
@@ -86,7 +90,11 @@ struct CalcoCommands: Commands {
             // Same as the bar: the current layer's drawing, or whole frames with Sync Layers on.
             Button(state.syncLayers ? "New Frame" : "New Drawing") { state.addDrawing() }.keyboardShortcut("n", modifiers: [.option])
             Button(state.syncLayers ? "Duplicate Frame" : "Duplicate Drawing") { state.duplicateDrawing() }.keyboardShortcut("d")
-            Button(state.syncLayers ? "Delete Frame" : "Delete Drawing") { state.deleteDrawing() }.keyboardShortcut(.delete)
+            // With frames picked in the timeline, all of them.
+            Button(state.frameRange != nil ? "Delete Frames" : state.syncLayers ? "Delete Frame" : "Delete Drawing") {
+                state.frameRange != nil ? state.deleteFrames() : state.deleteDrawing()
+            }
+            .keyboardShortcut(.delete)
                 .disabled(state.syncLayers && state.frames.count <= 1)
             Toggle("Sync Layers", isOn: $state.syncLayers)
             Divider()

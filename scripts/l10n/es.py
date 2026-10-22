@@ -473,4 +473,12 @@ ES = {
 "Smooth": "Suave",
 "Tween": "Interpolar",
 "Tween motion…": "Interpolar movimiento…",
+"Copy frames": "Copiar fotogramas",
+"Cut frames": "Cortar fotogramas",
+"Delete Frames": "Eliminar fotogramas",
+"Delete frames": "Eliminar fotogramas",
+"Duplicate frames": "Duplicar fotogramas",
+"Frames %lld–%lld": "Fotogramas %lld–%lld",
+"Paste frames": "Pegar fotogramas",
+"Reverse frames": "Invertir fotogramas",
 }

@@ -116,6 +116,9 @@ struct ContentView: View {
                 } else if state.tween != nil {
                     TweenBar(state: state)
                         .padding(.bottom, state.bottomInset + 6)
+                } else if state.frameRange != nil {
+                    FrameRangeBar(state: state)
+                        .padding(.bottom, state.bottomInset + 6)
                 } else if state.tool == .move, let id = state.moveBlockedLayer,
                    let layer = state.layers.first(where: { $0.id == id }) {
                     MoveLockedHint(state: state, layerName: layer.name)

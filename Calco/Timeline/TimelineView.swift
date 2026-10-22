@@ -144,6 +144,7 @@ struct TimelineView: View {
                                 ForEach(rows) { layer in row(layer) }
                             }
                             .overlay(alignment: .topLeading) { playhead }
+                            .overlay(alignment: .topLeading) { rangeBand }
                             .coordinateSpace(name: Self.sheet)
                             .padding(.trailing, 8)
                         }
@@ -178,6 +179,12 @@ struct TimelineView: View {
 
     /// Scrubbing: the frame under `x` (in the sheet's coordinates) becomes the current one.
     private func scrub(toX x: CGFloat) {
+        // With frames picked, dragging along the numbers stretches the range instead.
+        if state.frameRange != nil {
+            let i = frameIndex(atX: max(0, x))
+            state.extendFrameRange(to: i)
+            return
+        }
         if !scrubbing {
             scrubbing = true
             if state.isPlaying { state.togglePlayback() }
@@ -267,7 +274,11 @@ struct TimelineView: View {
                     .background(state.playRange != nil && range.contains(i) ? Theme.accent.opacity(0.12) : .clear)
                     .overlay(alignment: .bottomLeading) { Rectangle().fill(Theme.hairline).frame(width: 1, height: 8) }
                     .contentShape(Rectangle())
-                    .onTapGesture { state.frameIndex = i }
+                    .onTapGesture { state.clearFrameRange(); state.frameIndex = i }
+                    // Tap twice to pick this frame; dragging then picks a range of frames.
+                    .simultaneousGesture(TapGesture(count: 2).onEnded {
+                        DispatchQueue.main.async { state.beginFrameRange(at: i); Self.tick.selectionChanged() }
+                    })
                     // Hold the number, then drag: the frame (all its layers) moves along the sheet.
                     // Drag straight away instead: scrub, the frames flip by as fast or as slow as
                     // the finger (or the Pencil) goes, a light tick on each.
@@ -285,6 +296,25 @@ struct TimelineView: View {
                     .accessibilityHint("Drag along the numbers to flip through the frames; hold and drag to move the frame")
                     .id(frame.id)
             }
+        }
+    }
+
+    /// The frames picked, outlined: the current layer's cells with Layer, whole frames with All.
+    @ViewBuilder
+    private var rangeBand: some View {
+        if let r = state.frameRange, state.frames.indices.contains(r.lowerBound) {
+            let hi = min(r.upperBound, state.frames.count - 1)
+            let x = x(ofFrame: r.lowerBound)
+            let w = state.frames[r.lowerBound...hi].reduce(0) { $0 + width($1) }
+            let row = rows.firstIndex { $0.id == state.currentLayer?.id } ?? 0
+            let top = state.syncLayers ? 0 : Self.rulerHeight + Self.rowGap + CGFloat(row) * (rowHeight + Self.rowGap)
+            let height = state.syncLayers ? Self.rulerHeight + CGFloat(state.layers.count) * (rowHeight + Self.rowGap) : rowHeight
+            RoundedRectangle(cornerRadius: 5)
+                .fill(Theme.accent.opacity(0.16))
+                .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Theme.accent, lineWidth: 2))
+                .frame(width: w, height: height)
+                .offset(x: x, y: top)
+                .allowsHitTesting(false)
         }
     }
 
@@ -813,5 +843,44 @@ private struct FollowPlayhead: View {
                     withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(f.id, anchor: .center) }
                 }
             }
+    }
+}
+
+/// Under the canvas while frames are picked in the timeline: what's picked, and copy, cut, paste,
+/// reverse, duplicate, delete, done.
+struct FrameRangeBar: View {
+    @Bindable var state: EditorState
+
+    var body: some View {
+        let r = state.frameRange
+        HStack(spacing: 2) {
+            Text(caption(r))
+                .font(.subheadline.weight(.semibold)).monospacedDigit()
+                .foregroundStyle(Theme.text)
+                .padding(.horizontal, 10)
+                .fixedSize()
+            RailButton(icon: "doc.on.doc", label: "Copy frames", size: 34) { state.copyFrames() }
+            RailButton(icon: "scissors", label: "Cut frames", size: 34) { state.cutFrames() }
+            RailButton(icon: "doc.on.clipboard", label: "Paste frames", size: 34) { state.pasteFrames() }
+                .disabled(state.frameClipboard == nil)
+                .opacity(state.frameClipboard == nil ? 0.35 : 1)
+            RailButton(icon: "arrow.left.arrow.right", label: "Reverse frames", size: 34) { state.reverseFrames() }
+                .disabled((r?.count ?? 0) < 2)
+                .opacity((r?.count ?? 0) < 2 ? 0.35 : 1)
+            RailButton(icon: "plus.square.on.square", label: "Duplicate frames", size: 34) { state.duplicateFrames() }
+            RailButton(icon: "trash", label: "Delete frames", size: 34) { state.deleteFrames() }
+            RailButton(icon: "xmark", label: "Done", size: 34) { state.clearFrameRange() }
+        }
+        .padding(4)
+        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 13))
+        .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(Theme.hairline))
+    }
+
+    private func caption(_ r: ClosedRange<Int>?) -> String {
+        guard let r else { return "" }
+        let which = state.syncLayers ? "" : " · \(state.currentLayer?.name ?? "")"
+        let frames = r.count == 1 ? String(localized: "Frame \(r.lowerBound + 1)", bundle: AppLanguage.bundle)
+            : String(localized: "Frames \(r.lowerBound + 1)–\(r.upperBound + 1)", bundle: AppLanguage.bundle)
+        return frames + which
     }
 }

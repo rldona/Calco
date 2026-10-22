@@ -8,6 +8,7 @@ A release is made by pushing a tag `vX.Y.Z`: the release workflow tests and buil
 
 ### Added
 
+- **Pick several frames** in the timeline (tap a number twice, then drag): copy, cut, paste, reverse, duplicate or delete them together, whole frames or one layer's drawings, as one undo.
 - **Tween motion** (More → Tween motion…): put a drawing, or some of its strokes, in an end pose and Calco draws the poses in between on the next frames, with an easing and an optional arc, as one undo. Strokes stay sharp in every pose.
 - **Project palette**: the character's colours, named, at the top of the colour panel, or picked from the drawings. **Change everywhere** repaints one colour in every drawing of every clip, soft edges included, as one undo: a palette swap in two taps.
 - **Import an image sequence as a guide**, one image per frame, to trace a motion made somewhere else (New layer → Sequence as guide…).
