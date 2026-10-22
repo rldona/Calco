@@ -481,4 +481,6 @@ ES = {
 "Frames %lld–%lld": "Fotogramas %lld–%lld",
 "Paste frames": "Pegar fotogramas",
 "Reverse frames": "Invertir fotogramas",
+"Select frames": "Seleccionar fotogramas",
+"Select frames from here": "Seleccionar fotogramas desde aquí",
 }

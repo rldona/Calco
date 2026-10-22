@@ -14,6 +14,7 @@ struct TimelineView: View {
     /// Dragging along the frame numbers: the frames flip by under the finger, and the sheet holds
     /// still instead of following the playhead.
     @State private var scrubbing = false
+    @State private var lastNumberTap: (index: Int, time: CFTimeInterval)?
     private static let tick = UISelectionFeedbackGenerator()
 
     /// Width of one tick (one `hold` unit).
@@ -177,6 +178,21 @@ struct TimelineView: View {
         return max(0, state.frames.count - 1)
     }
 
+    /// A tap on frame number `i`: twice in a row picks the frame; with a range picked, stretches
+    /// it to here; otherwise goes there.
+    private func tapNumber(_ i: Int) {
+        let now = CACurrentMediaTime()
+        defer { lastNumberTap = (i, now) }
+        if let last = lastNumberTap, last.index == i, now - last.time < 0.35 {
+            state.beginFrameRange(at: i)
+            Self.tick.selectionChanged()
+        } else if state.frameRange != nil {
+            state.extendFrameRange(to: i)
+        } else {
+            state.frameIndex = i
+        }
+    }
+
     /// Scrubbing: the frame under `x` (in the sheet's coordinates) becomes the current one.
     private func scrub(toX x: CGFloat) {
         // With frames picked, dragging along the numbers stretches the range instead.
@@ -274,11 +290,6 @@ struct TimelineView: View {
                     .background(state.playRange != nil && range.contains(i) ? Theme.accent.opacity(0.12) : .clear)
                     .overlay(alignment: .bottomLeading) { Rectangle().fill(Theme.hairline).frame(width: 1, height: 8) }
                     .contentShape(Rectangle())
-                    .onTapGesture { state.clearFrameRange(); state.frameIndex = i }
-                    // Tap twice to pick this frame; dragging then picks a range of frames.
-                    .simultaneousGesture(TapGesture(count: 2).onEnded {
-                        DispatchQueue.main.async { state.beginFrameRange(at: i); Self.tick.selectionChanged() }
-                    })
                     // Hold the number, then drag: the frame (all its layers) moves along the sheet.
                     // Drag straight away instead: scrub, the frames flip by as fast or as slow as
                     // the finger (or the Pencil) goes, a light tick on each.
@@ -289,9 +300,17 @@ struct TimelineView: View {
                             state.moveFrame(id: frame.id, to: frameIndex(atX: drag.location.x))
                         }
                         .onEnded { _ in state.endCoalescing() }
-                        .exclusively(before: DragGesture(minimumDistance: 3, coordinateSpace: .named(Self.sheet))
-                            .onChanged { g in scrub(toX: g.location.x) }
-                            .onEnded { _ in scrubbing = false }))
+                        // Taps are told apart from drags here, in the same gesture (a separate tap
+                        // gesture never got them): a tap goes to the frame, or stretches the range;
+                        // two taps pick the frame; a drag scrubs, or stretches the range.
+                        .exclusively(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.sheet))
+                            .onChanged { g in
+                                if hypot(g.translation.width, g.translation.height) > 4 { scrub(toX: g.location.x) }
+                            }
+                            .onEnded { g in
+                                scrubbing = false
+                                if hypot(g.translation.width, g.translation.height) <= 4 { tapNumber(i) }
+                            }))
                     .accessibilityLabel("Frame \(i + 1)")
                     .accessibilityHint("Drag along the numbers to flip through the frames; hold and drag to move the frame")
                     .id(frame.id)
@@ -468,6 +487,10 @@ struct TimelineView: View {
             labelText = state.drawingLabel(layer: layer, at: frame) ?? ""
             labeling = true
         } label: { Label("Label…", systemImage: "tag") }
+        // Then tap another frame number (or drag along them) to pick up to there.
+        Button { select(frame: frame, layer: layer); state.beginFrameRange(at: frame) } label: {
+            Label("Select frames from here", systemImage: "rectangle.dashed")
+        }
         Divider()
         Button(role: .destructive) { select(frame: frame, layer: layer); state.clearCurrentLayer() } label: {
             Label("Clear drawing", systemImage: "eraser.line.dashed")

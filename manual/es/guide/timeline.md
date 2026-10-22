@@ -56,11 +56,11 @@ Encima de las celdas van los números de los fotogramas:
 - **Toca un número** para ir a ese fotograma.
 - **Arrastra por los números**, con el dedo o el Pencil, para pasar los fotogramas bajo el dedo, tan rápido o tan despacio como lo muevas, con un toque háptico en cada uno. Así ves el movimiento a tu ritmo sin reproducir. La línea de tiempo se queda quieta mientras arrastras.
 - **Mantén pulsado un número y arrastra** para mover el fotograma, con todas sus capas.
-- **Toca dos veces un número** para elegir ese fotograma; después **arrastra por los números** para elegir un rango.
+- **Para elegir varios fotogramas:** **Más → Seleccionar fotogramas** (empieza en el cabezal), **Seleccionar fotogramas desde aquí** al mantener pulsada una celda, o **toca dos veces un número**. Después **toca otro número**, o arrastra por los números, para ampliar el rango hasta ahí.
 
 ### Varios fotogramas a la vez
 
-Con fotogramas elegidos, una barra bajo el lienzo actúa sobre todos ellos: **Copiar**, **Cortar**, **Pegar** (después del cabezal, cada fotograma con su duración), **Invertir** (reproducirlos al revés, para la vuelta de un ciclo), **Duplicar** (justo detrás) y **Eliminar**. Con **Capa** en el riel de animación actúan solo sobre los dibujos de la capa actual (las piernas, sin el resto); con **Todas**, sobre los fotogramas enteros. Cada acción se deshace de una vez; **✕** suelta el rango. Con teclado: ⌘C, ⌘X, ⌘V y ⌘⌫.
+Con fotogramas elegidos, una barra bajo el lienzo actúa sobre todos ellos: **Copiar**, **Cortar**, **Pegar** (después del cabezal, cada fotograma con su duración), **Invertir** (reproducirlos al revés, para la vuelta de un ciclo), **Duplicar** (justo detrás) y **Eliminar**. Con **Capa** en el riel de animación actúan solo sobre los dibujos de la capa actual (las piernas, sin el resto); con **Todas**, sobre los fotogramas enteros. Cada acción se deshace de una vez; **✕** suelta el rango (mientras hay un rango, tocar un número lo amplía en vez de ir a él). Con teclado: ⌘C, ⌘X, ⌘V y ⌘⌫.
 
 ### Celdas
 
