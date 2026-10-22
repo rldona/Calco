@@ -167,4 +167,18 @@ final class MoveToolTests: XCTestCase {
         XCTAssertGreaterThan(solid, 18, "about 24 px thick")
         XCTAssertLessThanOrEqual(soft, 4, "a sharp edge, not a blur")
     }
+
+    func testATapOnABlankSpotPutsDownWhatFloats() throws {
+        let state = try makeState()
+        try dot(state, at: SIMD2(100, 100))
+        try dot(state, at: SIMD2(300, 300))
+        state.tool = .move
+        state.liftForMove(at: CGPoint(x: 300, y: 300))
+        state.updateSelection { $0.offset = CGVector(dx: 40, dy: 0) }
+        state.liftForMove(at: CGPoint(x: 500, y: 40), dropOnMiss: true)
+        XCTAssertNil(state.selection, "nothing floats")
+        XCTAssertGreaterThan(alpha(state, x: 340, y: 300), 200, "dropped where it was moved")
+        state.liftForMove(at: CGPoint(x: 100, y: 100), dropOnMiss: true)
+        XCTAssertNotNil(state.selection, "a tap on a stroke still picks it")
+    }
 }

@@ -60,7 +60,7 @@ The frame numbers run above the cells:
 
 ### Several frames at once
 
-With frames picked, a bar under the canvas acts on all of them: **Copy**, **Cut**, **Paste** (after the playhead, each frame with its length), **Reverse** (play them backwards, for the way back of a cycle), **Duplicate** (right after them) and **Delete**. With **Layer** on the animation rail, they act on the current layer's drawings only (the legs, without the rest); with **All**, on whole frames. Each is one undo; **✕** lets go of the range (while there's one, tapping a number stretches it instead of going there). On a keyboard: ⌘C, ⌘X, ⌘V and ⌘⌫.
+With frames picked, a bar under the canvas acts on all of them: **Copy**, **Cut**, **Paste** (after the playhead, each frame with its length), **Reverse** (play them backwards, for the way back of a cycle), **Duplicate** (right after them) and **Delete**. The range starts on the current layer (with **Layer** on the animation rail) or on every layer (with **All**). While there's a range, **tap a layer's name** to add or remove it: it gets a ✓ and the outline marks its rows. So you can copy, say, the legs and the shadow without the rest. With every layer in, it acts on whole frames. Pasting puts each layer back into itself; a single layer goes into the current one. Each is one undo; **✕** lets go of the range (while there's one, tapping a number stretches it instead of going there). On a keyboard: ⌘C, ⌘X, ⌘V and ⌘⌫.
 
 ### Cells
 

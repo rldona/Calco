@@ -8,7 +8,7 @@ A release is made by pushing a tag `vX.Y.Z`: the release workflow tests and buil
 
 ### Added
 
-- **Pick several frames** in the timeline (tap a number twice, then drag): copy, cut, paste, reverse, duplicate or delete them together, whole frames or one layer's drawings, as one undo.
+- **Pick several frames** in the timeline (tap a number twice, then drag): copy, cut, paste, reverse, duplicate or delete them together, whole frames or the drawings of the layers you choose (tap a layer's name to add or remove it), as one undo.
 - **Tween motion** (More → Tween motion…): put a drawing, or some of its strokes, in an end pose and Calco draws the poses in between on the next frames, with an easing and an optional arc, as one undo. Strokes stay sharp in every pose.
 - **Project palette**: the character's colours, named, at the top of the colour panel, or picked from the drawings. **Change everywhere** repaints one colour in every drawing of every clip, soft edges included, as one undo: a palette swap in two taps.
 - **Import an image sequence as a guide**, one image per frame, to trace a motion made somewhere else (New layer → Sequence as guide…).
@@ -33,6 +33,7 @@ A release is made by pushing a tag `vX.Y.Z`: the release workflow tests and buil
 
 ### Changed
 
+- A tap outside puts down what Move holds, and finishes the path being edited with Node: no need to reach for ✓.
 - **Fill** has a paint-bucket icon instead of a drop, so it's easy to find.
 - **Animation rail** on the right: a big **New**, Duplicate, Hold, Delete and **More** (label, split, repeat, frame actions), the onion skin, and **Layer | All**, which replaces Sync layers. In portrait it sits above the timeline.
 - The timeline is cleaner: a bigger Play, one **clip settings** button (fps, loop, pivot), taller rows, a **+** over the layer names and a **+** cell after the last drawing.

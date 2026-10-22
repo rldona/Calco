@@ -325,16 +325,28 @@ struct TimelineView: View {
             let hi = min(r.upperBound, state.frames.count - 1)
             let x = x(ofFrame: r.lowerBound)
             let w = state.frames[r.lowerBound...hi].reduce(0) { $0 + width($1) }
-            let row = rows.firstIndex { $0.id == state.currentLayer?.id } ?? 0
-            let top = state.syncLayers ? 0 : Self.rulerHeight + Self.rowGap + CGFloat(row) * (rowHeight + Self.rowGap)
-            let height = state.syncLayers ? Self.rulerHeight + CGFloat(state.layers.count) * (rowHeight + Self.rowGap) : rowHeight
-            RoundedRectangle(cornerRadius: 5)
-                .fill(Theme.accent.opacity(0.16))
-                .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Theme.accent, lineWidth: 2))
-                .frame(width: w, height: height)
-                .offset(x: x, y: top)
-                .allowsHitTesting(false)
+            let picked = rows.enumerated().filter { state.rangeLayerIDs.contains($0.element.id) }.map(\.offset)
+            ZStack(alignment: .topLeading) {
+                // One band per layer in the range; every layer, one band over the whole frames.
+                if picked.count == rows.count {
+                    band(width: w, height: Self.rulerHeight + CGFloat(rows.count) * (rowHeight + Self.rowGap))
+                        .offset(x: x)
+                } else {
+                    ForEach(picked, id: \.self) { row in
+                        band(width: w, height: rowHeight)
+                            .offset(x: x, y: Self.rulerHeight + Self.rowGap + CGFloat(row) * (rowHeight + Self.rowGap))
+                    }
+                }
+            }
+            .allowsHitTesting(false)
         }
+    }
+
+    private func band(width: CGFloat, height: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: 5)
+            .fill(Theme.accent.opacity(0.16))
+            .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Theme.accent, lineWidth: 2))
+            .frame(width: width, height: height)
     }
 
     private var playhead: some View {
@@ -549,8 +561,22 @@ private struct LayerLabel: View {
             .padding(.horizontal, 6)
             .frame(height: height)
             .background(selected ? Theme.accentWash : .clear, in: RoundedRectangle(cornerRadius: 6))
+            // With frames picked: whether this layer is in the range, and a tap puts it in or out.
+            .overlay(alignment: .trailing) {
+                if state.frameRange != nil {
+                    let on = state.rangeLayerIDs.contains(layer.id)
+                    Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(on ? Theme.accent : Theme.textFaint)
+                        .padding(.trailing, 4)
+                        .background(Theme.panel.opacity(0.9), in: Circle())
+                        .accessibilityHidden(true)
+                }
+            }
             .contentShape(Rectangle())
-            .onTapGesture { state.layerIndex = index }
+            .onTapGesture {
+                if state.frameRange != nil { state.toggleRangeLayer(layer.id) } else { state.layerIndex = index }
+            }
             .guideSequenceImport(isPresented: $replacingSequence, state: state, replacing: layer.id)
             .contextMenu {
                 Button { name = layer.name; renaming = true } label: { Label("Rename…", systemImage: "pencil") }
@@ -901,7 +927,8 @@ struct FrameRangeBar: View {
 
     private func caption(_ r: ClosedRange<Int>?) -> String {
         guard let r else { return "" }
-        let which = state.syncLayers ? "" : " · \(state.currentLayer?.name ?? "")"
+        let picked = state.rangeLayers
+        let which = picked.count == state.layers.count ? "" : " · " + picked.reversed().map(\.name).joined(separator: ", ")
         let frames = r.count == 1 ? String(localized: "Frame \(r.lowerBound + 1)", bundle: AppLanguage.bundle)
             : String(localized: "Frames \(r.lowerBound + 1)–\(r.upperBound + 1)", bundle: AppLanguage.bundle)
         return frames + which

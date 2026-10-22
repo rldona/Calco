@@ -103,7 +103,7 @@ Paste lands where you copied, on whichever frame and layer you're on: handy to c
 - Choosing **Move** picks up the **whole drawing**, in a box that hugs the paint.
 - **Tap a stroke** to pick just that one: an eye, a hand, an antenna. Calco remembers every stroke you draw with the brush, so it picks the exact stroke even where it crosses others.
 - **Drag a stroke** to pick it up and move it in one go.
-- Tap a blank spot to go back to the whole drawing.
+- **Tap outside** the box, on a blank spot, to put down what you're moving (like ✓). Tap the Move button again to pick up the whole drawing.
 
 ![Move: one stroke](/crops/en/move-stroke.jpg)
 
@@ -156,7 +156,7 @@ A path **can be edited again**: with the Pen, tap it and its points come back. I
 - **Drag a node** or its handles to change the shape. Node never adds nodes: that's the Pen's job.
 - **Drag on an empty spot** to draw a box: it picks every node inside, and dragging one moves them all together.
 - **Tap a node twice** to switch it between corner and curve.
-- **Tap an empty spot** to let go of the picked nodes; again, to finish.
+- **Tap away from the path** to finish (like ✓); a tap on its line lets go of the picked nodes.
 
 The bar under the canvas is the Pen's: how many nodes you have, **Corner** or **Curve** for all of them, delete them, cancel or finish. You can switch between the Pen and Node without closing the path.
 

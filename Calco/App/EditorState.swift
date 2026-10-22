@@ -1947,6 +1947,8 @@ final class EditorState {
     private(set) var nodeMarquee: CGRect?
     @ObservationIgnored private var nodeDragFrom: CGPoint = .zero
     @ObservationIgnored private var lastNodeTap: (index: Int, time: TimeInterval)?
+    /// The touch began on the open path's line (a tap there doesn't put the path down).
+    @ObservationIgnored private var nodeTapOnLine = false
 
     /// A touch with the Node tool. It only edits the points there are, never adds one (that's the
     /// Pen's): on a point it picks it (a second tap soon after turns it into a corner or a curve),
@@ -1955,6 +1957,7 @@ final class EditorState {
     func nodeTouchDown(at p: CGPoint, tolerance tol: CGFloat, time: TimeInterval) -> NodeGrab {
         guard !isPlaying, let key = currentDrawingKey, currentLayer?.locked == false else { return .nothing }
         nodeDragFrom = p
+        nodeTapOnLine = false
         if var e = penEditing, e.key == key {
             if let s = e.selected, e.path.nodes.indices.contains(s) {
                 let n = e.path.nodes[s]
@@ -1974,7 +1977,7 @@ final class EditorState {
                 penEditing = e
                 return .nodes
             }
-            if let n = e.path.nearest(to: p), n.distance < tol { return .marquee(p) }
+            if let n = e.path.nearest(to: p), n.distance < tol { nodeTapOnLine = true; return .marquee(p) }
             if penPiece(at: p, tolerance: tol, key: key) == nil { return .marquee(p) }
             finishPen()
         } else if penEditing != nil {
@@ -2020,10 +2023,12 @@ final class EditorState {
         if moved, let box = nodeMarquee {
             e.picked = Set(e.path.nodes.indices.filter { box.contains(e.path.nodes[$0].point) })
             penEditing = e
-        } else if !e.picked.isEmpty {
+        } else if nodeTapOnLine {
+            // On the line: only lets go of the picked points.
             e.picked = []
             penEditing = e
         } else {
+            // Away from the path: done with it, in one tap.
             finishPen()
         }
     }
@@ -2228,7 +2233,9 @@ final class EditorState {
     /// piece under it (a stroke, or a shape), boxed tight. Tapping the same spot again picks the
     /// piece underneath; with `addingStrokes`, taps add pieces or take them out. A locked layer
     /// lifts nothing and sets `moveBlockedLayer`, so the editor can offer to unlock it.
-    func liftForMove(at point: CGPoint? = nil) {
+    /// `dropOnMiss`: a tap that hits no stroke just puts down what was floating, instead of
+    /// picking up the whole drawing.
+    func liftForMove(at point: CGPoint? = nil, dropOnMiss: Bool = false) {
         // Placing a tween's end pose: taps and drags move that pose, they don't pick anything.
         guard tween == nil else { return }
         finishPen()
@@ -2266,6 +2273,7 @@ final class EditorState {
                 moveHint = MoveHint(here: here.count, number: here.count - here.firstIndex(of: pick)!, selected: chosen.count)
             } else {
                 lastPick = nil
+                if dropOnMiss { return }
             }
         } else {
             lastPick = nil
@@ -2625,19 +2633,22 @@ final class EditorState {
     // MARK: - Frame range
 
     /// Frames picked in the timeline (by index), for copying, cutting, pasting, reversing,
-    /// duplicating or deleting them together. With Layer, the current layer's drawings in them;
-    /// with All, the whole frames.
+    /// duplicating or deleting them together, on the layers in `rangeLayerIDs`.
     private(set) var frameRange: ClosedRange<Int>?
+    /// The layers the range covers: starts as the current one (Layer) or every one (All); tapping
+    /// a layer's name while a range is picked adds or removes it.
+    private(set) var rangeLayerIDs: Set<String> = []
     /// Where the range started: dragging extends it from here.
     @ObservationIgnored private var frameRangeAnchor = 0
 
-    /// What Copy put aside: per frame, its length and its drawings (copies, so they can be
-    /// pasted again and again), for one layer or every layer.
+    /// What Copy put aside: per frame, its length and, per layer, its drawing (copies, so they can
+    /// be pasted again and again).
     struct FrameClipboard {
         struct Cell { var texture: MTLTexture?; var held: Bool; var label: String? }
         var holds: [Int]
-        /// The layer the cells came from; nil for whole frames.
-        var layer: String?
+        /// The layers copied, in stacking order; every layer means whole frames.
+        var layers: [String]
+        var wholeFrames: Bool
         var cells: [[String: Cell]]
     }
     private(set) var frameClipboard: FrameClipboard?
@@ -2645,12 +2656,13 @@ final class EditorState {
     @ObservationIgnored private var lastCopyWasFrames = false
     var pasteMakesFrames: Bool { lastCopyWasFrames && frameClipboard != nil }
 
-    /// Starts a range at frame `i`.
+    /// Starts a range at frame `i`, on the current layer (Layer) or every layer (All).
     func beginFrameRange(at i: Int) {
         guard frames.indices.contains(i) else { return }
         commitSelection()
         frameRangeAnchor = i
         frameRange = i...i
+        rangeLayerIDs = syncLayers ? Set(layers.map(\.id)) : Set(currentLayer.map { [$0.id] } ?? [])
     }
 
     /// Stretches the range from where it started to frame `i`.
@@ -2658,6 +2670,16 @@ final class EditorState {
         guard frameRange != nil else { return }
         let j = min(max(i, 0), frames.count - 1)
         frameRange = min(frameRangeAnchor, j)...max(frameRangeAnchor, j)
+    }
+
+    /// A layer in or out of the range (at least one stays in).
+    func toggleRangeLayer(_ id: String) {
+        guard frameRange != nil, layers.contains(where: { $0.id == id }) else { return }
+        if rangeLayerIDs.contains(id) {
+            if rangeLayerIDs.count > 1 { rangeLayerIDs.remove(id) }
+        } else {
+            rangeLayerIDs.insert(id)
+        }
     }
 
     func clearFrameRange() { frameRange = nil }
@@ -2669,11 +2691,13 @@ final class EditorState {
         return lo...max(lo, hi)
     }
 
-    /// The layers the range acts on: the current one with Layer, every one with All.
-    private var rangeLayers: [Layer] { syncLayers ? layers : (currentLayer.map { [$0] } ?? []) }
+    /// The layers the range acts on, in stacking order.
+    var rangeLayers: [Layer] { layers.filter { rangeLayerIDs.contains($0.id) } }
+    /// Every layer is in the range: it acts on whole frames.
+    private var rangeIsWholeFrames: Bool { !layers.isEmpty && rangeLayers.count == layers.count }
 
     func copyFrames() {
-        guard let r = validRange else { return }
+        guard let r = validRange, !rangeLayers.isEmpty else { return }
         var cells: [[String: FrameClipboard.Cell]] = []
         for i in r {
             var row: [String: FrameClipboard.Cell] = [:]
@@ -2685,40 +2709,48 @@ final class EditorState {
             }
             cells.append(row)
         }
-        frameClipboard = FrameClipboard(holds: r.map { frames[$0].hold }, layer: syncLayers ? nil : currentLayer?.id, cells: cells)
+        frameClipboard = FrameClipboard(holds: r.map { frames[$0].hold }, layers: rangeLayers.map(\.id),
+                                        wholeFrames: rangeIsWholeFrames, cells: cells)
         lastCopyWasFrames = true
     }
 
-    /// Pastes what Copy put aside as new frames after the playhead (or at `at`): whole frames,
-    /// or one layer's drawings into the current layer with the other layers holding. One undo step.
+    /// Where each copied layer lands: the same layer when it's still there (whole frames, or
+    /// several layers); one copied layer goes into the current layer.
+    private func pasteTargets(_ cb: FrameClipboard) -> [String: String] {
+        if cb.layers.count == 1, !cb.wholeFrames, let current = currentLayer, !current.locked {
+            return [current.id: cb.layers[0]]
+        }
+        var out: [String: String] = [:]
+        for id in cb.layers where layers.contains(where: { $0.id == id && (cb.wholeFrames || !$0.locked) }) { out[id] = id }
+        return out
+    }
+
+    /// Pastes what Copy put aside as new frames after the playhead (or at `at`). The layers that
+    /// weren't copied keep showing what they had. One undo step.
     func pasteFrames(at insertAt: Int? = nil) {
         guard let cb = frameClipboard, !cb.cells.isEmpty, !isPlaying else { return }
-        if cb.layer != nil, currentLayer?.locked != false { return }
+        let targets = pasteTargets(cb)
+        guard !targets.isEmpty else { return }
         let at = min(max(insertAt ?? frameIndex + 1, 0), frames.count)
         let new = cb.holds.map { Frame(id: newFrameID(), hold: $0) }
         recordUndo(textures: allCellKeys() + new.flatMap { layerKeys(clip, frame: $0.id) })
-        let target = cb.layer.map { _ in currentLayer?.id ?? "" }
         keepingPicture {
             for (n, var f) in new.enumerated() {
-                let row = cb.cells[n]
                 for l in layers {
-                    let source = target == l.id ? cb.layer.flatMap { row[$0] } : (cb.layer == nil ? row[l.id] : nil)
-                    if let cell = source {
+                    if let source = targets[l.id], let cell = cb.cells[n][source] {
                         if cell.held && n > 0 { f.held.append(l.id) }
                         if let label = cell.label { f.labels[l.id] = label }
                     } else if at > 0 || n > 0 {
-                        f.held.append(l.id)                  // layers not pasted keep showing what they had
+                        f.held.append(l.id)
                     }
                 }
                 clip.frames.insert(f, at: at + n)
             }
         }
         for (n, f) in new.enumerated() {
-            let row = cb.cells[n]
-            for l in layers {
-                let source = target == l.id ? cb.layer.flatMap { row[$0] } : (cb.layer == nil ? row[l.id] : nil)
-                guard let tex = source?.texture, let copy = store.copy(tex) else { continue }
-                store.set(copy, for: LayerKey(clip: clip.id, frame: f.id, layer: l.id))
+            for (layer, source) in targets {
+                guard let tex = cb.cells[n][source]?.texture, let copy = store.copy(tex) else { continue }
+                store.set(copy, for: LayerKey(clip: clip.id, frame: f.id, layer: layer))
             }
         }
         frameRange = nil
@@ -2739,58 +2771,69 @@ final class EditorState {
         }
     }
 
-    /// The range played backwards: whole frames swap places, or the current layer's drawings do
-    /// within the same frames. One undo step.
+    /// The cells the range changes on `ls`, and the frame after it, for the undo step.
+    private func rangeKeys(_ r: ClosedRange<Int>, _ ls: [Layer]) -> [LayerKey] {
+        let upTo = min(r.upperBound + 1, frames.count - 1)
+        return (r.lowerBound...upTo).flatMap { i in ls.map { LayerKey(clip: clip.id, frame: frames[i].id, layer: $0.id) } }
+    }
+
+    /// The range played backwards: whole frames swap places, or the drawings of the layers in the
+    /// range do, within the same frames. One undo step.
     func reverseFrames() {
         guard let r = validRange, r.count > 1 else { return }
-        if syncLayers {
+        if rangeIsWholeFrames {
             recordUndo(textures: allCellKeys())
             keepingPicture { clip.frames[r].reverse() }
         } else {
-            guard let l = currentLayer, !l.locked else { return }
-            recordUndo(textures: r.map { LayerKey(clip: clip.id, frame: frames[$0].id, layer: l.id) }
-                       + (frames.indices.contains(r.upperBound + 1) ? [LayerKey(clip: clip.id, frame: frames[r.upperBound + 1].id, layer: l.id)] : []))
-            detachAfter(r, layers: [l])
-            let shown = r.map { i in drawingKey(layer: l.id, at: i).flatMap(store.raw) }
-            let labels = r.map { drawingLabel(layer: l.id, at: $0) }
-            var copies: [ObjectIdentifier: MTLTexture] = [:]
-            var previous: MTLTexture?? = .none
-            for (n, i) in r.enumerated() {
-                let src = shown[r.count - 1 - n]
-                let key = LayerKey(clip: clip.id, frame: frames[i].id, layer: l.id)
-                if n > 0, case .some(let p) = previous, (p as AnyObject?) === (src as AnyObject?) {
-                    clip.frames[i].ownDrawing(l.id)
-                    clip.frames[i].held.append(l.id)
-                    store.set(nil, for: key)
-                } else {
-                    clip.frames[i].ownDrawing(l.id)
-                    clip.frames[i].labels[l.id] = labels[r.count - 1 - n]
-                    let tex = src.flatMap { s in copies[ObjectIdentifier(s)] ?? store.copy(s) }
-                    if let s = src, let t = tex { copies[ObjectIdentifier(s)] = t }
-                    store.set(tex, for: key)
-                }
-                previous = .some(src)
-            }
+            let ls = rangeLayers.filter { !$0.locked }
+            guard !ls.isEmpty else { return }
+            recordUndo(textures: rangeKeys(r, ls))
+            for l in ls { reverseDrawings(r, layer: l) }
         }
         isDirty = true
         refreshClipThumbnails()
     }
 
+    private func reverseDrawings(_ r: ClosedRange<Int>, layer l: Layer) {
+        detachAfter(r, layers: [l])
+        let shown = r.map { i in drawingKey(layer: l.id, at: i).flatMap(store.raw) }
+        let labels = r.map { drawingLabel(layer: l.id, at: $0) }
+        var copies: [ObjectIdentifier: MTLTexture] = [:]
+        var previous: MTLTexture?? = .none
+        for (n, i) in r.enumerated() {
+            let src = shown[r.count - 1 - n]
+            let key = LayerKey(clip: clip.id, frame: frames[i].id, layer: l.id)
+            clip.frames[i].ownDrawing(l.id)
+            if n > 0, case .some(let p) = previous, (p as AnyObject?) === (src as AnyObject?) {
+                clip.frames[i].held.append(l.id)
+                store.set(nil, for: key)
+            } else {
+                clip.frames[i].labels[l.id] = labels[r.count - 1 - n]
+                let tex = src.flatMap { s in copies[ObjectIdentifier(s)] ?? store.copy(s) }
+                if let s = src, let t = tex { copies[ObjectIdentifier(s)] = t }
+                store.set(tex, for: key)
+            }
+            strokes[key] = nil
+            previous = .some(src)
+        }
+    }
+
     /// The range copied again right after itself. One undo step.
     func duplicateFrames() {
         guard let r = validRange else { return }
+        let keep = rangeLayerIDs
         copyFrames()
-        let range = r
-        pasteFrames(at: range.upperBound + 1)
-        frameRange = (range.upperBound + 1)...(range.upperBound + range.count)
-        frameRangeAnchor = range.upperBound + 1
+        pasteFrames(at: r.upperBound + 1)
+        frameRange = (r.upperBound + 1)...(r.upperBound + r.count)
+        frameRangeAnchor = r.upperBound + 1
+        rangeLayerIDs = keep
     }
 
-    /// Whole frames go (at least one stays); with Layer, the current layer's cells in the range
+    /// Whole frames go (at least one stays); with only some layers in the range, their cells in it
     /// are emptied. One undo step.
     func deleteFrames() {
         guard let r = validRange else { return }
-        if syncLayers {
+        if rangeIsWholeFrames {
             guard r.count < frames.count else { return }
             recordUndo(textures: allCellKeys())
             let gone = r.map { frames[$0].id }
@@ -2798,15 +2841,18 @@ final class EditorState {
             for id in gone { store.remove(clip: clip.id, frame: id, layers: layers.map(\.id)) }
             frameIndex = min(r.lowerBound, frames.count - 1)
         } else {
-            guard let l = currentLayer, !l.locked else { return }
-            recordUndo(textures: r.map { LayerKey(clip: clip.id, frame: frames[$0].id, layer: l.id) }
-                       + (frames.indices.contains(r.upperBound + 1) ? [LayerKey(clip: clip.id, frame: frames[r.upperBound + 1].id, layer: l.id)] : []))
-            detachAfter(r, layers: [l])
-            for i in r {
-                clip.frames[i].ownDrawing(l.id)
-                clip.frames[i].labels[l.id] = nil
-                store.set(nil, for: LayerKey(clip: clip.id, frame: frames[i].id, layer: l.id))
-                strokes[LayerKey(clip: clip.id, frame: frames[i].id, layer: l.id)] = nil
+            let ls = rangeLayers.filter { !$0.locked }
+            guard !ls.isEmpty else { return }
+            recordUndo(textures: rangeKeys(r, ls))
+            for l in ls {
+                detachAfter(r, layers: [l])
+                for i in r {
+                    let key = LayerKey(clip: clip.id, frame: frames[i].id, layer: l.id)
+                    clip.frames[i].ownDrawing(l.id)
+                    clip.frames[i].labels[l.id] = nil
+                    store.set(nil, for: key)
+                    strokes[key] = nil
+                }
             }
         }
         frameRange = nil

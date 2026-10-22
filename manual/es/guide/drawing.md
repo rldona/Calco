@@ -103,7 +103,7 @@ Lo pegado aparece donde lo copiaste, en el fotograma y la capa en que estés: ú
 - Al elegir **Mover** se coge **todo el dibujo**, en un recuadro ajustado a la pintura.
 - **Toca un trazo** para coger solo ese: un ojo, una mano, una antena. Calco recuerda cada trazo que haces con el pincel, así que coge el trazo exacto aunque se cruce con otros.
 - **Arrastra un trazo** para cogerlo y moverlo de una vez.
-- Toca un hueco para volver a todo el dibujo.
+- **Toca fuera** del recuadro, en un hueco, para soltar lo que mueves (como ✓). Toca otra vez el botón Mover para coger el dibujo entero.
 
 ![Mover: un trazo](/crops/es/move-stroke.jpg)
 
@@ -156,7 +156,7 @@ Un trazado **se puede volver a editar**: con la Pluma, tócalo y vuelven sus pun
 - **Arrastra un nodo** o sus manejadores para cambiar la forma. Nodo no añade nodos: para eso está la Pluma.
 - **Arrastra en un hueco** para hacer un recuadro: coge todos los nodos que haya dentro, y al arrastrar uno se mueven todos juntos.
 - **Toca dos veces un nodo** para pasarlo de esquina a curva y al revés.
-- **Toca un hueco** para soltar los nodos elegidos; otra vez, para terminar.
+- **Toca fuera del trazado** para terminar (como ✓); un toque en su línea suelta los nodos elegidos.
 
 La barra de debajo es la de la Pluma: cuántos nodos tienes, **Esquina** o **Curva** para todos, borrarlos, cancelar o terminar. Se puede pasar de la Pluma a Nodo sin cerrar el trazado.
 

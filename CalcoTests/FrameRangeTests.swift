@@ -100,4 +100,38 @@ final class FrameRangeTests: XCTestCase {
         state.reverseFrames()
         XCTAssertEqual((3...5).map { shown(state, $0) }, [4, 3, 4], "the frame after still shows what it did")
     }
+
+    func testSomeLayersOfTheRange() throws {
+        let state = try makeState()
+        try five(state)                                      // on the top layer
+        let top = state.currentLayer!.id
+        state.layerIndex = 0                                 // the bottom layer: one drawing held
+        let bottom = state.currentLayer!.id
+        state.frameIndex = 0
+        try mark(state, 9)
+        state.layerIndex = state.layers.firstIndex { $0.id == top }!
+        state.beginFrameRange(at: 1); state.extendFrameRange(to: 3)
+        XCTAssertEqual(state.rangeLayerIDs, [top])
+        state.toggleRangeLayer(bottom)
+        XCTAssertEqual(state.rangeLayerIDs, [top, bottom])
+        state.toggleRangeLayer(top); state.toggleRangeLayer(bottom)
+        XCTAssertEqual(state.rangeLayerIDs, [bottom], "at least one stays in")
+        state.toggleRangeLayer(top)
+        if state.layers.count == 2 {
+            // Two layers of two is whole frames: reversing swaps the frames themselves.
+            state.reverseFrames()
+            XCTAssertEqual((0..<5).map { shown(state, $0, layer: top) }, [0, 3, 2, 1, 4])
+            XCTAssertEqual((0..<5).map { shown(state, $0, layer: bottom) }, [9, 9, 9, 9, 9])
+        }
+        state.undo()
+        state.beginFrameRange(at: 1); state.extendFrameRange(to: 2)
+        state.toggleRangeLayer(bottom)
+        state.copyFrames()
+        XCTAssertEqual(state.frameClipboard?.layers.count, 2)
+        state.frameIndex = 4
+        state.pasteFrames()
+        XCTAssertEqual(state.frames.count, 7)
+        XCTAssertEqual((5...6).map { shown(state, $0, layer: top) }, [1, 2], "each layer back into itself")
+        XCTAssertEqual((5...6).map { shown(state, $0, layer: bottom) }, [9, 9])
+    }
 }

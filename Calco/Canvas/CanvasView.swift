@@ -240,7 +240,9 @@ final class CanvasUIView: UIView {
             let point = SIMD2<Float>(Float(p.x), Float(p.y))
             switch state.tool {
             case .fill: state.fill(at: point)
-            case .move: state.liftForMove(at: p)     // the shape under the tap, or all of it on a blank spot
+            // The stroke under the tap; on a blank spot, puts down what's floating (or, with
+            // nothing floating, picks up the whole drawing).
+            case .move: state.liftForMove(at: p, dropOnMiss: state.selection != nil)
             default: state.pickColor(at: point)
             }
         case .lasso:

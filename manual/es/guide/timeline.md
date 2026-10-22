@@ -60,7 +60,7 @@ Encima de las celdas van los números de los fotogramas:
 
 ### Varios fotogramas a la vez
 
-Con fotogramas elegidos, una barra bajo el lienzo actúa sobre todos ellos: **Copiar**, **Cortar**, **Pegar** (después del cabezal, cada fotograma con su duración), **Invertir** (reproducirlos al revés, para la vuelta de un ciclo), **Duplicar** (justo detrás) y **Eliminar**. Con **Capa** en el riel de animación actúan solo sobre los dibujos de la capa actual (las piernas, sin el resto); con **Todas**, sobre los fotogramas enteros. Cada acción se deshace de una vez; **✕** suelta el rango (mientras hay un rango, tocar un número lo amplía en vez de ir a él). Con teclado: ⌘C, ⌘X, ⌘V y ⌘⌫.
+Con fotogramas elegidos, una barra bajo el lienzo actúa sobre todos ellos: **Copiar**, **Cortar**, **Pegar** (después del cabezal, cada fotograma con su duración), **Invertir** (reproducirlos al revés, para la vuelta de un ciclo), **Duplicar** (justo detrás) y **Eliminar**. El rango empieza en la capa actual (con **Capa** en el riel de animación) o en todas (con **Todas**). Mientras hay un rango, **toca el nombre de una capa** para añadirla o quitarla: lleva un ✓ y el recuadro marca sus filas. Así puedes copiar, por ejemplo, las piernas y la sombra sin el resto. Con todas las capas, se actúa sobre los fotogramas enteros. Al pegar, cada capa vuelve a la suya; si copiaste una sola, va a la capa actual. Cada acción se deshace de una vez; **✕** suelta el rango (mientras hay un rango, tocar un número lo amplía en vez de ir a él). Con teclado: ⌘C, ⌘X, ⌘V y ⌘⌫.
 
 ### Celdas
 
