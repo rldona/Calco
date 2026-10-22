@@ -30,6 +30,7 @@ The **+** over the layer names (**New layer**) offers three kinds of layer, and 
 - **Same timing as Line, blank**: a layer *under* the current one with the same drawings and holds, all empty. Perfect for a colour pass: one empty drawing waiting under each line drawing.
 - **Duplicate Line**: a copy with all its drawings.
 - **Image from Files…** / **Image from Photos…**: a [reference image](#reference-images) to draw over.
+- **Sequence as guide…**: one image per frame, to [trace a motion](./guide-sequence) made somewhere else.
 
 ## Reference images
 

@@ -8,6 +8,7 @@ const pages = [
   ['drawing', 'Drawing tools', 'Herramientas de dibujo'],
   ['layers', 'Layers', 'Capas'],
   ['timeline', 'Timeline and drawings', 'Línea de tiempo y dibujos'],
+  ['guide-sequence', 'Tracing a motion', 'Calcar un movimiento'],
   ['onion-skin', 'Onion skin', 'Papel cebolla'],
   ['cycles', 'Cycles and inbetweens', 'Ciclos e intermedios'],
   ['clips', 'Clips and pivot', 'Clips y pivote'],

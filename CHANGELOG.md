@@ -8,6 +8,7 @@ A release is made by pushing a tag `vX.Y.Z`: the release workflow tests and buil
 
 ### Added
 
+- **Import an image sequence as a guide**, one image per frame, to trace a motion made somewhere else (New layer → Sequence as guide…).
 - The inside of a shape or a path can have **its own colour**, apart from its outline.
 - **Node** (A): edit the points of paths and shapes without ever drawing or adding points (that's the Pen). Shapes turn into points (an ellipse is four curves), a box picks several nodes to move together, and a double tap switches a node between corner and curve.
 - **Scrub** the frames: drag along the frame numbers, with a finger or the Pencil, and the frames flip by as fast or as slow as you go, with a haptic tick on each.

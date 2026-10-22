@@ -30,6 +30,7 @@ El **+** sobre los nombres de las capas (**Nueva capa**) ofrece tres tipos de ca
 - **Mismo ritmo que Line, vacía**: una capa *debajo* de la actual con los mismos dibujos y pausas, todos vacíos. Perfecta para colorear: un dibujo vacío esperando bajo cada dibujo de línea.
 - **Duplicar Line**: una copia con todos sus dibujos.
 - **Imagen desde Archivos…** / **Imagen desde Fotos…**: una [imagen de referencia](#imagenes-de-referencia) para dibujar encima.
+- **Secuencia como guía…**: una imagen por fotograma, para [calcar un movimiento](./guide-sequence) hecho en otro sitio.
 
 ## Imágenes de referencia
 
