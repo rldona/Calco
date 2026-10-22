@@ -57,6 +57,33 @@ final class GuideSequencePlanTests: XCTestCase {
                        CGRect(x: 101, y: -3, width: 64, height: 128))
     }
 
+    func testFittingABigImageScalesItDownCentredAndActualSizeCropsIt() {
+        // Criterion 4, on a small canvas: a 1024 square with a 64 px black bar along its top.
+        let ctx = CGContext(data: nil, width: 1024, height: 1024, bitsPerComponent: 8, bytesPerRow: 0,
+                            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        ctx.setFillColor(CGColor(red: 1, green: 0, blue: 0, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: 1024, height: 1024))
+        ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 960, width: 1024, height: 64))       // y-up: the top
+        let image = ctx.makeImage()!
+        let canvas = CGSize(width: 256, height: 256)
+        let fit = GuideSequence.rasterize(image, into: GuideSequence.rect(for: CGSize(width: 1024, height: 1024), in: canvas, fit: .fit),
+                                          width: 256, height: 256)
+        // Red or black, give or take the colour space.
+        func px(_ b: [UInt8], _ x: Int, _ y: Int) -> String {
+            let i = (y * 256 + x) * 4
+            guard b[i + 3] > 250 else { return "clear" }
+            return b[i] > 200 ? "red" : b[i] < 40 ? "black" : "other"
+        }
+        XCTAssertEqual(fit.count, 256 * 256 * 4)
+        XCTAssertEqual(px(fit, 128, 2), "black", "the bar, scaled to 16 px, at the very top")
+        XCTAssertEqual(px(fit, 128, 20), "red")
+        XCTAssertEqual(px(fit, 0, 255), "red", "the whole height, corner to corner")
+        let actual = GuideSequence.rasterize(image, into: GuideSequence.rect(for: CGSize(width: 1024, height: 1024), in: canvas, fit: .actual),
+                                             width: 256, height: 256)
+        XCTAssertEqual(px(actual, 128, 2), "red", "1:1 shows the middle: the bar is cut off")
+    }
+
     func testOptionsAreRemembered() {
         let defaults = UserDefaults(suiteName: "GuideSequenceTests")!
         defaults.removePersistentDomain(forName: "GuideSequenceTests")
@@ -201,5 +228,16 @@ final class GuideSequenceImportTests: XCTestCase {
         XCTAssertEqual(guide.opacity, 0.6)
         XCTAssertEqual(guide.tint, "#E5484D")
         XCTAssertEqual(mark(other, layer: id, frame: 2), 2)
+    }
+
+    func testTheOnionSkinLeavesGuidesOut() throws {
+        // Criterion 10: a guide on every frame shouldn't ghost a second figure.
+        let state = try makeState()
+        _ = importSequence(state, count: 3)
+        state.frameIndex = 1
+        state.onion.enabled = true
+        state.onion.before = 1; state.onion.after = 1
+        let tinted = state.visibleLayers().filter { $0.tintAmount > 0 }
+        XCTAssertTrue(tinted.isEmpty, "no ghosts: only the guide had drawings")
     }
 }

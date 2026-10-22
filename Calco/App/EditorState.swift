@@ -1506,7 +1506,9 @@ final class EditorState {
             for (layer, texture, mask) in shown {
                 let key = drawingKey(layer: layer.id, at: frameIndex)
                 if let texture {
-                    out.append(.init(texture: texture, opacity: Float(layer.opacity), tint: .zero, tintAmount: 0, mask: mask))
+                    let tint = layer.guideTint
+                    out.append(.init(texture: texture, opacity: Float(layer.opacity), tint: tint ?? .zero,
+                                     tintAmount: tint == nil ? 0 : 1, mask: mask))
                 }
                 // A floating selection shows right above its own layer, where it'll land.
                 if let sel = selection, sel.key == key, let preview = selectionPreview {
@@ -1541,7 +1543,8 @@ final class EditorState {
     /// frame or a hold doesn't hide the pose you're tracing. A layer whose drawing doesn't change
     /// (a held background) has nothing to ghost.
     private func onionLayers(drawingsAway offset: Int, opacity: Float, tint: SIMD3<Float>) -> [CanvasRenderer.CompositeLayer] {
-        let ghosted = onion.currentLayerOnly ? (currentLayer.map { [$0] } ?? []) : clip.layers
+        // Guides aren't drawing: a guide sequence would ghost a second figure under the onion skin.
+        let ghosted = (onion.currentLayerOnly ? (currentLayer.map { [$0] } ?? []) : clip.layers).filter { !$0.guide }
         return ghosted.compactMap { layer in
             guard layer.visible, let t = onionTexture(layer: layer.id, drawingsAway: offset) else { return nil }
             return .init(texture: t, opacity: Float(layer.opacity) * opacity, tint: tint, tintAmount: 1)
@@ -1578,8 +1581,10 @@ final class EditorState {
         }
         return shown.compactMap { layer, texture, mask in
             texture.map {
-                CanvasRenderer.CompositeLayer(texture: $0, opacity: Float(layer.opacity) * opacity,
-                                              tint: tint ?? .zero, tintAmount: tint == nil ? 0 : 1, mask: mask)
+                // A tinted guide keeps its tint, unless the whole frame is tinted (the onion skin).
+                let t = tint ?? layer.guideTint
+                return CanvasRenderer.CompositeLayer(texture: $0, opacity: Float(layer.opacity) * opacity,
+                                                     tint: t ?? .zero, tintAmount: t == nil ? 0 : 1, mask: mask)
             }
         }
     }

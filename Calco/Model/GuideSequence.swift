@@ -103,6 +103,21 @@ enum GuideSequence {
         return CGRect(x: (canvas.width - w) / 2 + offset.x, y: (canvas.height - h) / 2 + offset.y, width: w, height: h)
     }
 
+    /// `image` drawn into `rect` on a `width` x `height` canvas: premultiplied RGBA, row 0 at the
+    /// top, like layer textures. Any pixel format or size goes in. `hard` keeps pixels sharp.
+    static func rasterize(_ image: CGImage, into rect: CGRect, width: Int, height: Int, hard: Bool = false) -> [UInt8] {
+        var out = [UInt8](repeating: 0, count: width * height * 4)
+        out.withUnsafeMutableBytes { ptr in
+            guard let ctx = CGContext(data: ptr.baseAddress, width: width, height: height, bitsPerComponent: 8,
+                                      bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+            ctx.interpolationQuality = hard ? .none : .high
+            // CoreGraphics is y-up; the buffer's row 0 is the canvas top, so flip the rect's y.
+            ctx.draw(image, in: CGRect(x: rect.minX, y: CGFloat(height) - rect.maxY, width: rect.width, height: rect.height))
+        }
+        return out
+    }
+
     /// File names in natural order: `f2` before `f10`, ignoring case.
     static func naturalOrder(_ names: [String]) -> [String] {
         names.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
