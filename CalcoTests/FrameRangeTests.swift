@@ -134,4 +134,18 @@ final class FrameRangeTests: XCTestCase {
         XCTAssertEqual((5...6).map { shown(state, $0, layer: top) }, [1, 2], "each layer back into itself")
         XCTAssertEqual((5...6).map { shown(state, $0, layer: bottom) }, [9, 9])
     }
+
+    func testDrawingOnAFrameAfterTheEndFillsTheGap() throws {
+        let state = try makeState()
+        try five(state)
+        let line = state.currentLayer!.id
+        state.addDrawing(at: 8, layer: line)
+        XCTAssertEqual(state.frames.count, 9)
+        XCTAssertEqual(state.frameIndex, 8)
+        XCTAssertEqual((5...7).map { shown(state, $0) }, [4, 4, 4], "the gap holds the last drawing")
+        XCTAssertNil(shown(state, 8), "a blank drawing to draw on")
+        XCTAssertFalse(state.clip.isHeld(layer: line, at: 8))
+        state.undo()
+        XCTAssertEqual(state.frames.count, 5)
+    }
 }

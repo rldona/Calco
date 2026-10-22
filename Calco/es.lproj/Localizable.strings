@@ -146,6 +146,7 @@
 "Drag up or down to resize. Double tap for the automatic height." = "Arrastra arriba o abajo para cambiar el tamaño. Doble toque para la altura automática.";
 "Drags the paint along with your finger." = "Arrastra la pintura con el dedo.";
 "Draw" = "Dibujo";
+"Draw on frame %lld" = "Dibujar en el fotograma %lld";
 "Drawing length" = "Duración del dibujo";
 "Drawings after" = "Dibujos después";
 "Drawings after colour" = "Color de los dibujos después";

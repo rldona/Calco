@@ -315,6 +315,15 @@ struct TimelineView: View {
                     .accessibilityHint("Drag along the numbers to flip through the frames; hold and drag to move the frame")
                     .id(frame.id)
             }
+            ForEach(state.frames.count..<(state.frames.count + Self.ghostSlots), id: \.self) { k in
+                Text("\(k + 1)")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(Theme.textFaint.opacity(0.45))
+                    .padding(.leading, 3)
+                    .frame(width: tick, height: Self.rulerHeight, alignment: .bottomLeading)
+                    .overlay(alignment: .bottomLeading) { Rectangle().fill(Theme.hairline.opacity(0.5)).frame(width: 1, height: 8) }
+                    .accessibilityHidden(true)
+            }
         }
     }
 
@@ -470,8 +479,21 @@ struct TimelineView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(state.syncLayers ? "Add frame at the end" : "Add drawing at the end")
             }
+            // The sheet goes on, faint, so it's clear there's room: a tap draws there.
+            let first = state.frames.count + (isCurrentLayer && !layer.locked ? 1 : 0)
+            ForEach(first..<(state.frames.count + Self.ghostSlots), id: \.self) { k in
+                RoundedRectangle(cornerRadius: 4)
+                    .strokeBorder(Theme.hairline, style: StrokeStyle(lineWidth: 0.75, dash: [3, 3]))
+                    .frame(width: tick, height: rowHeight)
+                    .contentShape(Rectangle())
+                    .onTapGesture { if !layer.locked { state.addDrawing(at: k, layer: layer.id) } }
+                    .accessibilityLabel("Draw on frame \(k + 1)")
+            }
         }
     }
+
+    /// Empty slots shown after the last frame, enough to reach past the edge of the sheet.
+    private static let ghostSlots = 16
 
     /// Long-press a cell: what the exposure sheet can do with it.
     @ViewBuilder

@@ -483,4 +483,5 @@ ES = {
 "Reverse frames": "Invertir fotogramas",
 "Select frames": "Seleccionar fotogramas",
 "Select frames from here": "Seleccionar fotogramas desde aquí",
+"Draw on frame %lld": "Dibujar en el fotograma %lld",
 }

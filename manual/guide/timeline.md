@@ -73,6 +73,7 @@ Each layer row is a strip of **cells**. A cell is one drawing, and its width is 
 - A label (for example *step*) replaces the number when the drawing has one.
 - A link icon means a [linked repeat](./cycles).
 - The dashed **+** cell after the current layer's last drawing adds one more at the end.
+- After it, the sheet goes on with **empty slots** and faint numbers: tap one to draw there, on that layer. The frames in between are added, each layer holding its last drawing.
 
 **Drag a cell's right edge** with the Pencil or a finger to make that drawing last longer or shorter. What comes after moves along: lengthening a drawing pushes the next one instead of covering it.
 

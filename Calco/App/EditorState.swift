@@ -1037,6 +1037,24 @@ final class EditorState {
         if syncLayers { addBlankFrame() } else { addFrame() }
     }
 
+    /// A blank drawing on `layer` at frame `index`, past the end of the clip: the frames in between
+    /// are added too, every layer holding what it showed last, like an exposure sheet. One undo step.
+    func addDrawing(at index: Int, layer id: String) {
+        guard !isPlaying, index >= frames.count, !frames.isEmpty,
+              let l = layers.firstIndex(where: { $0.id == id }), !layers[l].locked else { return }
+        commitSelection()
+        let new = (frames.count...index).map { _ in Frame(id: newFrameID(), hold: 1) }
+        recordUndo(textures: new.flatMap { layerKeys(clip, frame: $0.id) })
+        for (n, var f) in new.enumerated() {
+            f.held = layers.map(\.id).filter { n < new.count - 1 || $0 != id }
+            clip.frames.append(f)
+        }
+        layerIndex = l
+        frameIndex = index
+        isDirty = true
+        refreshClipThumbnails()
+    }
+
     /// A new frame after the playhead with a blank drawing on every layer.
     func addBlankFrame() {
         let id = newFrameID()
@@ -2048,7 +2066,13 @@ final class EditorState {
             // Back in its place among the drawing's pieces, as one undo step from before it opened.
             defer { penBefore = nil }
             guard let target = store.texture(clip: e.key.clip, frame: e.key.frame, layer: e.key.layer),
-                  var pieces = strokes[e.key], pieces.indices.contains(index) else { return }
+                  var pieces = strokes[e.key], pieces.indices.contains(index) else {
+                // The pieces went missing: at least put the drawing back as it was.
+                if let before = penBefore { store.set(before, for: e.key) }
+                refreshThumbnails(showing: e.key)
+                canvasVersion &+= 1
+                return
+            }
             var before: [LayerKey: MTLTexture?] = [:]
             before.updateValue(penBefore, forKey: e.key)
             coalesceTag = nil
@@ -2079,9 +2103,23 @@ final class EditorState {
 
     /// The topmost Pen path in the drawing under `p` (on its line, or inside it when filled).
     private func penPiece(at p: CGPoint, tolerance tol: CGFloat, key: LayerKey) -> (Int, PenDrawing)? {
+        let pieces: [StrokePiece]
+        if let e = penEditing, e.key == key, e.piece != nil {
+            // A path is open, so it's off the drawing: the pixels and the pieces don't add up on
+            // purpose. Checking them would rebuild the pieces without it and lose it.
+            pieces = (strokes[key] ?? []).enumerated().filter { $0.offset != e.piece }.map(\.element)
+            for i in pieces.indices.reversed() {
+                guard let d = pieces[i].recipe?.pen else { continue }
+                if let n = d.path.nearest(to: p), n.distance < tol + CGFloat(d.style.size) {
+                    // Index in the drawing's own list, past the open one.
+                    return (i >= e.piece! ? i + 1 : i, d)
+                }
+            }
+            return nil
+        }
         guard let t = store.existingTexture(clip: key.clip, frame: key.frame, layer: key.layer),
               let pixels = renderer.readbackBytes(t) else { return nil }
-        let pieces = currentPieces(key, pixels: pixels)
+        pieces = currentPieces(key, pixels: pixels)
         for i in pieces.indices.reversed() {
             guard let d = pieces[i].recipe?.pen else { continue }
             if let n = d.path.nearest(to: p), n.distance < tol + CGFloat(d.style.size) { return (i, d) }

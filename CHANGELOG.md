@@ -8,6 +8,7 @@ A release is made by pushing a tag `vX.Y.Z`: the release workflow tests and buil
 
 ### Added
 
+- The timeline goes on past the last frame with **empty slots**: tap one to draw there, the frames in between holding the last drawings.
 - **Pick several frames** in the timeline (tap a number twice, then drag): copy, cut, paste, reverse, duplicate or delete them together, whole frames or the drawings of the layers you choose (tap a layer's name to add or remove it), as one undo.
 - **Tween motion** (More → Tween motion…): put a drawing, or some of its strokes, in an end pose and Calco draws the poses in between on the next frames, with an easing and an optional arc, as one undo. Strokes stay sharp in every pose.
 - **Project palette**: the character's colours, named, at the top of the colour panel, or picked from the drawings. **Change everywhere** repaints one colour in every drawing of every clip, soft edges included, as one undo: a palette swap in two taps.
@@ -30,6 +31,10 @@ A release is made by pushing a tag `vX.Y.Z`: the release workflow tests and buil
 - **Strokes you can pick one by one**: each drawing remembers its pencil strokes. With Move, a tap picks the exact stroke under it even where it crosses others; tap the same spot again for the one underneath, and **Add strokes** to pick several. Dragging a stroke moves it straight away. The eraser trims strokes; a fill or the lasso merges a drawing into shapes. Saved in the project as optional `<layer>.strokes` files.
 - **Stretch** with Move or the lasso: the handles in the middle of each side stretch the drawing wider or taller (squash and stretch), and **Uniform | Free** under the canvas makes the corner keep the proportions or stretch both ways. A chip shows the width and height while you drag, and each clicks back to 100 % or to the other's proportions. Pencil strokes **stay sharp** however much you scale or stretch them: each remembers how it was painted (saved as version 2 of the `.strokes` file) and is painted again where it lands instead of being resampled.
 - **Move tool** (V): picks up the current layer's whole drawing, boxed tight, to move, scale or rotate; tap a shape (an eye, a hand) to move just that one. On a locked layer, such as an imported image, **Unlock and move** unlocks it for the move and locks it again after. Moving, rotating or scaling **clicks back** into its starting place, upright (or a quarter turn) and its own size, and the pivot clicks back to the middle, with a light haptic tap.
+
+### Fixed
+
+- A path opened with Node no longer vanishes from the canvas when you tap away to finish it.
 
 ### Changed
 

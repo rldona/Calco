@@ -73,6 +73,7 @@ Cada fila de capa es una tira de **celdas**. Una celda es un dibujo, y su ancho 
 - Una etiqueta (por ejemplo *step*) sustituye al número cuando el dibujo tiene una.
 - Un icono de enlace indica una [repetición enlazada](./cycles).
 - La celda **+** discontinua después del último dibujo de la capa actual añade otro al final.
+- Después, la hoja sigue con **casillas vacías** y números tenues: toca una para dibujar ahí, en esa capa. Los fotogramas de en medio se añaden manteniendo el último dibujo de cada capa.
 
 **Arrastra el borde derecho de una celda** con el Pencil o con el dedo para que ese dibujo dure más o menos. Lo que viene después se desplaza: alargar un dibujo empuja al siguiente en vez de taparlo.
 
