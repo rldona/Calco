@@ -79,6 +79,15 @@ struct ProjectLibrary {
         return target
     }
 
+    /// Copies a `.calco` package from elsewhere (a drop from Files) into the folder, under a name
+    /// that doesn't clash. Returns the copy.
+    @discardableResult
+    func importPackage(at source: URL) throws -> URL {
+        let target = url(for: uniqueName(source.deletingPathExtension().lastPathComponent))
+        try FileManager.default.copyItem(at: source, to: target)
+        return target
+    }
+
     func delete(_ entry: Entry) throws {
         try FileManager.default.removeItem(at: entry.url)
     }
@@ -111,22 +120,27 @@ struct ProjectLibrary {
         }
     }
 
-    /// Reads PNGs and composites visible layers onto white, at most `maxSide` pixels.
-    static func preview(of entry: Entry, maxSide: Int = 192) -> Preview? {
-        guard let clip = entry.project.clips.first, !clip.frames.isEmpty else { return nil }
+    /// Reads PNGs and composites visible layers onto white, at most `maxSide` pixels: clip
+    /// `clipIndex` (the first by default), holds resolved, guides left out as in an export.
+    static func preview(of entry: Entry, clipIndex: Int = 0, maxSide: Int = 192) -> Preview? {
+        guard entry.project.clips.indices.contains(clipIndex) else { return nil }
+        let clip = entry.project.clips[clipIndex]
+        guard !clip.frames.isEmpty else { return nil }
         let canvas = entry.project.canvas
         let scale = min(1, CGFloat(maxSide) / CGFloat(max(canvas.width, canvas.height)))
         let w = max(1, Int(CGFloat(canvas.width) * scale)), h = max(1, Int(CGFloat(canvas.height) * scale))
         let space = CGColorSpaceCreateDeviceRGB()
         var images: [CGImage] = []
-        for frame in clip.frames {
+        for index in clip.frames.indices {
             guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0, space: space,
                                       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
             ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
             ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
             ctx.interpolationQuality = .medium
-            for layer in clip.layers where layer.visible {
-                let key = LayerKey(clip: clip.id, frame: frame.id, layer: layer.id)
+            for layer in clip.layers where layer.visible && !layer.guide {
+                // A held or linked cell shows another frame's drawing.
+                guard let source = clip.sourceFrameID(layer: layer.id, at: index) else { continue }
+                let key = LayerKey(clip: clip.id, frame: source, layer: layer.id)
                 guard let image = ProjectDocument.image(at: ProjectDocument.layerURL(in: entry.url, key)) else { continue }
                 ctx.setAlpha(CGFloat(layer.opacity))
                 ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))

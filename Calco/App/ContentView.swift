@@ -346,6 +346,12 @@ struct FileMenu: View {
             state.request = nil
             handle(request)
         }
+        // A request made just before the editor came up (Export from the gallery).
+        .onAppear {
+            guard let request = state.request else { return }
+            state.request = nil
+            handle(request)
+        }
         .fileImporter(isPresented: $showingOpen, allowedContentTypes: [ProjectDocument.contentType]) { result in
             if case .success(let url) = result { state.open(url) }
         }

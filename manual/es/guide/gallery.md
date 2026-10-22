@@ -4,9 +4,10 @@ Calco se abre en la galería: todos los proyectos de este iPad, con el último l
 
 ![La galería](/screens/es/gallery.jpg)
 
-- **Continuar** abre el proyecto en el que estabas. Su tarjeta reproduce el primer clip.
-- **Todos los proyectos** muestra el resto. Mantén pulsada una tarjeta para **renombrarla**, **duplicarla** o **eliminarla**.
-- **Abrir desde Archivos** importa un proyecto `.calco` desde Archivos, iCloud Drive o AirDrop.
+- **Continuar** abre el proyecto en el que estabas. Su tarjeta reproduce un clip: toca el nombre de otro para verlo. Muestra el tamaño del sprite, la velocidad y cuándo lo editaste por última vez, con **Exportar…** y **Duplicar** a mano.
+- **Todos los proyectos** muestra el resto, con su tamaño y fecha. Toca **⋯** en una tarjeta (o mantenla pulsada) para **abrirla**, **renombrarla**, **duplicarla**, **exportarla** o **eliminarla**.
+- **Buscar** encuentra un proyecto por su nombre o por el de uno de sus clips, y **Ordenar** los ordena por **Recientes**, **Nombre** o **Tamaño**.
+- La **carpeta** abre un proyecto `.calco` desde Archivos, iCloud Drive o AirDrop. También puedes soltar un `.calco` sobre la tarjeta **Nuevo**: Calco lo copia y lo abre.
 - La **rueda dentada** abre las [Preferencias](./preferences).
 
 ## Nuevo proyecto

@@ -1,11 +1,39 @@
 import SwiftUI
 
 /// What Calco opens on: the projects in Documents as cards that play their first clip, with the
-/// most recent one up top as "Continue". Long-press a card to rename, duplicate or delete it.
+/// most recent one up top as "Continue" (whose clips can be played one by one). Search and sort
+/// up top; each card's ⋯ (or a long-press) opens, renames, duplicates, exports or deletes it. A
+/// `.calco` dropped on the window is copied in and opened.
 struct GalleryView: View {
     @Bindable var state: EditorState
     @State private var entries: [ProjectLibrary.Entry] = []
     @State private var previews: [URL: ProjectLibrary.Preview] = [:]
+    /// The Continue card's clip previews, by clip index, loaded when picked.
+    @State private var clipPreviews: [Int: ProjectLibrary.Preview] = [:]
+    @State private var continueClip = 0
+    @State private var search = ""
+    @AppStorage("gallery.sort") private var sort = Sort.recent
+    @State private var dropping = false
+
+    enum Sort: String, CaseIterable, Identifiable {
+        case recent, name, size
+        var id: String { rawValue }
+    }
+
+    /// The projects in the grid: matching the search, in the chosen order; without a search, the
+    /// one in Continue isn't repeated.
+    private var listed: [ProjectLibrary.Entry] {
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        var list = query.isEmpty ? Array(entries.dropFirst())
+            : entries.filter { $0.name.localizedCaseInsensitiveContains(query)
+                || $0.project.clips.contains { $0.name.localizedCaseInsensitiveContains(query) } }
+        switch sort {
+        case .recent: break
+        case .name: list.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        case .size: list.sort { $0.project.canvas.width * $0.project.canvas.height > $1.project.canvas.width * $1.project.canvas.height }
+        }
+        return list
+    }
     @State private var showingNew = false
     @State private var showingImport = false
     @State private var renaming: ProjectLibrary.Entry?
@@ -22,17 +50,28 @@ struct GalleryView: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        ContinueCard(entry: entries[0], preview: previews[entries[0].url]) { open(entries[0]) }
-                            .contextMenu { menu(for: entries[0]) }
-                        if entries.count > 1 {
-                            Text("All projects").font(.subheadline).foregroundStyle(Theme.textFaint)
+                        if search.isEmpty {
+                            ContinueCard(entry: entries[0],
+                                         preview: continueClip == 0 ? previews[entries[0].url] : clipPreviews[continueClip],
+                                         clip: $continueClip,
+                                         open: { open(entries[0]) },
+                                         export: { export(entries[0]) },
+                                         duplicate: { attempt { try library.duplicate(entries[0]) } })
+                                .contextMenu { menu(for: entries[0]) }
+                        }
+                        HStack {
+                            Text(search.isEmpty ? "All projects · \(entries.count)" : "\(listed.count) found")
+                                .font(.subheadline).foregroundStyle(Theme.textFaint)
+                            Spacer()
                         }
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 12)], spacing: 12) {
-                            ForEach(entries.dropFirst()) { entry in
-                                ProjectCard(entry: entry, preview: previews[entry.url]) { open(entry) }
-                                    .contextMenu { menu(for: entry) }
+                            ForEach(listed) { entry in
+                                ProjectCard(entry: entry, preview: previews[entry.url], open: { open(entry) }) {
+                                    menu(for: entry)
+                                }
+                                .contextMenu { menu(for: entry) }
                             }
-                            NewCard { showingNew = true }
+                            if search.isEmpty { NewCard(dropping: dropping) { showingNew = true } }
                         }
                     }
                     .padding(.bottom, 16)
@@ -46,6 +85,21 @@ struct GalleryView: View {
         .tint(Theme.accent)
         .preferredColorScheme(.dark)
         .onAppear(perform: reload)
+        .onChange(of: continueClip) { _, i in loadClipPreview(i) }
+        // A .calco from Files dropped anywhere on the gallery: copied in and opened.
+        .onDrop(of: [ProjectDocument.contentType], isTargeted: $dropping) { providers in
+            guard let provider = providers.first else { return false }
+            _ = provider.loadFileRepresentation(forTypeIdentifier: ProjectDocument.contentType.identifier) { url, _ in
+                guard let url else { return }
+                // The file only exists during this call: copy it in now.
+                let copied = try? library.importPackage(at: url)
+                DispatchQueue.main.async {
+                    reload()
+                    if let copied { state.open(copied) }
+                }
+            }
+            return true
+        }
         .onChange(of: state.isInGallery) { _, inGallery in if inGallery { reload() } }
         // ⌘N / ⌘O from CalcoCommands land here while the gallery is showing.
         .onChange(of: state.request) { _, request in
@@ -97,11 +151,39 @@ struct GalleryView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .accessibilityHidden(true)
             Text("Calco").font(.title2.weight(.semibold)).foregroundStyle(Theme.text)
+            if !entries.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(Theme.textFaint)
+                    TextField("Search projects", text: $search)
+                        .textFieldStyle(.plain)
+                        .foregroundStyle(Theme.text)
+                    if !search.isEmpty {
+                        Button { search = "" } label: { Image(systemName: "xmark.circle.fill") }
+                            .foregroundStyle(Theme.textFaint)
+                            .accessibilityLabel("Clear search")
+                    }
+                }
+                .padding(.horizontal, 10).frame(height: 34)
+                .background(Theme.panel, in: RoundedRectangle(cornerRadius: 9))
+                .frame(maxWidth: 360)
+                Menu {
+                    Picker("Sort", selection: $sort) {
+                        Text("Recent").tag(Sort.recent)
+                        Text("Name").tag(Sort.name)
+                        Text("Size").tag(Sort.size)
+                    }
+                } label: {
+                    Label(sortTitle, systemImage: "arrow.up.arrow.down")
+                        .font(.callout)
+                        .foregroundStyle(Theme.textDim)
+                }
+            }
             Spacer()
-            Button { state.showingPreferences = true } label: { Label("Preferences", systemImage: "gearshape") }
+            Button { showingImport = true } label: { Label("Open from Files", systemImage: "folder") }
                 .labelStyle(.iconOnly)
                 .foregroundStyle(Theme.textDim)
-            Button { showingImport = true } label: { Label("Open from Files", systemImage: "folder") }
+            Button { state.showingPreferences = true } label: { Label("Preferences", systemImage: "gearshape") }
+                .labelStyle(.iconOnly)
                 .foregroundStyle(Theme.textDim)
             Button { showingNew = true } label: {
                 Label("New", systemImage: "plus")
@@ -134,17 +216,42 @@ struct GalleryView: View {
         .frame(maxWidth: .infinity)
     }
 
+    private var sortTitle: String {
+        switch sort {
+        case .recent: String(localized: "Recent", bundle: AppLanguage.bundle)
+        case .name: String(localized: "Name", bundle: AppLanguage.bundle)
+        case .size: String(localized: "Size", bundle: AppLanguage.bundle)
+        }
+    }
+
     @ViewBuilder
     private func menu(for entry: ProjectLibrary.Entry) -> some View {
         Button { open(entry) } label: { Label("Open", systemImage: "pencil.tip") }
         Button { newName = entry.name; renaming = entry } label: { Label("Rename…", systemImage: "character.cursor.ibeam") }
         Button { attempt { try library.duplicate(entry) } } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
+        Button { export(entry) } label: { Label("Export…", systemImage: "square.and.arrow.up.on.square") }
         Divider()
         Button(role: .destructive) { deleting = entry } label: { Label("Delete…", systemImage: "trash") }
     }
 
     private func open(_ entry: ProjectLibrary.Entry) {
         state.open(entry.url)
+    }
+
+    /// Opens the project and its export sheet.
+    private func export(_ entry: ProjectLibrary.Entry) {
+        state.open(entry.url)
+        guard !state.isInGallery else { return }
+        // Once the editor is up, its file menu takes the request.
+        DispatchQueue.main.async { state.request = .export }
+    }
+
+    private func loadClipPreview(_ i: Int) {
+        guard i > 0, clipPreviews[i] == nil, let entry = entries.first else { return }
+        Task.detached(priority: .userInitiated) {
+            let preview = ProjectLibrary.preview(of: entry, clipIndex: i)
+            await MainActor.run { clipPreviews[i] = preview }
+        }
     }
 
     private func attempt(_ work: () throws -> Void) {
@@ -155,6 +262,7 @@ struct GalleryView: View {
     /// Lists projects now; builds the card animations off the main thread.
     private func reload() {
         let found = library.entries()
+        if found.first?.url != entries.first?.url { continueClip = 0; clipPreviews = [:] }
         entries = found
         previews = previews.filter { url, _ in found.contains { $0.url == url } }
         Task.detached(priority: .utility) {
@@ -201,46 +309,72 @@ struct AnimatedPreview: View {
 private struct ContinueCard: View {
     let entry: ProjectLibrary.Entry
     let preview: ProjectLibrary.Preview?
+    @Binding var clip: Int
     let open: () -> Void
+    let export: () -> Void
+    let duplicate: () -> Void
 
     var body: some View {
-        Button(action: open) {
-            HStack(spacing: 16) {
-                AnimatedPreview(preview: preview).frame(width: 120, height: 120)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Continue").font(.caption.weight(.semibold)).foregroundStyle(Theme.accentText)
-                    Text(entry.name).font(.title3.weight(.semibold)).foregroundStyle(Theme.text).lineLimit(1)
-                    Text(ProjectCard.summary(entry)).font(.callout).foregroundStyle(Theme.textDim)
-                    HStack(spacing: 6) {
-                        ForEach(entry.project.clips.prefix(6)) { clip in
-                            Text(clip.name)
-                                .font(.caption)
-                                .foregroundStyle(Theme.textDim)
-                                .padding(.horizontal, 8).padding(.vertical, 3)
-                                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.hairline))
-                        }
-                    }
-                    .padding(.top, 4)
+        HStack(spacing: 16) {
+            AnimatedPreview(preview: preview).frame(width: 150, height: 150)
+                .onTapGesture(perform: open)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Continue").font(.caption.weight(.semibold)).foregroundStyle(Theme.accentText)
+                Text(entry.name).font(.title3.weight(.semibold)).foregroundStyle(Theme.text).lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(verbatim: "\(entry.project.canvas.width)×\(entry.project.canvas.height) · \(entry.project.fps) fps ·")
+                    Text(entry.modified, format: .relative(presentation: .named))
                 }
-                Spacer()
+                .font(.callout).foregroundStyle(Theme.textDim).lineLimit(1)
+                // Each clip plays in the preview when picked.
+                HStack(spacing: 6) {
+                    ForEach(Array(entry.project.clips.prefix(8).enumerated()), id: \.element.id) { i, c in
+                        let on = i == clip
+                        Button { clip = i } label: {
+                            HStack(spacing: 3) {
+                                if on { Image(systemName: "play.fill").font(.system(size: 8)) }
+                                Text(c.name)
+                            }
+                            .font(.caption.weight(on ? .semibold : .regular))
+                            .foregroundStyle(on ? Theme.accentText : Theme.textDim)
+                            .padding(.horizontal, 8).padding(.vertical, 4)
+                            .background(on ? Theme.accentWash : .clear, in: RoundedRectangle(cornerRadius: 6))
+                            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(on ? Theme.accent.opacity(0.6) : Theme.hairline))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(on ? .isSelected : [])
+                    }
+                }
+                .padding(.top, 4)
+                HStack(spacing: 8) {
+                    Button(action: export) { Label("Export…", systemImage: "square.and.arrow.up.on.square") }
+                    Button(action: duplicate) { Label("Duplicate", systemImage: "plus.square.on.square") }
+                }
+                .font(.caption)
+                .buttonStyle(.bordered)
+                .padding(.top, 6)
+            }
+            Spacer()
+            Button(action: open) {
                 Image(systemName: "arrow.right")
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(Theme.onAccent)
-                    .frame(width: 48, height: 48)
+                    .frame(width: 52, height: 52)
                     .background(Theme.accent, in: Circle())
             }
-            .padding(12)
-            .background(Theme.panel, in: RoundedRectangle(cornerRadius: Theme.corner))
+            .buttonStyle(.plain)
+            .accessibilityLabel("Continue \(entry.name)")
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Continue \(entry.name)")
+        .padding(12)
+        .background(Theme.panel, in: RoundedRectangle(cornerRadius: Theme.corner))
     }
 }
 
-private struct ProjectCard: View {
+private struct ProjectCard<Actions: View>: View {
     let entry: ProjectLibrary.Entry
     let preview: ProjectLibrary.Preview?
     let open: () -> Void
+    @ViewBuilder let actions: () -> Actions
 
     static func summary(_ entry: ProjectLibrary.Entry) -> String {
         let clips = entry.project.clips.count
@@ -250,37 +384,57 @@ private struct ProjectCard: View {
     }
 
     var body: some View {
-        Button(action: open) {
-            VStack(alignment: .leading, spacing: 6) {
-                AnimatedPreview(preview: preview).aspectRatio(1, contentMode: .fit)
-                Text(entry.name).font(.callout.weight(.medium)).foregroundStyle(Theme.text).lineLimit(1)
-                HStack(spacing: 4) {
-                    Text(entry.project.clips.count == 1 ? "1 clip ·" : "\(entry.project.clips.count) clips ·")
-                    Text(entry.modified, format: .relative(presentation: .named))
+        VStack(alignment: .leading, spacing: 6) {
+            AnimatedPreview(preview: preview).aspectRatio(1, contentMode: .fit)
+                .overlay(alignment: .topTrailing) {
+                    // The card's actions, in sight (a long-press opens them too).
+                    Menu { actions() } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 30, height: 30)
+                            .background(.black.opacity(0.5), in: Circle())
+                            .padding(6)
+                    }
+                    .accessibilityLabel("Actions for \(entry.name)")
                 }
-                .font(.caption).foregroundStyle(Theme.textFaint).lineLimit(1)
+            Text(entry.name).font(.callout.weight(.medium)).foregroundStyle(Theme.text).lineLimit(1)
+            HStack(spacing: 4) {
+                Text(entry.project.clips.count == 1 ? "1 clip ·" : "\(entry.project.clips.count) clips ·")
+                Text(verbatim: "\(entry.project.canvas.width)×\(entry.project.canvas.height) ·")
+                Text(entry.modified, format: .relative(presentation: .named))
             }
-            .padding(8)
-            .background(Theme.panel, in: RoundedRectangle(cornerRadius: Theme.corner))
+            .font(.caption).foregroundStyle(Theme.textFaint).lineLimit(1)
         }
-        .buttonStyle(.plain)
+        .padding(8)
+        .background(Theme.panel, in: RoundedRectangle(cornerRadius: Theme.corner))
+        .contentShape(Rectangle())
+        .onTapGesture(perform: open)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("\(entry.name), \(Self.summary(entry))")
+        .accessibilityAddTraits(.isButton)
     }
 }
 
 private struct NewCard: View {
+    /// A .calco is being dragged over the gallery.
+    var dropping = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             VStack(spacing: 6) {
-                Image(systemName: "plus").font(.system(size: 24))
-                Text("New").font(.callout)
+                Image(systemName: dropping ? "square.and.arrow.down" : "plus").font(.system(size: 24))
+                Text(dropping ? "Drop to open" : "New").font(.callout)
+                if !dropping {
+                    Text("or drop a .calco here").font(.caption2).foregroundStyle(Theme.textFaint)
+                }
             }
-            .foregroundStyle(Theme.textFaint)
+            .foregroundStyle(dropping ? Theme.accentText : Theme.textFaint)
             .frame(maxWidth: .infinity, minHeight: 200)
+            .background(dropping ? Theme.accentWash : .clear, in: RoundedRectangle(cornerRadius: Theme.corner))
             .overlay(RoundedRectangle(cornerRadius: Theme.corner)
-                .strokeBorder(Theme.hairline, style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
+                .strokeBorder(dropping ? Theme.accent : Theme.hairline, style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("New project")

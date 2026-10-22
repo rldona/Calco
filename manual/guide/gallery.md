@@ -4,9 +4,10 @@ Calco opens on the gallery: every project on this iPad, with the last one ready 
 
 ![The gallery](/screens/en/gallery.jpg)
 
-- **Continue** opens the project you were working on. Its card plays the first clip.
-- **All projects** lists the rest. Long-press a card to **rename**, **duplicate** or **delete** it.
-- **Open from Files** imports a `.calco` project from Files, iCloud Drive or AirDrop.
+- **Continue** opens the project you were working on. Its card plays a clip: tap a clip's name to watch another one. It shows the sprite size, the speed and when you last edited it, with **Export…** and **Duplicate** at hand.
+- **All projects** lists the rest, with their size and date. Tap **⋯** on a card (or long-press it) to **open**, **rename**, **duplicate**, **export** or **delete** it.
+- **Search** finds a project by its name or by the name of one of its clips, and **Sort** orders them by **Recent**, **Name** or **Size**.
+- The **folder** opens a `.calco` project from Files, iCloud Drive or AirDrop. You can also drop a `.calco` on the **New** card: Calco copies it in and opens it.
 - The **gear** opens [Preferences](./preferences).
 
 ## New project

@@ -19,6 +19,7 @@
 "%lld PPU" = "%lld PPU";
 "%lld clips" = "%lld clips";
 "%lld clips ·" = "%lld clips ·";
+"%lld found" = "%lld encontrados";
 "%lld fps" = "%lld fps";
 "%lld frames" = "%lld fotogramas";
 "%lld images on the frames there are." = "%lld imágenes en los fotogramas que hay.";
@@ -40,6 +41,7 @@
 "A faint grid behind the canvas, like a cutting mat." = "Una cuadrícula suave detrás del lienzo, como una plancha de corte.";
 "A folder per clip, one %lld × %lld PNG per tick (holds repeated)." = "Una carpeta por clip, un PNG de %lld × %lld por tick (las pausas se repiten).";
 "Act on" = "Actuar sobre";
+"Actions for %@" = "Acciones de %@";
 "Add" = "Añadir";
 "Add drawing" = "Añadir dibujo";
 "Add drawing at the end" = "Añadir dibujo al final";
@@ -58,6 +60,7 @@
 "All Projects" = "Todos los proyectos";
 "All its clips and drawings will be removed from this iPad. This can't be undone." = "Se eliminarán de este iPad todos sus clips y dibujos. No se puede deshacer.";
 "All projects" = "Todos los proyectos";
+"All projects · %lld" = "Todos los proyectos · %lld";
 "Also saved in On My iPad › Calco › Exports › %@." = "También guardado en En mi iPad › Calco › Exports › %@.";
 "Another clip (crouch, dash…)" = "Otro clip (agacharse, esquivar…)";
 "Apply Selection" = "Aplicar selección";
@@ -95,6 +98,7 @@
 "Clear Layer" = "Vaciar capa";
 "Clear drawing" = "Vaciar dibujo";
 "Clear layer" = "Vaciar capa";
+"Clear search" = "Borrar búsqueda";
 "Clear this frame's drawing on the layer" = "Vacía el dibujo de este fotograma en la capa";
 "Clip actions" = "Acciones del clip";
 "Clip settings" = "Ajustes del clip";
@@ -153,6 +157,7 @@
 "Drawings before" = "Dibujos antes";
 "Drawings before colour" = "Color de los dibujos antes";
 "Draws" = "Pinta";
+"Drop to open" = "Suelta para abrir";
 "Duplicate" = "Duplicar";
 "Duplicate %@" = "Duplicar %@";
 "Duplicate Drawing" = "Duplicar dibujo";
@@ -351,6 +356,7 @@
 "Pressing harder works the paint more. The size is the bar's." = "Cuanto más aprietas, más trabaja la pintura. El tamaño es el de la barra.";
 "Previous Frame" = "Fotograma anterior";
 "Project name" = "Nombre del proyecto";
+"Recent" = "Recientes";
 "Rectangle" = "Rectángulo";
 "Red" = "Rojo";
 "Redo" = "Rehacer";
@@ -386,6 +392,7 @@
 "Saved to On My iPad › Calco as a .calco package." = "Guardado en En mi iPad › Calco como paquete .calco.";
 "Scale" = "Escala";
 "Scale selection" = "Escalar selección";
+"Search projects" = "Buscar proyectos";
 "See the drawings before and after this one, faded, to draw in between" = "Ver en transparencia los dibujos de antes y de después, para dibujar los intermedios";
 "Select All" = "Seleccionar todo";
 "Select all" = "Seleccionar todo";
@@ -408,6 +415,7 @@
 "Show pivot" = "Mostrar el pivote";
 "Show the timeline" = "Mostrar la línea de tiempo";
 "Shown in the cell instead of its number. Leave empty to remove it." = "Se muestra en la celda en lugar de su número. Déjalo vacío para quitarla.";
+"Size" = "Tamaño";
 "Size %lld" = "Tamaño %lld";
 "Sketch" = "Boceto";
 "Small" = "Pequeño";
@@ -420,6 +428,7 @@
 "Soft edge, tapering tip" = "Borde suave, punta que afina";
 "Softens the paint where you go over it." = "Suaviza la pintura por donde pasas.";
 "Solid" = "Continuo";
+"Sort" = "Orden";
 "Speed" = "Velocidad";
 "Split drawing halfway" = "Partir el dibujo a mitad";
 "Sprite sheet + JSON" = "Hoja de sprites + JSON";
@@ -480,6 +489,7 @@
 "events" = "eventos";
 "fps" = "fps";
 "held %lld frames" = "mantenido %lld fotogramas";
+"or drop a .calco here" = "o suelta aquí un .calco";
 "power of two" = "potencia de dos";
 "trimmed" = "recortado";
 "vs. 1024" = "frente a 1024";
