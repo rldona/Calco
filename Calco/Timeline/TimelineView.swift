@@ -454,6 +454,7 @@ private struct LayerLabel: View {
     @State private var renaming = false
     @State private var editingOpacity = false
     @State private var confirmingDelete = false
+    @State private var replacingSequence = false
     @State private var name = ""
 
     var body: some View {
@@ -497,6 +498,7 @@ private struct LayerLabel: View {
             .background(selected ? Theme.accentWash : .clear, in: RoundedRectangle(cornerRadius: 6))
             .contentShape(Rectangle())
             .onTapGesture { state.layerIndex = index }
+            .guideSequenceImport(isPresented: $replacingSequence, state: state, replacing: layer.id)
             .contextMenu {
                 Button { name = layer.name; renaming = true } label: { Label("Rename…", systemImage: "pencil") }
                 Button { editingOpacity = true } label: { Label("Opacity…", systemImage: "circle.lefthalf.filled") }
@@ -508,6 +510,9 @@ private struct LayerLabel: View {
                 Button { state.toggleLayerGuide(index) } label: {
                     Label(layer.guide ? "Export this layer" : "Guide only (not exported)",
                           systemImage: layer.guide ? "square.and.arrow.up" : "eye.slash.circle")
+                }
+                if layer.guide {
+                    Button { replacingSequence = true } label: { Label("Replace sequence…", systemImage: "photo.stack") }
                 }
                 Button { state.moveLayer(from: index, to: index + 1) } label: { Label("Move up", systemImage: "arrow.up") }
                     .disabled(index == state.layers.count - 1)
@@ -697,6 +702,7 @@ private struct NewLayerMenu: View {
     @State private var pickingPhoto = false
     @State private var photo: PhotosPickerItem?
     @State private var importingFile = false
+    @State private var importingSequence = false
 
     var body: some View {
         Menu {
@@ -710,6 +716,8 @@ private struct NewLayerMenu: View {
             Divider()
             Button { pickingPhoto = true } label: { Label("Image from Photos…", systemImage: "photo.badge.plus") }
             Button { importingFile = true } label: { Label("Image from Files…", systemImage: "doc.badge.plus") }
+            // One image per frame, to trace a motion made somewhere else.
+            Button { importingSequence = true } label: { Label("Sequence as guide…", systemImage: "photo.stack") }
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 14, weight: .semibold))
@@ -718,6 +726,7 @@ private struct NewLayerMenu: View {
                 .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 7))
         }
         .accessibilityLabel("New layer")
+        .guideSequenceImport(isPresented: $importingSequence, state: state)
         .photosPicker(isPresented: $pickingPhoto, selection: $photo, matching: .images)
         .onChange(of: photo) { _, item in
             guard let item else { return }
