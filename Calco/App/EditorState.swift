@@ -1316,6 +1316,51 @@ final class EditorState {
         refreshClipThumbnails()
     }
 
+    /// An image sequence as a guide, one image per frame (see GuideSequence): `images` are already
+    /// drawn at canvas size, one per image of `plan` (nil for one that couldn't be read, whose
+    /// frame is left empty). Into the guide layer `replacing` (its old images all go), or a new
+    /// one under every layer. Frames the plan adds go at the end, lasting `hold`. The guide ends up
+    /// current and locked. One undo step. Returns the layer's id.
+    @discardableResult
+    func importGuideSequence(_ images: [[UInt8]?], plan: GuideSequence.Plan, hold: Int, replacing layerID: String? = nil,
+                             opacity: Double, tint: String?, name: String? = nil) -> String? {
+        guard !frames.isEmpty, images.count == plan.frames.count else { return nil }
+        stop()
+        finishPen()
+        let replaced = layerID.flatMap { id in layers.firstIndex { $0.id == id && $0.guide } }
+        let layerName = uniqueLayerName(name ?? String(localized: "Guide", bundle: AppLanguage.bundle))
+        let id = replaced.map { layers[$0].id } ?? Self.clipID(for: layerName, existing: layers.map(\.id))
+        let added = (0..<plan.newFrames).map { _ in Frame(id: newFrameID(), hold: max(1, hold)) }
+        let everyFrame = frames.map(\.id) + added.map(\.id)
+        // The guide's drawings in every frame, and every cell of the new frames.
+        let keys = everyFrame.map { LayerKey(clip: clip.id, frame: $0, layer: id) }
+            + added.flatMap { f in layers.map { LayerKey(clip: clip.id, frame: f.id, layer: $0.id) } }
+        recordUndo(textures: keys)
+
+        clip.frames += added
+        if let replaced {
+            clip.layers[replaced].opacity = opacity
+            clip.layers[replaced].tint = tint
+            clip.layers[replaced].locked = true
+            for i in clip.frames.indices { clip.frames[i].held.removeAll { $0 == id } }
+            for k in keys where k.layer == id { store.set(nil, for: k); strokes[k] = nil }
+            layerIndex = replaced
+        } else {
+            clip.layers.insert(Layer(id: id, name: layerName, opacity: opacity, locked: true, guide: true, tint: tint), at: 0)
+            layerIndex = 0
+        }
+        for (pixels, f) in zip(images, plan.frames) where clip.frames.indices.contains(f) {
+            guard let pixels else { continue }
+            let key = LayerKey(clip: clip.id, frame: clip.frames[f].id, layer: id)
+            if let target = store.texture(clip: key.clip, frame: key.frame, layer: key.layer) {
+                renderer.upload(bytes: pixels, into: target)
+            }
+        }
+        isDirty = true
+        refreshClipThumbnails()
+        return id
+    }
+
     /// `image` scaled to fit a `width` x `height` canvas and centred, as premultiplied RGBA with row 0
     /// at the top, like layer textures. `hard` keeps pixels sharp (pixel art).
     static func fitted(_ image: CGImage, width: Int, height: Int, hard: Bool = false) -> [UInt8] {

@@ -1,4 +1,5 @@
 import Foundation
+import simd
 
 /// In-memory representation of a `.calco` project.
 /// Mirrors `docs/format.md` 1:1. Keep it Codable and free of UI concerns.
@@ -80,14 +81,23 @@ struct Layer: Codable, Equatable, Identifiable {
     /// A guide to draw over (an imported reference image): shown in the editor, never exported, and
     /// not an outline for the fill. Optional in the file, written when true.
     var guide = false
+    /// A guide's lines in one colour, "#RRGGBB", so they don't read as drawing. Only guide layers
+    /// show it. Optional in the file.
+    var tint: String?
 
     init(id: String, name: String, opacity: Double = 1.0, visible: Bool = true, locked: Bool = false,
-         maskBelow: Bool = false, guide: Bool = false) {
+         maskBelow: Bool = false, guide: Bool = false, tint: String? = nil) {
         self.id = id; self.name = name; self.opacity = opacity; self.visible = visible
-        self.locked = locked; self.maskBelow = maskBelow; self.guide = guide
+        self.locked = locked; self.maskBelow = maskBelow; self.guide = guide; self.tint = tint
     }
 
-    private enum CodingKeys: String, CodingKey { case id, name, opacity, visible, locked, maskBelow, guide }
+    /// The tint as RGB 0–1, when this is a guide with a valid one.
+    var guideTint: SIMD3<Float>? {
+        guard guide, let tint, tint.count == 7, tint.first == "#", let v = UInt32(tint.dropFirst(), radix: 16) else { return nil }
+        return SIMD3(Float((v >> 16) & 0xFF), Float((v >> 8) & 0xFF), Float(v & 0xFF)) / 255
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, name, opacity, visible, locked, maskBelow, guide, tint }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -98,6 +108,7 @@ struct Layer: Codable, Equatable, Identifiable {
         locked = try c.decodeIfPresent(Bool.self, forKey: .locked) ?? false
         maskBelow = try c.decodeIfPresent(Bool.self, forKey: .maskBelow) ?? false
         guide = try c.decodeIfPresent(Bool.self, forKey: .guide) ?? false
+        tint = try c.decodeIfPresent(String.self, forKey: .tint)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -109,6 +120,7 @@ struct Layer: Codable, Equatable, Identifiable {
         try c.encode(locked, forKey: .locked)
         if maskBelow { try c.encode(maskBelow, forKey: .maskBelow) }
         if guide { try c.encode(guide, forKey: .guide) }
+        try c.encodeIfPresent(tint, forKey: .tint)
     }
 }
 
