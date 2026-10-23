@@ -95,9 +95,10 @@ struct SelectionOverlay: View {
                 let a = g.startLocation.applying(toCanvas), c = g.location.applying(toCanvas)
                 let moved = CGVector(dx: s.offset.dx + c.x - a.x, dy: s.offset.dy + c.y - a.y)
                 // 12 points on screen, whatever the zoom.
-                let snap = FloatingSelection.snappedOffset(moved, tolerance: Self.snapPoints / Self.zoom(toView))
-                click(snap != nil)
-                state.updateSelection { $0.offset = snap ?? moved }
+                // Home within 12 points on screen, whatever the zoom; otherwise on the grid if it's on.
+                let placed = state.movedOffset(moved, home: Self.snapPoints / Self.zoom(toView))
+                click(placed == .zero)
+                state.updateSelection { $0.offset = placed }
             }.onEnded { _ in start = nil; snapped = false })
             // With Move, a tap (not a drag) on a shape inside the box picks just that shape.
             .onTapGesture { p in

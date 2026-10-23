@@ -178,6 +178,10 @@ The bar under the canvas is the Pen's: how many nodes you have, **Corner** or **
 
 Tap Smudge again for the mode, the **strength** and the **tip** (soft, or the chosen brush's). The size is the bar's, and pressing harder with the Pencil works the paint more. Whatever Smudge goes over is no longer a stroke Move remembers: it stays as pixels.
 
+## Grid
+
+The **grid** button at the top right makes moves go in steps: what you move with Move, Transform or Paste sits down on the grid, its top-left corner on a line, every 1, 2, 4, 8, 16 or 32 pixels. A 16 px block lands right on a 16 px tile. **Show the grid** draws its lines faintly over the canvas. Moves still click back to where they started. It's saved with the project.
+
 ## Symmetry
 
 The **symmetry** button at the top right paints with a mirror: **Left–right**, **Top–bottom** or **Four ways**. The brush, eraser and smudge paint again in the mirror as you go; fill, shapes and the Pen don't.

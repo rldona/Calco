@@ -119,4 +119,19 @@ final class ArrangeFlipSymmetryEditorTests: XCTestCase {
         let back = try JSONDecoder().decode(Project.self, from: JSONEncoder().encode(state.project))
         XCTAssertEqual(back.symmetry?.mode, .both, "saved with the project")
     }
+
+    func testMovesSitDownOnTheGrid() throws {
+        let state = try makeState()
+        try line(state, from: SIMD2(103, 101), to: SIMD2(140, 101), color: SIMD3(0, 0, 0))
+        state.tool = .move
+        let sel = try XCTUnwrap(state.selection)
+        XCTAssertEqual(state.movedOffset(CGVector(dx: 30, dy: 5), home: 0), CGVector(dx: 30, dy: 5), "off: as dragged")
+        state.setGrid(GridSnap(step: 16, visible: true))
+        let o = state.movedOffset(CGVector(dx: 30, dy: 5), home: 0)
+        XCTAssertEqual((sel.bounds.minX + o.dx).truncatingRemainder(dividingBy: 16), 0, accuracy: 0.001)
+        XCTAssertEqual((sel.bounds.minY + o.dy).truncatingRemainder(dividingBy: 16), 0, accuracy: 0.001)
+        XCTAssertEqual(state.movedOffset(CGVector(dx: 2, dy: 1), home: 4), .zero, "still clicks home")
+        let back = try JSONDecoder().decode(Project.self, from: JSONEncoder().encode(state.project))
+        XCTAssertEqual(back.grid?.step, 16, "saved with the project")
+    }
 }

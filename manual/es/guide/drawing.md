@@ -178,6 +178,10 @@ El **Dedo** trabaja la pintura que ya hay en la capa:
 
 Toca otra vez el Dedo para elegir el modo, la **fuerza** y la **punta** (suave, o la del pincel elegido). El tamaño es el de la barra, y cuanto más aprietas con el Pencil, más trabaja la pintura. Lo que pasa por el Dedo deja de ser un trazo que Mover recuerda: queda como píxeles.
 
+## Cuadrícula
+
+El botón de **cuadrícula**, arriba a la derecha, hace que los movimientos vayan a pasos: lo que mueves con Mover, Transformar o Pegar se asienta en la cuadrícula, con su esquina superior izquierda en una línea, cada 1, 2, 4, 8, 16 o 32 píxeles. Un bloque de 16 px cae justo en una casilla de 16 px. **Ver la cuadrícula** dibuja sus líneas, tenues, sobre el lienzo. Los movimientos siguen enganchando en su sitio de partida. Se guarda con el proyecto.
+
 ## Simetría
 
 El botón de **simetría**, arriba a la derecha, pinta con un espejo: **Izq.–der.**, **Arriba–abajo** o **Cuatro**. El pincel, la goma y el dedo pintan también en el espejo mientras dibujas; el relleno, las formas y la Pluma no.

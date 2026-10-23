@@ -8,6 +8,7 @@ A release is made by pushing a tag `vX.Y.Z`: the release workflow tests and buil
 
 ### Added
 
+- **Grid** (top right): moves go in steps of 1–32 px, the box's top-left corner on a grid line, with the grid shown faintly if you like. Moves still click home. Saved with the project.
 - **Compact timeline** (the dots button above the layer names): thin rows with a dot per drawing and a line through its held frames, many frames in view. Pixel-art projects show it compact, the rest with previews.
 - **Symmetry** (top right): paint with a mirror, left–right, top–bottom or four ways. The brush, eraser and smudge paint again in the mirror; drag an axis by its dot. Axes sit on pixel edges or centres, so pixel art mirrors exactly. Saved with the project.
 - **Flip** a layer (long-press its name): this drawing horizontally or vertically, or every drawing of the layer; strokes stay sharp and editable.

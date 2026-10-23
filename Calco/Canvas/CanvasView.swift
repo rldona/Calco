@@ -231,7 +231,8 @@ final class CanvasUIView: UIView {
         case .moveDrag:
             guard mode == .moveDrag, let start = moveStart else { break }
             let p = canvasPoint(t, in: state)
-            state.updateSelection { $0.offset = CGVector(dx: p.x - start.canvas.x, dy: p.y - start.canvas.y) }
+            let placed = state.movedOffset(CGVector(dx: p.x - start.canvas.x, dy: p.y - start.canvas.y), home: 0)
+            state.updateSelection { $0.offset = placed }
         }
     }
 

@@ -2671,6 +2671,30 @@ final class EditorState {
         [CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.maxX, y: r.minY), CGPoint(x: r.maxX, y: r.maxY), CGPoint(x: r.minX, y: r.maxY)]
     }
 
+    // MARK: - Grid
+
+    /// Moving on a grid on (with its step) or off.
+    func setGrid(_ grid: GridSnap?) {
+        guard grid != project.grid else { return }
+        project.grid = grid
+        isDirty = true
+    }
+
+    /// Where a drag puts what's floating: back home within `home` canvas pixels of where it
+    /// started (so it can always return), otherwise on the grid when it's on, otherwise as dragged.
+    func movedOffset(_ offset: CGVector, home: CGFloat) -> CGVector {
+        if let back = FloatingSelection.snappedOffset(offset, tolerance: home) { return back }
+        guard let grid = project.grid, let sel = selection else { return offset }
+        // The box as it sits with no offset: what's lifted, scaled and turned, before moving.
+        var still = sel
+        still.offset = .zero
+        let b = sel.bounds
+        let corners = [CGPoint(x: b.minX, y: b.minY), CGPoint(x: b.maxX, y: b.minY),
+                       CGPoint(x: b.maxX, y: b.maxY), CGPoint(x: b.minX, y: b.maxY)].map { $0.applying(still.transform) }
+        let box = CGRect(x: corners.map(\.x).min()!, y: corners.map(\.y).min()!, width: 0, height: 0)
+        return grid.snapped(offset, box: box)
+    }
+
     // MARK: - Symmetry
 
     /// Symmetry on (vertical, horizontal or both axes) or off. Turned on, the axes go through

@@ -557,4 +557,10 @@ ES = {
     "By colour": "Por color",
     "Takes everything drawn that touches the tap, whatever its colour.": "Coge todo lo dibujado que se toca con lo que tocas, sea del color que sea.",
     "Takes the patch of the colour you tap.": "Coge la mancha del color que tocas.",
+    "Grid": "Cuadrícula",
+    "Grid: move things in steps": "Cuadrícula: mover a pasos",
+    "Move on a grid": "Mover en cuadrícula",
+    "Show the grid": "Ver la cuadrícula",
+    "Step": "Paso",
+    "What you move with Move, Transform or Paste sits down on the grid, its top-left corner on a line, in steps of this many pixels. It still clicks back to where it started.": "Lo que mueves con Mover, Transformar o Pegar se asienta en la cuadrícula, con su esquina superior izquierda en una línea, a pasos de estos píxeles. Sigue enganchando en su sitio de partida.",
 }

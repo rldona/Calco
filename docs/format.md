@@ -81,6 +81,7 @@ Hero.calco/
 | `clips[].frames[].held` | Optional (format 2). Layer ids that keep showing the previous frame's drawing here, like a hold on an exposure sheet; those layers have no PNG in this frame's folder. Ignored on a clip's first frame. |
 | `clips[].frames[].links` | Optional (format 3). Layer id → frame id: that layer shows the other frame's drawing here, linked, as in a cycle (editing one edits all). No PNG in this frame's folder for those layers. A link to a frame that doesn't exist shows nothing. |
 | `references` | Optional guide images drawn under everything, never exported. |
+| `grid` | Optional, absent when off. Moving in steps: `{ "step", "visible" }`, the step in canvas pixels. Only the editor uses it. |
 | `symmetry` | Optional, absent when off. Drawing with a mirror: `{ "mode": "vertical" \| "horizontal" \| "both", "x", "y" }`, the axes in canvas pixels (on a half pixel). Only the editor uses it. |
 | `palette` | Optional, absent when empty. The project's named colours, in order: `[{ "id", "name", "color": "#RRGGBB" }]`. Only the editor uses it; drawings stay plain pixels. |
 | `pixelArt` | Optional, default `false`. When `true` the editor draws, erases, fills and moves selections with hard edges (no antialiasing). Doesn't change how the file is read. |

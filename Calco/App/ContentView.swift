@@ -106,6 +106,7 @@ struct ContentView: View {
             .overlay {
                 if state.showPivot { PivotOverlay(state: state).ignoresSafeArea() }
             }
+            .overlay { GridOverlay(state: state).ignoresSafeArea() }
             .overlay { SymmetryOverlay(state: state).ignoresSafeArea() }
             .overlay { SelectionOverlay(state: state).ignoresSafeArea() }
             // Above the selection, so the arc's handle can be grabbed; nothing else catches touches.
@@ -169,6 +170,7 @@ struct TopBar: View {
     let latencyMs: Double
     @AppStorage("showLatency") private var showLatency = false
     @State private var editingSymmetry = false
+    @State private var editingGrid = false
 
     var body: some View {
         HStack(spacing: 16) {
@@ -180,6 +182,13 @@ struct TopBar: View {
                 }
                 .help("Fit canvas")
             }
+            Button { editingGrid = true } label: {
+                Image(systemName: "square.grid.3x3.topleft.filled")
+                    .foregroundStyle(state.project.grid != nil ? Theme.accent : Theme.textDim)
+            }
+            .help("Grid: move things in steps")
+            .accessibilityLabel("Grid")
+            .popover(isPresented: $editingGrid) { GridPanel(state: state) }
             Button { editingSymmetry = true } label: {
                 Image(systemName: state.project.symmetry?.mode == .horizontal ? "square.split.1x2"
                                   : state.project.symmetry?.mode == .both ? "square.grid.2x2" : "square.split.2x1")
