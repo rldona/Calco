@@ -43,6 +43,8 @@ A release is made by pushing a tag `vX.Y.Z`: the release workflow tests and buil
 
 ### Fixed
 
+- Zoomed in, a drawing shows smooth instead of in blocky pixels; pixel-art projects stay crisp.
+- A side handle stretches from the opposite side, which stays put, instead of both sides at once around the centre.
 - The selection's marching ants, the lasso and the handles over the canvas no longer sit a little off the drawing (more so near its edges): they now share the canvas's full-screen space.
 - **Pixel art**: the brush is a square block at every size (it was round, a "+" at small sizes), and the Pencil's pressure and tilt no longer change its size.
 - A path opened with Node no longer vanishes from the canvas when you tap away to finish it.

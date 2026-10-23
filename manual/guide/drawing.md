@@ -93,7 +93,7 @@ With Select, the bar over it has **Transform**, **Fill** (the current colour), *
 ![A selection being transformed](/crops/en/lasso-selection.jpg)
 
 - **Drag inside** to move it.
-- **Corner handle**: scale. **Side handles**: stretch it wider or taller, for squash and stretch. **Round handle**: rotate. **Centre dot**: the point it scales, stretches and rotates around; drag it to move it (to the feet, say, so a squash keeps them on the ground).
+- **Corner handle**: scale. **Side handles**: stretch it wider or taller from the opposite side, which stays put, for squash and stretch. **Round handle**: rotate. **Centre dot**: the point it scales, stretches and rotates around; drag it to move it (to the feet, say, so a squash keeps them on the ground).
 - While you scale or stretch, a chip shows the width and height as a percentage. Each one **clicks** back to 100 %, or to the other's proportions, with a light haptic tap.
 - **Uniform | Free**, under the canvas, is what the corner does: keep the proportions, or stretch width and height apart.
 - The bar above it: **Copy**, **Cut**, **Delete**, **Flip horizontally**, **Cancel** (✕, Esc) and **Apply** (✓, Return). Tapping outside also applies. Applied, the selection goes where the drawing went.

@@ -350,14 +350,15 @@ extension CanvasUIView: MTKViewDelegate {
             guard let state else { return }
             // Whatever this frame reads from the editor is watched: the next change to any of it
             // (the playhead, a layer, the zoom, an edit…) asks for another frame. Nothing else does.
-            let (layers, grid, target) = withObservationTracking {
+            let (layers, grid, target, smooth) = withObservationTracking {
                 _ = state.canvasVersion
-                return (state.visibleLayers(), state.workspaceGrid, state.canvasTransform)
+                return (state.visibleLayers(), state.workspaceGrid, state.canvasTransform, !state.project.pixelArt)
             } onChange: { [weak self] in
                 DispatchQueue.main.async { self?.redraw() }
             }
             guard let drawable = view.currentDrawable else { return }
             state.renderer.showsWorkspaceGrid = grid
+            state.renderer.smoothMagnification = smooth
             var transform = target
             transform.insets = insets(toward: transform.insets)
             state.renderer.present(layers, to: drawable, viewSize: view.drawableSize,

@@ -100,6 +100,8 @@ final class CanvasRenderer {
     private let workspacePipeline: MTLRenderPipelineState
     /// The grid behind the canvas (Preferences).
     var showsWorkspaceGrid = true
+    /// On screen, magnified drawings are shown smooth; pixel art (false) stays crisp.
+    var smoothMagnification = false
     private let thumbCompositePipeline: MTLRenderPipelineState
     private let thumbCheckerPipeline: MTLRenderPipelineState
 
@@ -453,7 +455,7 @@ final class CanvasRenderer {
         enc.setFragmentBytes(&w, length: MemoryLayout<CompositeUniforms>.stride, index: 0)
         enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
         encodeComposite(enc, layers: layers, rect: rect,
-                        checker: screenCheckerPipeline, composite: screenCompositePipeline)
+                        checker: screenCheckerPipeline, composite: screenCompositePipeline, smooth: smoothMagnification)
         enc.endEncoding()
         cmd.present(drawable)
         cmd.commit()
@@ -601,8 +603,9 @@ final class CanvasRenderer {
     }
 
     private func encodeComposite(_ enc: MTLRenderCommandEncoder, layers: [CompositeLayer], rect: Quad,
-                                 checker: MTLRenderPipelineState?, composite: MTLRenderPipelineState) {
-        var u = CompositeUniforms(origin: rect.origin, axisX: rect.axisX, axisY: rect.axisY, tint: .zero, opacity: 1, tintAmount: 0,
+                                 checker: MTLRenderPipelineState?, composite: MTLRenderPipelineState, smooth: Bool = false) {
+        var u = CompositeUniforms(origin: rect.origin, axisX: rect.axisX, axisY: rect.axisY,
+                                  pad: SIMD2(smooth ? 1 : 0, 0), tint: .zero, opacity: 1, tintAmount: 0,
                                   canvasSize: SIMD2<Float>(Float(canvasSize.x), Float(canvasSize.y)))
         if let checker {
             enc.setRenderPipelineState(checker)

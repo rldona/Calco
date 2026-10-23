@@ -123,8 +123,13 @@ struct SelectionOverlay: View {
                         let s = begin(sel)
                         sizing = true
                         let toLocal = s.transform.concatenating(toView).inverted()
+                        // The opposite side stays put: only the side you pull moves.
+                        let b = s.bounds
+                        let opposite = [CGPoint(x: b.minX, y: b.midY), CGPoint(x: b.maxX, y: b.midY),
+                                        CGPoint(x: b.midX, y: b.minY), CGPoint(x: b.midX, y: b.maxY)][i]
                         let snap = stretch(s, horizontal: sides[i].horizontal,
-                                           from: g.startLocation.applying(toLocal), to: g.location.applying(toLocal))
+                                           from: g.startLocation.applying(toLocal), to: g.location.applying(toLocal),
+                                           pivot: opposite)
                         click(snap)
                     }.onEnded { _ in start = nil; snapped = false; sizing = false })
                     .accessibilityLabel(sides[i].horizontal ? "Stretch width" : "Stretch height")
@@ -212,9 +217,10 @@ struct SelectionOverlay: View {
     /// into place.
     @discardableResult
     private func stretch(_ s: FloatingSelection, horizontal: Bool, from a: CGPoint, to c: CGPoint,
-                         keepingOther: Bool = false) -> Bool {
-        let d0 = horizontal ? a.x - s.anchor.x : a.y - s.anchor.y
-        let d1 = horizontal ? c.x - s.anchor.x : c.y - s.anchor.y
+                         keepingOther: Bool = false, pivot: CGPoint? = nil) -> Bool {
+        let p = pivot ?? s.anchor
+        let d0 = horizontal ? a.x - p.x : a.y - p.y
+        let d1 = horizontal ? c.x - p.x : c.y - p.y
         guard abs(d0) > 1 else { return false }
         // Past the anchor it would turn inside out: it stops thin instead (Flip is in the bar).
         let ratio = max(d1 / d0, 0.02)
@@ -225,6 +231,13 @@ struct SelectionOverlay: View {
         let snap = FloatingSelection.snappedStretch(value, scale: s.scale, other: other)
         state.updateSelection {
             if horizontal { $0.stretch.width = snap ?? value } else { $0.stretch.height = snap ?? value }
+            // Stretched around the anchor; slid back so `pivot` lands where it was.
+            if let pivot {
+                $0.offset = s.offset                // from the start of the drag, not the last step
+                let was = pivot.applying(s.transform), now = pivot.applying($0.transform)
+                $0.offset.dx += was.x - now.x
+                $0.offset.dy += was.y - now.y
+            }
         }
         return snap != nil
     }

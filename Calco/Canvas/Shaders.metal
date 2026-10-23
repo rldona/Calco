@@ -107,7 +107,7 @@ struct CompositeUniforms {
     float2 origin;      // NDC of the canvas's bottom-left corner
     float2 axisX;       // NDC from bottom-left to bottom-right
     float2 axisY;       // NDC from bottom-left to top-left
-    float2 pad;
+    float2 pad;         // pad.x > 0.5: magnify smoothly (drawing, not pixel art)
     float4 tint;        // rgb used when tintAmount > 0
     float  opacity;
     float  tintAmount;  // 0 = original colors, 1 = fully tinted (onion skin)
@@ -143,8 +143,10 @@ fragment float4 composite_fragment(CompositeVertexOut in [[stage_in]],
     // Magnified (the usual case on screen) shows the sprite's real pixels, like any sprite
     // editor: blending them on the way up is what made strokes look blurry. Shrunk (thumbnails,
     // zoomed out) still blends, which is the better-looking way down.
+    // Pixel art keeps every pixel crisp; a drawing, blown up, reads better smooth.
     constexpr sampler s(mag_filter::nearest, min_filter::linear);
-    float4 c = layer.sample(s, in.uv);          // premultiplied
+    constexpr sampler smooth(mag_filter::linear, min_filter::linear);
+    float4 c = u.pad.x > 0.5 ? layer.sample(smooth, in.uv) : layer.sample(s, in.uv);   // premultiplied
     float3 tinted = u.tint.rgb * c.a;           // tint keeps coverage
     c.rgb = mix(c.rgb, tinted, u.tintAmount);
     if (u.useMask > 0.5) c *= mask.sample(s, in.uv).a;
