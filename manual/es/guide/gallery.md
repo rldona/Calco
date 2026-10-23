@@ -28,7 +28,7 @@ Toca **Nuevo** arriba, o la tarjeta **Nuevo proyecto**, para elegir cómo empiez
 
 ![Nuevo proyecto](/crops/es/new-project.jpg)
 
-- **Tamaño del sprite**: el lienzo en píxeles, de 64 a 1024, u **Otro**. La caja de la derecha lo compara con 1024.
+- **Tamaño del sprite**: el lienzo en píxeles, de 64 a 1024, u **Otro** para escribir el ancho y el alto (de 16 a 2048). La caja de la derecha lo compara con 1024.
 - **Pixel art**: bordes duros, cada píxel pintado o vacío del todo. Puedes cambiarlo después en las opciones del pincel.
 - **Velocidad**: 8 fps para un movimiento retro con pocas poses, 12 para la mayoría de juegos, 24 para un movimiento muy fluido.
 - **Empezar con estos clips**: marca las animaciones que vayas a necesitar o escribe las tuyas (agacharse, esquivar…).

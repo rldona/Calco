@@ -131,7 +131,6 @@ ES = {
 "Frames %lld × %lld px.": "Fotogramas de %lld × %lld px.",
 "GIF": "GIF",
 "Godot SpriteFrames": "Godot SpriteFrames",
-"H": "Al",
 "Hard edges: every pixel fully on or off": "Bordes duros: cada píxel, pintado o vacío del todo",
 "Hide Onion Skin": "Ocultar papel cebolla",
 "Hold Longer": "Mantener más",
@@ -278,7 +277,6 @@ ES = {
 "Unlink (keep a copy)": "Desenlazar (quedarse una copia)",
 "Use project fps": "Usar los fps del proyecto",
 "Very smooth": "Muy fluido",
-"W": "An",
 "Zen": "Zen",
 "Zen Mode": "Modo Zen",
 "Zen mode: hide everything but the canvas": "Modo Zen: oculta todo menos el lienzo",
@@ -507,4 +505,6 @@ ES = {
     "Rename folder": "Renombrar carpeta",
     "Search in this folder": "Buscar en esta carpeta",
     "This folder is empty. Drag projects here from All projects, or make a new one.": "Esta carpeta está vacía. Arrastra proyectos aquí desde Todos los proyectos, o crea uno nuevo.",
+    "Height": "Alto",
+    "Width": "Ancho",
 }

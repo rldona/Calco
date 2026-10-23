@@ -28,7 +28,7 @@ Tap **New** at the top, or the **New project** card, to choose how the character
 
 ![New project](/crops/en/new-project.jpg)
 
-- **Sprite size**: the canvas in pixels, from 64 to 1024, or **Custom**. The box on the right compares it with 1024.
+- **Sprite size**: the canvas in pixels, from 64 to 1024, or **Custom** to type the width and height (16 to 2048). The box on the right compares it with 1024.
 - **Pixel art**: hard edges, every pixel fully on or off. You can change it later in the brush options.
 - **Speed**: 8 fps for retro motion with few poses, 12 for most games, 24 for very smooth motion.
 - **Start with these clips**: pick the animations you'll need, or type your own (crouch, dash…).

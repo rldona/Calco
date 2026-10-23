@@ -40,6 +40,7 @@ A release is made by pushing a tag `vX.Y.Z`: the release workflow tests and buil
 
 ### Changed
 
+- A custom sprite size is typed: width and height are number fields instead of small − / + buttons.
 - A tap outside puts down what Move holds, and finishes the path being edited with Node: no need to reach for ✓.
 - **Fill** has a paint-bucket icon instead of a drop, so it's easy to find.
 - **Animation rail** on the right: a big **New**, Duplicate, Hold, Delete and **More** (label, split, repeat, frame actions), the onion skin, and **Layer | All**, which replaces Sync layers. In portrait it sits above the timeline.

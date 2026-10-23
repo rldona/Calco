@@ -230,9 +230,9 @@
 "Guide" = "Guía";
 "Guide layer, not exported" = "Capa guía, no se exporta";
 "Guide only (not exported)" = "Solo guía (no se exporta)";
-"H" = "Al";
 "Hard edges: every pixel fully on or off" = "Bordes duros: cada píxel, pintado o vacío del todo";
 "Hard fill, no pressure" = "Relleno duro, sin presión";
+"Height" = "Alto";
 "Hide Onion Skin" = "Ocultar papel cebolla";
 "Hold" = "Mantener";
 "Hold Longer" = "Mantener más";
@@ -490,9 +490,9 @@
 "Use project fps" = "Usar los fps del proyecto";
 "Very smooth" = "Muy fluido";
 "Very soft; builds up as you go over" = "Muy suave; se acumula al repasar";
-"W" = "An";
 "W %lld%% · H %lld%%" = "An %lld%% · Al %lld%%";
 "Whole" = "Ajustar";
+"Width" = "Ancho";
 "Zen" = "Zen";
 "Zen Mode" = "Modo Zen";
 "Zen mode: hide everything but the canvas" = "Modo Zen: oculta todo menos el lienzo";

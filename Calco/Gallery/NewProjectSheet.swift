@@ -35,12 +35,14 @@ struct NewProjectSheet: View {
                                 }
                                 if customSize {
                                     HStack {
-                                        CompactStepper(title: "W", value: $config.width, range: Config.sideRange)
-                                        CompactStepper(title: "H", value: $config.height, range: Config.sideRange)
+                                        PixelField(title: "Width", value: $config.width, range: Config.sideRange)
+                                        PixelField(title: "Height", value: $config.height, range: Config.sideRange)
                                     }
                                 }
-                                Text("\(config.width) × \(config.height) px")
-                                    .font(.caption).foregroundStyle(Theme.textFaint)
+                                if !customSize {
+                                    Text("\(config.width) × \(config.height) px")
+                                        .font(.caption).foregroundStyle(Theme.textFaint)
+                                }
                                 Toggle(isOn: $config.pixelArt) {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text("Pixel art").font(.subheadline)
@@ -175,6 +177,44 @@ private struct FlowChips: View {
                 Chip(title: Text(verbatim: isOn(item) ? "✓ \(item)" : item), on: isOn(item)) { toggle(item) }
             }
         }
+    }
+}
+
+/// A side of a custom size, typed on the number pad. Tapping it clears it, so the new number is
+/// typed straight away (the old one stays as the placeholder, and comes back if nothing is
+/// typed). The value follows the typing, held inside `range`; the field shows it once you leave.
+private struct PixelField: View {
+    let title: LocalizedStringKey
+    @Binding var value: Int
+    let range: ClosedRange<Int>
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.caption).foregroundStyle(Theme.textFaint)
+            HStack(spacing: 4) {
+                TextField(text: $text) { Text(verbatim: "\(value)") }
+                    .keyboardType(.numberPad)
+                    .focused($focused)
+                    .font(.system(.title3, design: .monospaced).weight(.medium))
+                    .foregroundStyle(Theme.text)
+                Text(verbatim: "px").font(.callout).foregroundStyle(Theme.textFaint)
+            }
+            .padding(.horizontal, 12).frame(height: 44)
+            .background(Theme.background, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(focused ? Theme.accent : Theme.hairline))
+            .contentShape(Rectangle())
+            .onTapGesture { focused = true }
+        }
+        .onAppear { text = "\(value)" }
+        .onChange(of: text) { _, new in
+            let digits = String(new.filter(\.isNumber).prefix(4))
+            if digits != new { text = digits; return }
+            if let n = Int(digits) { value = min(max(n, range.lowerBound), range.upperBound) }
+        }
+        .onChange(of: focused) { _, on in text = on ? "" : "\(value)" }
+        .onChange(of: value) { _, v in if !focused { text = "\(v)" } }
     }
 }
 
