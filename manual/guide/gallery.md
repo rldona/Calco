@@ -47,9 +47,20 @@ The folder icon at the top left of the editor opens the file menu.
 | Preferences… | App settings such as the language (⌘,). |
 | New project… / Open from Files… | Same as in the gallery (⌘N / ⌘O). |
 | Save / Save As… | Save now, or save a copy with a new name (⌘S / ⇧⌘S). |
+| Canvas size… | Make the canvas bigger or smaller without scaling the drawing. See below. |
 | Export… | Export with a profile (⌘E). See [Export](./export). |
 | Export GIF | A quick GIF of the current clip (⌘G). |
 
 ::: info Where files go
 Projects are `.calco` packages in **On My iPad › Calco**. Exports go to **On My iPad › Calco › Exports**.
 :::
+
+### Canvas size
+
+Halfway through, the sprite needs more room (a sword swing, a jump)? **Canvas size…** adds space around the drawing, or cuts it, without scaling anything.
+
+- Type the **width** and **height**, or tap **+25 %**, **+50 %**, **× 2**, or **Fit to drawing** (the smallest canvas that holds every frame).
+- **Where the drawing stays**: nine squares. With the left one, the new room goes on the right; with the bottom one, on top, so the feet stay put.
+- The preview shows the new canvas (dashed) with the drawing in it.
+
+It changes every clip, frame and layer at once, so the sprite sheet stays even. Strokes and shapes stay sharp and editable, and each clip's **pivot** stays on the same pixel, so the character doesn't jump in the game. Made smaller, what falls outside is cut; **Undo** brings it all back.

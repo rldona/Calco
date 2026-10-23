@@ -10,9 +10,13 @@ On the left of each row:
 
 - **Eye**: show or hide the layer. Hidden layers aren't exported (Calco warns you before exporting).
 - **Name**: tap to draw on that layer. It's highlighted in orange.
-- **Lock**: protects the layer from the pencil, eraser, fill and lasso.
+- **Lock**: protects the layer from the pencil, eraser, fill and selections.
 
-Long-press the name for **Rename…**, **Opacity…**, **Mask to layer below**, **Guide only (not exported)**, **Move up**, **Move down** and **Delete layer…**.
+Long-press the name for **Rename…**, **Opacity…**, **Mask to layer below**, **Guide only (not exported)**, **Flip**, **Move up**, **Move down** and **Delete layer…**.
+
+**Flip** mirrors the layer's drawing at the playhead, horizontally or vertically (a head turned to look the other way), or every drawing of the layer in the clip at once. Strokes stay strokes, sharp and editable; one undo step.
+
+The dots button above the layer names makes the timeline **compact**: thin rows with a dot for each drawing (hollow while it's blank) and a line through the frames that hold it, so many layers and frames fit at once. Tap it again for the previews. Pixel-art projects show it compact, the rest with previews.
 
 ## The layers panel
 

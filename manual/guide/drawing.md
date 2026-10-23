@@ -10,7 +10,7 @@ From top to bottom:
 - **Eraser** (E)
 - **Fill** (G): the paint bucket.
 - **Eyedropper** (I)
-- **Lasso** (L)
+- **Select** (L): freehand, rectangle or magic wand.
 - **Move** (V)
 - **Shapes** (U)
 - **Pen** (P)
@@ -57,7 +57,7 @@ The **Settings** tab has the options for every brush:
 - **Smoothing**: steadies the line. Higher is calmer, with a little more lag.
 - **Pencil pressure changes size**: turn it off for an even line.
 - **Only Apple Pencil draws**: fingers never draw; they still zoom, pan and undo. See [Apple Pencil and gestures](./pencil).
-- **Pixel art**: hard edges for this project. The brush size becomes a width in pixels: size 1 paints exactly one pixel.
+- **Pixel art**: hard edges for this project. The brush size becomes a width in pixels: size 1 paints exactly one pixel, 2 a 2×2 square, 3 a 3×3. Pressure and tilt don't change it.
 
 ## Eraser
 
@@ -76,27 +76,33 @@ Tap inside an outline to fill it with the current colour. The outline is everyth
 
 Tap anywhere on the canvas to take that colour. Calco then switches back to the tool you had.
 
-## Lasso
+## Select
 
-Draw around something to lift it into a selection.
+Mark part of the drawing, then decide what to do with it. Tap the tool again for its options:
 
-![A lasso selection](/crops/en/lasso-selection.jpg)
+- **Shape**: **Freehand** (draw around it), **Rectangle** (drag a box) or **Wand** (tap a colour: it takes the patch of that colour, as it looks with every layer, and the neighbours as alike as the **tolerance** allows).
+- **When you mark**: **Replace** the selection, **Add** to it, or **Subtract** from it. A tap in Replace lets the selection go.
+- **Select all** (⌘A), **Invert selection** (⇧⌘I) and **Paste**.
+
+In **pixel art**, a lasso, a rectangle or Select all keeps only the pixels drawn inside it, so the selection hugs the sprite pixel for pixel; while you draw it, the pixels it will take show outlined. What's selected shows with **marching ants**, and stays while you change tools, frames or layers. Meanwhile the **brush, eraser, fill, shapes and smudge only reach inside it**: shade a cheek without going over the line, or colour one part of a sprite.
+
+With Select, the bar over it has **Transform**, **Fill** (the current colour), **Clear**, **Copy**, **Cut**, **Invert**, **Paste** (once something is copied) and **Deselect** (✕, ⌘D, Esc). With nothing selected and something copied, a **Paste** button waits under the canvas.
+
+**Transform** lifts what's selected to move, scale, stretch or rotate it, on every visible layer at once, so the lines and their colour move together (locked layers and guides stay put; with nothing drawn inside, a note says so):
+
+![A selection being transformed](/crops/en/lasso-selection.jpg)
 
 - **Drag inside** to move it.
 - **Corner handle**: scale. **Side handles**: stretch it wider or taller, for squash and stretch. **Round handle**: rotate. **Centre dot**: the point it scales, stretches and rotates around; drag it to move it (to the feet, say, so a squash keeps them on the ground).
 - While you scale or stretch, a chip shows the width and height as a percentage. Each one **clicks** back to 100 %, or to the other's proportions, with a light haptic tap.
 - **Uniform | Free**, under the canvas, is what the corner does: keep the proportions, or stretch width and height apart.
-- The bar above it: **Copy**, **Cut**, **Delete**, **Flip horizontally**, **Cancel** (✕, Esc) and **Apply** (✓, Return). Tapping outside also applies.
-
-Tap the lasso again for **Select all** and **Paste**:
-
-![Lasso options](/crops/en/lasso-options.jpg)
+- The bar above it: **Copy**, **Cut**, **Delete**, **Flip horizontally**, **Cancel** (✕, Esc) and **Apply** (✓, Return). Tapping outside also applies. Applied, the selection goes where the drawing went.
 
 Paste lands where you copied, on whichever frame and layer you're on: handy to carry a pose to another drawing and adjust it.
 
 ## Move
 
-**Move** picks up the drawing on the current layer, at the playhead, to move, scale or rotate it, with the same handles as the lasso.
+**Move** picks up the drawing on the current layer, at the playhead, to move, scale or rotate it, with the same handles as Transform.
 
 ![Move: the whole drawing](/crops/en/move-all.jpg)
 
@@ -107,7 +113,7 @@ Paste lands where you copied, on whichever frame and layer you're on: handy to c
 
 ![Move: one stroke](/crops/en/move-stroke.jpg)
 
-Scaled, stretched or turned, a stroke **stays sharp**: Calco paints it again where it lands, with its brush, instead of resampling its pixels. Strokes that were erased, filled or lassoed, and imported images, are resampled.
+Scaled, stretched or turned, a stroke **stays sharp**: Calco paints it again where it lands, with its brush, instead of resampling its pixels. Strokes that were erased, filled or transformed with Select, and imported images, are resampled.
 
 Where several strokes cross, **tap the same spot again** to go to the one underneath; the hint under the canvas says which one you have. **Add strokes** makes each tap add a stroke to what you're moving, or take it out, to move a few together.
 
@@ -116,8 +122,10 @@ Where several strokes cross, **tap the same spot again** to go to the one undern
 Moving, rotating and scaling **click back** into the starting place, upright (or a quarter turn) and the original size, with a light tap you can feel; the pivot clicks back to the middle. So you can always return to where you began. Tap outside, change tool or change frame to drop it; the whole move is one undo step.
 
 - Moved strokes stay strokes: you can pick them again later.
-- The **eraser** trims the strokes it crosses. A **fill**, the **lasso** or a paste merge the drawing, which then splits into its separate shapes.
+- The **eraser** trims the strokes it crosses. A **fill**, **Select** or a paste merge the drawing, which then splits into its separate shapes.
 - On a **locked** layer, such as an [imported image](./layers#reference-images), Move offers **Unlock and move**, and locks it again when you're done.
+
+**In front or behind**: with strokes, shapes or paths picked, the bar over them has **Bring to front**, **Bring forward**, **Send backward** and **Send to back**: their place among the drawing's other pieces, on the same layer. It shows at once, and lands (one undo step) with ✓.
 
 ## Shapes
 
@@ -170,6 +178,14 @@ The bar under the canvas is the Pen's: how many nodes you have, **Corner** or **
 
 Tap Smudge again for the mode, the **strength** and the **tip** (soft, or the chosen brush's). The size is the bar's, and pressing harder with the Pencil works the paint more. Whatever Smudge goes over is no longer a stroke Move remembers: it stays as pixels.
 
+## Symmetry
+
+The **symmetry** button at the top right paints with a mirror: **Left–right**, **Top–bottom** or **Four ways**. The brush, eraser and smudge paint again in the mirror as you go; fill, shapes and the Pen don't.
+
+- The axes show dashed over the canvas. Drag the **dot** at the end of one to move it; it clicks back to the middle, and a double tap centres both.
+- Axes sit on a pixel edge or a pixel's centre, so in **pixel art** the mirror is exact, pixel for pixel.
+- It stays on, with its axes, in the project: a symmetric sprite stays symmetric.
+
 ## Project palette
 
 The colour panel starts with the project's own colours, named: the character's line, body, face… Tap one to paint with it.
@@ -181,7 +197,7 @@ Good for a palette swap: duplicate a project or a clip, change the enemy's red t
 
 ## Pixel art
 
-With **Pixel art** on, every tool works on whole pixels: no soft edges on the brush, eraser, fill or lasso, and moved selections stay crisp. Turn it on when creating the project or in the brush options.
+With **Pixel art** on, every tool works on whole pixels: no soft edges on the brush, eraser, fill or selections, and moved selections stay crisp. Turn it on when creating the project or in the brush options.
 
 ## View
 

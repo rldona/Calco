@@ -25,7 +25,8 @@ struct StampUniforms {
 // or (pixel art) all or nothing by the pixel centre, so a one-pixel brush paints exactly one pixel.
 static float stampCoverage(float2 local, float hard, float hardness) {
     float d = length(local);
-    if (hard > 0.5) return d <= 1.0 ? 1.0 : 0.0;
+    // Pixel art: a square block of whole pixels (a round one comes out as a "+" when small).
+    if (hard > 0.5) return max(abs(local.x), abs(local.y)) <= 1.0 ? 1.0 : 0.0;
     float edge = fwidth(d) * 1.5;
     float inner = clamp(hardness, 0.0, 1.0) * (1.0 - edge);
     return 1.0 - smoothstep(inner, 1.0, d);

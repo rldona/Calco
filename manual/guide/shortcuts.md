@@ -17,6 +17,8 @@ With a hardware keyboard, hold **⌘** to see every shortcut in iPadOS.
 | ⌘Z / ⇧⌘Z | Undo / Redo |
 | ⌘C ⌘X ⌘V | Copy, cut, paste |
 | ⌘A | Select all |
+| ⌘D | Deselect |
+| ⇧⌘I | Invert selection |
 
 ## Drawing
 
@@ -26,14 +28,14 @@ With a hardware keyboard, hold **⌘** to see every shortcut in iPadOS.
 | E | Eraser |
 | G | Fill |
 | I | Eyedropper |
-| L | Lasso |
+| L | Select |
 | V | Move |
 | U | Shapes |
 | P | Pen |
 | A | Node |
 | S | Smudge |
 | [ / ] | Smaller / bigger |
-| Return / Esc | Apply / cancel selection |
+| Return / Esc | Apply / cancel selection (Esc with nothing lifted: deselect) |
 | ⇧H | Flip selection |
 | ⇧⌘⌫ | Clear layer |
 

@@ -101,14 +101,17 @@ struct ContentView: View {
     private var canvas: some View {
         CanvasView(state: state, latencyMs: $latencyMs)
             .ignoresSafeArea()
+            // Drawn over the canvas in its own space: the whole screen, like the canvas, or what
+            // they draw would sit a little off it, more so the further from the middle.
             .overlay {
-                if state.showPivot { PivotOverlay(state: state) }
+                if state.showPivot { PivotOverlay(state: state).ignoresSafeArea() }
             }
-            .overlay { SelectionOverlay(state: state) }
+            .overlay { SymmetryOverlay(state: state).ignoresSafeArea() }
+            .overlay { SelectionOverlay(state: state).ignoresSafeArea() }
             // Above the selection, so the arc's handle can be grabbed; nothing else catches touches.
-            .overlay { TweenOverlay(state: state) }
-            .overlay { ShapeDraftOverlay(state: state) }
-            .overlay { PenOverlay(state: state) }
+            .overlay { TweenOverlay(state: state).ignoresSafeArea() }
+            .overlay { ShapeDraftOverlay(state: state).ignoresSafeArea() }
+            .overlay { PenOverlay(state: state).ignoresSafeArea() }
             .overlay(alignment: .bottom) {
                 if state.penEditing != nil {
                     PenBar(state: state)
@@ -125,6 +128,19 @@ struct ContentView: View {
                         .padding(.bottom, state.bottomInset + 6)
                 } else if state.tool == .move && state.hasSelection {
                     MoveStrokesHint(state: state)
+                        .padding(.bottom, state.bottomInset + 6)
+                } else if let notice = state.selectNotice {
+                    Label(notice, systemImage: "exclamationmark.circle")
+                        .font(.subheadline)
+                        .foregroundStyle(Theme.text)
+                        .padding(.horizontal, 14).padding(.vertical, 9)
+                        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 13))
+                        .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(Theme.hairline))
+                        .padding(.bottom, state.bottomInset + 6)
+                        .transition(.opacity)
+                } else if state.tool == .lasso && !state.hasSelection && state.selectionMask == nil
+                            && state.clipboard != nil && state.lassoPoints.isEmpty {
+                    PasteHint(state: state)
                         .padding(.bottom, state.bottomInset + 6)
                 } else if state.hasSelection {
                     ScaleModePicker()
@@ -148,11 +164,12 @@ struct ContentView: View {
     }
 }
 
-/// Document on the left; view toggles (fit, flip, Zen) on the right.
+/// Document on the left; symmetry and view toggles (fit, flip, Zen) on the right.
 struct TopBar: View {
     @Bindable var state: EditorState
     let latencyMs: Double
     @AppStorage("showLatency") private var showLatency = false
+    @State private var editingSymmetry = false
 
     var body: some View {
         HStack(spacing: 16) {
@@ -164,6 +181,14 @@ struct TopBar: View {
                 }
                 .help("Fit canvas")
             }
+            Button { editingSymmetry = true } label: {
+                Image(systemName: state.project.symmetry?.mode == .horizontal ? "square.split.1x2"
+                                  : state.project.symmetry?.mode == .both ? "square.grid.2x2" : "square.split.2x1")
+                    .foregroundStyle(state.project.symmetry != nil ? Theme.accent : Theme.textDim)
+            }
+            .help("Symmetry: paint with a mirror")
+            .accessibilityLabel("Symmetry")
+            .popover(isPresented: $editingSymmetry) { SymmetryPanel(state: state) }
             Button { state.canvasTransform.flipped.toggle() } label: {
                 Image(systemName: "arrow.left.and.right.righttriangle.left.righttriangle.right")
                     .foregroundStyle(state.viewFlipped ? Theme.accent : Theme.textDim)
@@ -218,6 +243,27 @@ struct MoveLockedHint: View {
 
 /// Under the canvas while Move holds something: which stroke of the ones under the finger it
 /// is, the switch to pick several, and how the corner scales.
+/// With Select and nothing marked, what was copied is one tap away.
+struct PasteHint: View {
+    @Bindable var state: EditorState
+
+    var body: some View {
+        Button { state.paste() } label: {
+            Label("Paste", systemImage: "doc.on.clipboard")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.onAccent)
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 10))
+                .fixedSize()
+        }
+        .buttonStyle(.plain)
+        .padding(4)
+        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 13))
+        .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(Theme.hairline))
+        .help("Floats what you copied where it was, on this frame and layer")
+    }
+}
+
 struct MoveStrokesHint: View {
     @Bindable var state: EditorState
 
@@ -274,7 +320,7 @@ struct ZenBar: View {
             RailButton(icon: "eraser", label: "Eraser", active: state.tool == .eraser, size: 34) { state.tool = .eraser }
             RailButton(icon: "FillBucket", label: "Fill", active: state.tool == .fill, size: 34) { state.tool = .fill }
             RailButton(icon: "eyedropper", label: "Eyedropper", active: state.tool == .eyedropper, size: 34) { state.tool = .eyedropper }
-            RailButton(icon: "lasso", label: "Lasso", active: state.tool == .lasso, size: 34) { state.tool = .lasso }
+            RailButton(icon: state.select.shape.icon, label: "Select", active: state.tool == .lasso, size: 34) { state.tool = .lasso }
             RailButton(icon: "arrow.up.and.down.and.arrow.left.and.right", label: "Move", active: state.tool == .move, size: 34) {
                 if state.tool == .move { state.liftForMove() } else { state.tool = .move }
             }
@@ -306,6 +352,7 @@ struct FileMenu: View {
     @State private var exportTitle = ""
     @State private var showingExport = false
     @State private var showingProfiles = false
+    @State private var showingCanvasSize = false
 
     var body: some View {
         Menu {
@@ -317,6 +364,9 @@ struct FileMenu: View {
             Button { state.save() } label: { Label("Save", systemImage: "square.and.arrow.down") }
             Button { state.request = .saveAs } label: {
                 Label("Save As…", systemImage: "square.and.arrow.down.on.square")
+            }
+            Button { showingCanvasSize = true } label: {
+                Label("Canvas size…", systemImage: "arrow.up.left.and.down.right.and.arrow.up.right.and.down.left")
             }
             Divider()
             Button { state.request = .export } label: {
@@ -369,6 +419,7 @@ struct FileMenu: View {
                 showingExport = true
             }
         }
+        .sheet(isPresented: $showingCanvasSize) { CanvasSizeSheet(state: state) }
         .sheet(isPresented: $showingExport) {
             ExportSheet(title: exportTitle, urls: exported, name: state.project.name)
         }

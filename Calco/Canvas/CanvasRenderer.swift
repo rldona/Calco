@@ -363,9 +363,10 @@ final class CanvasRenderer {
     }
 
     /// The layer as it was before the stroke (`base`, nil = blank) with the stroke so far on top,
-    /// at `opacity`, in front / behind / inside, or rubbed out of it with the eraser.
+    /// at `opacity`, in front / behind / inside, or rubbed out of it with the eraser. With a `mask`
+    /// (a selection), the stroke only reaches where the mask's alpha does.
     func compositeStroke(_ stroke: MTLTexture, base: MTLTexture?, into target: MTLTexture,
-                         opacity: Float, mode: PaintMode, erase: Bool) {
+                         opacity: Float, mode: PaintMode, erase: Bool, mask: MTLTexture? = nil) {
         guard let cmd = queue.makeCommandBuffer() else { return }
         if let base, let blit = cmd.makeBlitCommandEncoder() {
             blit.copy(from: base, to: target)
@@ -380,23 +381,34 @@ final class CanvasRenderer {
         let rect = Quad.fullScreen
         var u = CompositeUniforms(origin: rect.origin, axisX: rect.axisX, axisY: rect.axisY, tint: .zero,
                                   opacity: opacity, tintAmount: 0,
-                                  canvasSize: SIMD2<Float>(Float(canvasSize.x), Float(canvasSize.y)))
+                                  canvasSize: SIMD2<Float>(Float(canvasSize.x), Float(canvasSize.y)),
+                                  useMask: mask == nil ? 0 : 1)
         enc.setRenderPipelineState(erase ? strokeErasePipeline
                                    : mode == .behind ? strokeBehindPipeline
                                    : mode == .inside ? strokeInsidePipeline : strokeFrontPipeline)
         enc.setVertexBytes(&u, length: MemoryLayout<CompositeUniforms>.stride, index: 0)
         enc.setFragmentBytes(&u, length: MemoryLayout<CompositeUniforms>.stride, index: 0)
         enc.setFragmentTexture(stroke, index: 0)
-        enc.setFragmentTexture(stroke, index: 1)
+        enc.setFragmentTexture(mask ?? stroke, index: 1)
         enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
         enc.endEncoding()
         cmd.commit()
     }
 
-    /// A pixel-art stamp: centred on the pixel under it, and the brush size read as a width in
-    /// pixels (size 1 is one pixel, 3 a 3×3 block) instead of a radius.
+    /// A pixel-art stamp: a square block, the brush size read as its width in pixels (size 1 is
+    /// one pixel, 2 a 2×2 block, 3 a 3×3), sitting on whole pixels.
     static func snappedToPixel(_ s: Stamp) -> Stamp {
-        Stamp(position: s.position.rounded(.down) + 0.5, radius: max(0.5, s.radius / 2), alpha: 1)
+        Stamp(position: pixelPosition(s), radius: Float(pixelWidth(s)) / 2, alpha: 1)
+    }
+
+    /// The block's width in pixels for a stamp of this size.
+    static func pixelWidth(_ s: Stamp) -> Int { max(1, Int(s.radius.rounded())) }
+
+    /// Where a pixel-art stamp's centre goes: on the centre of the pixel under it for an odd width,
+    /// on the nearest pixel corner for an even one, so the block covers whole pixels either way.
+    /// The same again for a position already snapped.
+    static func pixelPosition(_ s: Stamp) -> SIMD2<Float> {
+        pixelWidth(s) % 2 == 0 ? s.position.rounded(.toNearestOrAwayFromZero) : s.position.rounded(.down) + 0.5
     }
 
     // MARK: - Compositing

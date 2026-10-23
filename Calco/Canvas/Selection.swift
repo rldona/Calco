@@ -88,6 +88,116 @@ struct FloatingSelection: Equatable {
     }
 }
 
+/// An area marked on the canvas without lifting anything: brush, eraser, fill, shapes and smudge
+/// only reach inside it, and the bar over it fills, clears, copies, cuts or lifts it to transform.
+/// One coverage byte per canvas pixel: 0 outside, 255 inside, in between on a soft edge.
+struct SelectionMask: Equatable {
+    let width: Int
+    let height: Int
+    private(set) var coverage: [UInt8]
+
+    /// How a new lasso, rectangle or wand pick meets the selection already there.
+    enum Combine: String, Codable, CaseIterable, Identifiable {
+        case replace, add, subtract
+        var id: String { rawValue }
+    }
+
+    init(width: Int, height: Int, coverage: [UInt8]) {
+        self.width = width
+        self.height = height
+        self.coverage = coverage.count == width * height ? coverage : [UInt8](repeating: 0, count: width * height)
+    }
+
+    static func all(width: Int, height: Int) -> SelectionMask {
+        SelectionMask(width: width, height: height, coverage: [UInt8](repeating: 255, count: width * height))
+    }
+
+    /// `area` (same size) taking the selection's place, added to it, or taken out of it.
+    func combined(with area: [UInt8], _ how: Combine) -> SelectionMask {
+        guard area.count == coverage.count else { return self }
+        switch how {
+        case .replace: return SelectionMask(width: width, height: height, coverage: area)
+        case .add: return SelectionMask(width: width, height: height, coverage: zip(coverage, area).map { max($0, $1) })
+        case .subtract:
+            return SelectionMask(width: width, height: height,
+                                 coverage: zip(coverage, area).map { UInt8((Int($0) * (255 - Int($1)) + 127) / 255) })
+        }
+    }
+
+    /// Everything that wasn't selected, and nothing that was.
+    var inverted: SelectionMask {
+        SelectionMask(width: width, height: height, coverage: coverage.map { 255 - $0 })
+    }
+
+    var isEmpty: Bool { !coverage.contains { $0 != 0 } }
+
+    /// The smallest pixel rectangle holding the selection; nil when it's empty.
+    var bounds: CGRect? {
+        var minX = width, minY = height, maxX = -1, maxY = -1
+        for y in 0..<height {
+            let row = y * width
+            for x in 0..<width where coverage[row + x] != 0 {
+                if x < minX { minX = x }
+                if x > maxX { maxX = x }
+                if y < minY { minY = y }
+                if y > maxY { maxY = y }
+            }
+        }
+        guard maxX >= 0 else { return nil }
+        return CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1)
+    }
+
+    /// Canvas pixels with the coverage as alpha (premultiplied white): the mask the GPU clips
+    /// strokes with, and what's resampled when a transformed selection is put down.
+    var rgba: [UInt8] {
+        var out = [UInt8](repeating: 0, count: coverage.count * 4)
+        for (i, c) in coverage.enumerated() where c != 0 {
+            out[i * 4] = c; out[i * 4 + 1] = c; out[i * 4 + 2] = c; out[i * 4 + 3] = c
+        }
+        return out
+    }
+
+    /// Where the selection ends up when what's inside it is moved by `transform` (canvas space).
+    func transformed(_ transform: CGAffineTransform, hard: Bool) -> SelectionMask {
+        let placed = SelectionPixels.render(rgba, width: width, height: height, transform: transform, hard: hard)
+        return SelectionMask(width: width, height: height, coverage: stride(from: 3, to: placed.count, by: 4).map { placed[$0] })
+    }
+
+    /// The border between selected and unselected pixels (half coverage or more counts as in),
+    /// as a path along the pixel edges in canvas coordinates: what the marching ants trace.
+    var outline: CGPath {
+        let path = CGMutablePath()
+        func inside(_ x: Int, _ y: Int) -> Bool {
+            x >= 0 && y >= 0 && x < width && y < height && coverage[y * width + x] >= 128
+        }
+        // Horizontal edges, between row y - 1 and row y, joined into runs.
+        for y in 0...height {
+            var start: Int?
+            for x in 0...width {
+                let edge = x < width && inside(x, y - 1) != inside(x, y)
+                if edge, start == nil { start = x }
+                if !edge, let s = start {
+                    path.move(to: CGPoint(x: s, y: y)); path.addLine(to: CGPoint(x: x, y: y))
+                    start = nil
+                }
+            }
+        }
+        // Vertical edges, between column x - 1 and column x.
+        for x in 0...width {
+            var start: Int?
+            for y in 0...height {
+                let edge = y < height && inside(x - 1, y) != inside(x, y)
+                if edge, start == nil { start = y }
+                if !edge, let s = start {
+                    path.move(to: CGPoint(x: x, y: s)); path.addLine(to: CGPoint(x: x, y: y))
+                    start = nil
+                }
+            }
+        }
+        return path
+    }
+}
+
 /// The pixel work behind the lasso, on CPU buffers (RGBA8 premultiplied, row 0 at the top).
 /// Pure CoreGraphics so it's testable without Metal.
 enum SelectionPixels {
@@ -198,6 +308,48 @@ enum SelectionPixels {
             ctx.translateBy(x: 0, y: CGFloat(height))
             ctx.scaleBy(x: 1, y: -1)
             ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        }
+        return out
+    }
+
+    /// `color` (0–1 RGB, opaque) laid into `rgba` through a coverage mask: over what's there,
+    /// behind it, or (inside) recolouring what's drawn while keeping its coverage.
+    static func fill(_ rgba: [UInt8], mask: [UInt8], color: SIMD3<Float>,
+                     mode: CanvasRenderer.PaintMode = .front) -> [UInt8] {
+        guard rgba.count == mask.count * 4 else { return rgba }
+        let rgb = [color.x, color.y, color.z].map { Int((min(max($0, 0), 1) * 255).rounded()) }
+        var out = rgba
+        for (i, m) in mask.enumerated() where m > 0 {
+            let p = i * 4, cov = Int(m), a = Int(rgba[p + 3])
+            switch mode {
+            case .front:
+                // The colour at `cov` over what's there.
+                for c in 0..<3 { out[p + c] = UInt8((rgb[c] * cov + Int(rgba[p + c]) * (255 - cov) + 127) / 255) }
+                out[p + 3] = UInt8((255 * cov + a * (255 - cov) + 127) / 255)
+            case .behind:
+                // What's there over the colour at `cov`.
+                let under = (255 - a) * cov
+                for c in 0..<3 { out[p + c] = UInt8(min(255, Int(rgba[p + c]) + (rgb[c] * under / 255 + 127) / 255)) }
+                out[p + 3] = UInt8(min(255, a + (under + 127) / 255))
+            case .inside:
+                for c in 0..<3 {
+                    let recoloured = rgb[c] * a / 255
+                    out[p + c] = UInt8((recoloured * cov + Int(rgba[p + c]) * (255 - cov) + 127) / 255)
+                }
+            }
+        }
+        return out
+    }
+
+    /// `after` inside the mask and `before` outside it: an edit kept to the selection.
+    static func blend(_ after: [UInt8], _ before: [UInt8], mask: [UInt8]) -> [UInt8] {
+        guard after.count == before.count, after.count == mask.count * 4 else { return after }
+        var out = before
+        for (i, m) in mask.enumerated() where m > 0 {
+            for c in 0..<4 {
+                let p = i * 4 + c
+                out[p] = UInt8((Int(after[p]) * Int(m) + Int(before[p]) * (255 - Int(m)) + 127) / 255)
+            }
         }
         return out
     }

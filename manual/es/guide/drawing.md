@@ -10,7 +10,7 @@ De arriba abajo:
 - **Goma** (E)
 - **Relleno** (G): el cubo de pintura.
 - **Cuentagotas** (I)
-- **Lazo** (L)
+- **Seleccionar** (L): libre, rectángulo o varita mágica.
 - **Mover** (V)
 - **Formas** (U)
 - **Pluma** (P)
@@ -57,7 +57,7 @@ La pestaña **Ajustes** tiene las opciones comunes a todos:
 - **Suavizado**: estabiliza la línea. Más alto es más tranquilo, con algo más de retraso.
 - **La presión del Pencil cambia el tamaño**: desactívalo para una línea uniforme.
 - **Solo dibuja el Apple Pencil**: los dedos nunca dibujan; siguen sirviendo para ampliar, desplazar y deshacer. Ver [Apple Pencil y gestos](./pencil).
-- **Pixel art**: bordes duros para este proyecto. El tamaño del pincel pasa a ser un ancho en píxeles: el tamaño 1 pinta exactamente un píxel.
+- **Pixel art**: bordes duros para este proyecto. El tamaño del pincel pasa a ser un ancho en píxeles: el tamaño 1 pinta exactamente un píxel, el 2 un cuadrado de 2×2, el 3 uno de 3×3. La presión y la inclinación no lo cambian.
 
 ## Goma
 
@@ -76,27 +76,33 @@ Toca dentro de un contorno para rellenarlo con el color actual. El contorno es t
 
 Toca en cualquier punto del lienzo para coger ese color. Después Calco vuelve a la herramienta que tenías.
 
-## Lazo
+## Seleccionar
 
-Rodea algo para levantarlo como selección.
+Marca una parte del dibujo y luego decide qué hacer con ella. Toca otra vez la herramienta para sus opciones:
 
-![Una selección con el lazo](/crops/es/lasso-selection.jpg)
+- **Forma**: **Libre** (rodéalo), **Rectángulo** (arrastra una caja) o **Varita** (toca un color: coge la mancha de ese color, tal como se ve con todas las capas, y los vecinos tan parecidos como permita la **tolerancia**).
+- **Al marcar**: **Nueva** selección, **Añadir** a la que hay o **Restar** de ella. Un toque en Nueva quita la selección.
+- **Seleccionar todo** (⌘A), **Invertir selección** (⇧⌘I) y **Pegar**.
+
+En **pixel art**, el lazo, el rectángulo o Seleccionar todo se quedan solo con los píxeles dibujados dentro, así la selección se ajusta al sprite píxel a píxel; mientras la trazas, se ven marcados los píxeles que va a coger. Lo seleccionado se ve con **hormigas**, y sigue ahí aunque cambies de herramienta, fotograma o capa. Mientras tanto **el pincel, la goma, el relleno, las formas y el dedo solo actúan dentro**: sombrea una mejilla sin salirte de la línea, o colorea una parte del sprite.
+
+Con Seleccionar, la barra de encima tiene **Transformar**, **Rellenar** (con el color actual), **Borrar**, **Copiar**, **Cortar**, **Invertir**, **Pegar** (si has copiado algo) y **Deseleccionar** (✕, ⌘D, Esc). Sin nada seleccionado y con algo copiado, aparece un botón **Pegar** bajo el lienzo.
+
+**Transformar** levanta lo seleccionado para moverlo, escalarlo, estirarlo o girarlo, en todas las capas visibles a la vez, para que las líneas y su color se muevan juntos (las capas bloqueadas y las guías no se mueven; si no hay nada dibujado dentro, un aviso lo dice):
+
+![Una selección transformándose](/crops/es/lasso-selection.jpg)
 
 - **Arrastra por dentro** para moverla.
 - **Tirador de la esquina**: escalar. **Tiradores de los lados**: estirar a lo ancho o a lo alto, para el *squash & stretch*. **Tirador redondo**: girar. **Punto central**: el punto alrededor del que escala, estira y gira; arrástralo para moverlo (a los pies, por ejemplo, para que al aplastar sigan en el suelo).
 - Mientras escalas o estiras, una etiqueta muestra el ancho y el alto en porcentaje. Cada uno **encaja** en el 100 %, o en las proporciones del otro, con un toque háptico suave.
 - **Uniforme | Libre**, bajo el lienzo, es lo que hace la esquina: mantener las proporciones, o estirar el ancho y el alto por separado.
-- La barra de encima: **Copiar**, **Cortar**, **Eliminar**, **Voltear en horizontal**, **Cancelar** (✕, Esc) y **Aplicar** (✓, Retorno). Tocar fuera también aplica.
-
-Toca otra vez el lazo para **Seleccionar todo** y **Pegar**:
-
-![Opciones del lazo](/crops/es/lasso-options.jpg)
+- La barra de encima: **Copiar**, **Cortar**, **Eliminar**, **Voltear en horizontal**, **Cancelar** (✕, Esc) y **Aplicar** (✓, Retorno). Tocar fuera también aplica. Al aplicar, la selección se va con el dibujo.
 
 Lo pegado aparece donde lo copiaste, en el fotograma y la capa en que estés: útil para llevar una pose a otro dibujo y ajustarla.
 
 ## Mover
 
-**Mover** coge el dibujo de la capa actual, en el cabezal, para moverlo, escalarlo o girarlo, con los mismos tiradores que el lazo.
+**Mover** coge el dibujo de la capa actual, en el cabezal, para moverlo, escalarlo o girarlo, con los mismos tiradores que Transformar.
 
 ![Mover: todo el dibujo](/crops/es/move-all.jpg)
 
@@ -107,7 +113,7 @@ Lo pegado aparece donde lo copiaste, en el fotograma y la capa en que estés: ú
 
 ![Mover: un trazo](/crops/es/move-stroke.jpg)
 
-Al escalarlo, estirarlo o girarlo, un trazo **sigue nítido**: Calco lo vuelve a pintar donde cae, con su pincel, en vez de remuestrear sus píxeles. Los trazos borrados, rellenados o pasados por el lazo, y las imágenes importadas, se remuestrean.
+Al escalarlo, estirarlo o girarlo, un trazo **sigue nítido**: Calco lo vuelve a pintar donde cae, con su pincel, en vez de remuestrear sus píxeles. Los trazos borrados, rellenados o transformados con Seleccionar, y las imágenes importadas, se remuestrean.
 
 Donde se cruzan varios trazos, **toca otra vez en el mismo sitio** para pasar al de debajo; el aviso bajo el lienzo dice cuál tienes. **Añadir trazos** hace que cada toque añada un trazo a lo que mueves, o lo quite, para mover varios juntos.
 
@@ -116,8 +122,10 @@ Donde se cruzan varios trazos, **toca otra vez en el mismo sitio** para pasar al
 Al mover, girar y escalar, la forma **se engancha** a su sitio de inicio, recta (o a un cuarto de vuelta) y a su tamaño, con un toque suave que se nota; el pivote se engancha al centro. Así siempre puedes volver a donde empezaste. Toca fuera, cambia de herramienta o de fotograma para soltarlo; todo el movimiento se deshace en un paso.
 
 - Los trazos movidos siguen siendo trazos: puedes volver a cogerlos.
-- La **goma** recorta los trazos por los que pasa. Un **relleno**, el **lazo** o pegar funden el dibujo, que entonces se separa en sus formas sueltas.
+- La **goma** recorta los trazos por los que pasa. Un **relleno**, **Seleccionar** o pegar funden el dibujo, que entonces se separa en sus formas sueltas.
 - En una capa **bloqueada**, como una [imagen importada](./layers#imagenes-de-referencia), Mover ofrece **Desbloquear y mover**, y la vuelve a bloquear al terminar.
+
+**Delante o detrás**: con trazos, formas o paths cogidos, la barra de encima tiene **Traer al frente**, **Subir uno**, **Bajar uno** y **Llevar al fondo**: su sitio entre las demás piezas del dibujo, en la misma capa. Se ve al momento y se queda (un paso de deshacer) con ✓.
 
 ## Formas
 
@@ -170,6 +178,14 @@ El **Dedo** trabaja la pintura que ya hay en la capa:
 
 Toca otra vez el Dedo para elegir el modo, la **fuerza** y la **punta** (suave, o la del pincel elegido). El tamaño es el de la barra, y cuanto más aprietas con el Pencil, más trabaja la pintura. Lo que pasa por el Dedo deja de ser un trazo que Mover recuerda: queda como píxeles.
 
+## Simetría
+
+El botón de **simetría**, arriba a la derecha, pinta con un espejo: **Izq.–der.**, **Arriba–abajo** o **Cuatro**. El pincel, la goma y el dedo pintan también en el espejo mientras dibujas; el relleno, las formas y la Pluma no.
+
+- Los ejes se ven discontinuos sobre el lienzo. Arrastra el **punto** del extremo de uno para moverlo; se engancha al centro, y un doble toque centra los dos.
+- Los ejes caen en el borde o el centro de un píxel, así que en **pixel art** el espejo es exacto, píxel a píxel.
+- Se queda activada, con sus ejes, en el proyecto: un sprite simétrico sigue siéndolo.
+
 ## Paleta del proyecto
 
 El panel de color empieza con los colores del proyecto, con nombre: la línea del personaje, el cuerpo, la cara… Toca uno para pintar con él.
@@ -181,7 +197,7 @@ Sirve para cambiar la paleta de un personaje: duplica un proyecto o un clip, pas
 
 ## Pixel art
 
-Con **Pixel art** activado, todas las herramientas trabajan con píxeles enteros: sin bordes suaves en el pincel, la goma, el relleno ni el lazo, y las selecciones movidas siguen nítidas. Actívalo al crear el proyecto o en las opciones del pincel.
+Con **Pixel art** activado, todas las herramientas trabajan con píxeles enteros: sin bordes suaves en el pincel, la goma, el relleno ni las selecciones, y las selecciones movidas siguen nítidas. Actívalo al crear el proyecto o en las opciones del pincel.
 
 ## Vista
 

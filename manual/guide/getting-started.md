@@ -10,7 +10,7 @@ The canvas fills the whole screen, on a faint grid, and the panels float over it
 
 | Area | What it does |
 |---|---|
-| **Tool rail** (left, centred) | Brush, eraser, fill, eyedropper, lasso, move, colour, size, undo and redo. See [Drawing tools](./drawing). |
+| **Tool rail** (left, centred) | Brush, eraser, fill, eyedropper, select, move, colour, size, undo and redo. See [Drawing tools](./drawing). |
 | **Canvas** (centre) | Where you draw. Pinch to zoom, two fingers to pan and rotate. |
 | **Animation rail** (right, centred) | New drawing, duplicate, hold, delete, more, the onion skin, and whether they act on the layer or every layer. See [Timeline and drawings](./timeline). |
 | **Top bar** | The file menu on the left; flip view and Zen mode on the right. |

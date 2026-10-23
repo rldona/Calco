@@ -66,7 +66,7 @@ final class ClipboardTests: XCTestCase {
         XCTAssertGreaterThan(try alpha(state, frame: 0, 60, 60), 200, "delete undoes")
     }
 
-    func testSelectAllLiftsTheWholeDrawingAndCopyWithoutASelectionTakesItAll() throws {
+    func testSelectAllMarksTheWholeCanvasAndCopyWithoutASelectionTakesItAll() throws {
         let state = try makeState()
         try dot(state, at: SIMD2(20, 20))
         try dot(state, at: SIMD2(60, 60))
@@ -75,7 +75,10 @@ final class ClipboardTests: XCTestCase {
 
         state.selectAll()
         XCTAssertEqual(state.tool, .lasso)
-        XCTAssertNotNil(state.selection)
+        XCTAssertNil(state.selection, "marked, not lifted")
+        XCTAssertEqual(state.selectionMask?.bounds, CGRect(x: 0, y: 0, width: 512, height: 512))
+        XCTAssertGreaterThan(try alpha(state, frame: 0, 60, 60), 200, "the drawing stays where it is")
+        state.transformSelection()
         XCTAssertEqual(try alpha(state, frame: 0, 60, 60), 0, "lifted off the layer while it floats")
         state.cancelSelection()
         XCTAssertGreaterThan(try alpha(state, frame: 0, 60, 60), 200)

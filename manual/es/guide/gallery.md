@@ -47,9 +47,20 @@ El icono de la carpeta, arriba a la izquierda del editor, abre el menú de archi
 | Preferencias… | Ajustes de la app, como el idioma (⌘,). |
 | Nuevo proyecto… / Abrir desde Archivos… | Igual que en la galería (⌘N / ⌘O). |
 | Guardar / Guardar como… | Guarda ahora, o guarda una copia con otro nombre (⌘S / ⇧⌘S). |
+| Tamaño del lienzo… | Hace el lienzo más grande o más pequeño sin escalar el dibujo. Ver más abajo. |
 | Exportar… | Exporta con un perfil (⌘E). Ver [Exportar](./export). |
 | Exportar GIF | Un GIF rápido del clip actual (⌘G). |
 
 ::: info Dónde van los archivos
 Los proyectos son paquetes `.calco` en **En mi iPad › Calco**. Las exportaciones van a **En mi iPad › Calco › Exports**.
 :::
+
+### Tamaño del lienzo
+
+¿A mitad de camino el sprite necesita más sitio (un espadazo, un salto)? **Tamaño del lienzo…** añade espacio alrededor del dibujo, o lo recorta, sin escalar nada.
+
+- Escribe el **ancho** y el **alto**, o toca **+25 %**, **+50 %**, **× 2** o **Al dibujo** (el lienzo más pequeño en el que caben todos los fotogramas).
+- **Dónde queda el dibujo**: nueve casillas. Con la de la izquierda, el sitio nuevo va a la derecha; con la de abajo, arriba, para que los pies no se muevan.
+- La vista previa muestra el lienzo nuevo (discontinuo) con el dibujo dentro.
+
+Cambia todos los clips, fotogramas y capas a la vez, para que la hoja de sprites siga igualada. Los trazos y las formas siguen nítidos y editables, y el **pivote** de cada clip sigue en el mismo píxel, para que el personaje no salte en el juego. Si lo haces más pequeño, se recorta lo que quede fuera; **Deshacer** lo recupera todo.

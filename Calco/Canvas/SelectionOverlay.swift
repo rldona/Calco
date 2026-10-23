@@ -1,7 +1,8 @@
 import SwiftUI
 import UIKit
 
-/// Draws the lasso while it's being drawn, then the floating selection with its handles:
+/// Draws the lasso or rectangle while it's being drawn, what's selected with its marching ants
+/// and its bar, then the floating selection with its handles:
 /// drag inside to move, the corner to scale, the side handles to stretch it wider or taller
 /// (squash and stretch), the knob above to rotate, the dot to move the anchor (what scaling and
 /// rotation pivot around) without moving the drawing. With Free scaling the corner stretches too.
@@ -25,9 +26,33 @@ struct SelectionOverlay: View {
             let toView = state.canvasTransform.canvasToView(canvas: state.renderer.canvasSize, viewSize: geo.size)
             ZStack {
                 if !state.lassoPoints.isEmpty {
-                    Path { p in p.addLines(state.lassoPoints.map { $0.applying(toView) }) }
-                        .stroke(Theme.accent, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                    // In pixel art the line is only a guide: the pixels it takes show over it.
+                    let pixels = state.project.pixelArt
+                    Path { p in
+                        p.addLines(state.lassoPoints.map { $0.applying(toView) })
+                        if state.select.shape == .rect { p.closeSubpath() }
+                    }
+                    .stroke(Theme.accent.opacity(pixels ? 0.45 : 1), style: StrokeStyle(lineWidth: pixels ? 1 : 1.5, dash: [5, 4]))
+                    .allowsHitTesting(false)
+                    if pixels, let preview = state.lassoPreview {
+                        let path = Path(preview).applying(toView)
+                        ZStack {
+                            path.stroke(Color.black.opacity(0.8), lineWidth: 3)
+                            path.stroke(Theme.accent, lineWidth: 1.5)
+                        }
                         .allowsHitTesting(false)
+                    }
+                }
+                // Marked, not lifted: the ants, and with Select, what to do with it.
+                if state.selection == nil, let outline = state.selectionOutline {
+                    MarchingAnts(path: Path(outline).applying(toView))
+                    if state.tool == .lasso && state.tween == nil {
+                        let box = outline.boundingBoxOfPath.applying(toView)
+                        let above = box.minY - 34 >= 28
+                        let y = above ? box.minY - 34 : (box.maxY + 34 <= geo.size.height - 28 ? box.maxY + 34 : max(box.minY, 0) + 34)
+                        MaskBar(state: state)
+                            .position(x: min(max(box.midX, 190), max(190, geo.size.width - 190)), y: y)
+                    }
                 }
                 if let sel = state.selection {
                     selection(sel, toView: toView)
@@ -299,7 +324,51 @@ struct ScaleModePicker: View {
     }
 }
 
-/// Copy, cut, delete, flip, cancel and apply, floating above the selection.
+/// The border of what's selected: white with black dashes that crawl along it, so it shows on
+/// any drawing.
+private struct MarchingAnts: View {
+    let path: Path
+
+    var body: some View {
+        SwiftUI.TimelineView(.periodic(from: .now, by: 0.12)) { context in
+            let phase = CGFloat(Int(context.date.timeIntervalSinceReferenceDate / 0.12) % 8)
+            ZStack {
+                path.stroke(Color.white.opacity(0.9), lineWidth: 1.2)
+                path.stroke(Color.black, style: StrokeStyle(lineWidth: 1.2, dash: [4, 4], dashPhase: phase))
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+/// What to do with what's selected: lift it to transform, fill it, rub it out, copy, cut, invert
+/// the selection, paste what was copied, or let it go.
+private struct MaskBar: View {
+    @Bindable var state: EditorState
+
+    var body: some View {
+        HStack(spacing: 2) {
+            RailButton(icon: "skew", label: "Transform", size: 32) {
+                state.transformSelection()
+            }
+            RailButton(icon: "FillBucket", label: "Fill selection", size: 32) { state.fillSelection() }
+            RailButton(icon: "trash", label: "Clear selection", size: 32) { state.clearSelection() }
+            RailButton(icon: "doc.on.doc", label: "Copy", size: 32) { state.copySelection() }
+            RailButton(icon: "scissors", label: "Cut", size: 32) { state.cutSelection() }
+            RailButton(icon: "arrow.left.arrow.right.square", label: "Invert selection", size: 32) { state.invertSelection() }
+            if state.clipboard != nil {
+                RailButton(icon: "doc.on.clipboard", label: "Paste", size: 32) { state.paste() }
+            }
+            RailButton(icon: "xmark", label: "Deselect", size: 32) { state.deselect() }
+        }
+        .padding(4)
+        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 13))
+        .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(Theme.hairline))
+    }
+}
+
+/// Copy, cut, delete, flip, (for pieces picked with Move) arrange, cancel and apply, floating above the selection.
 private struct SelectionBar: View {
     @Bindable var state: EditorState
 
@@ -310,6 +379,15 @@ private struct SelectionBar: View {
             RailButton(icon: "trash", label: "Delete selection", size: 32) { state.deleteSelection() }
             RailButton(icon: "arrow.left.and.right.righttriangle.left.righttriangle.right", label: "Flip horizontally", size: 32) {
                 state.updateSelection { $0.flipped.toggle() }
+            }
+            // Strokes, shapes or paths picked with Move: their place in the drawing's stack.
+            if state.canArrange {
+                Divider().overlay(Theme.hairline).frame(height: 20).padding(.horizontal, 2)
+                RailButton(icon: "square.3.layers.3d.top.filled", label: "Bring to front", size: 32) { state.arrange(.front) }
+                RailButton(icon: "square.2.layers.3d.top.filled", label: "Bring forward", size: 32) { state.arrange(.forward) }
+                RailButton(icon: "square.2.layers.3d.bottom.filled", label: "Send backward", size: 32) { state.arrange(.backward) }
+                RailButton(icon: "square.3.layers.3d.bottom.filled", label: "Send to back", size: 32) { state.arrange(.back) }
+                Divider().overlay(Theme.hairline).frame(height: 20).padding(.horizontal, 2)
             }
             RailButton(icon: "xmark", label: "Cancel selection", size: 32) { state.cancelSelection() }
             RailButton(icon: "checkmark", label: "Apply selection", active: true, size: 32) { state.commitSelection() }

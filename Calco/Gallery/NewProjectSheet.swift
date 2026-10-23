@@ -183,7 +183,7 @@ private struct FlowChips: View {
 /// A side of a custom size, typed on the number pad. Tapping it clears it, so the new number is
 /// typed straight away (the old one stays as the placeholder, and comes back if nothing is
 /// typed). The value follows the typing, held inside `range`; the field shows it once you leave.
-private struct PixelField: View {
+struct PixelField: View {
     let title: LocalizedStringKey
     @Binding var value: Int
     let range: ClosedRange<Int>

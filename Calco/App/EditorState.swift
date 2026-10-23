@@ -120,6 +120,19 @@ final class EditorState {
         var useBrushTip = false
     }
     var smudge = SmudgeOptions() { didSet { saveToolSettings() } }
+    /// The Select tool: how it marks (freehand, a rectangle, or by colour with the wand), how a
+    /// new mark meets the selection already there, and how alike a colour must be for the wand.
+    struct SelectOptions: Codable, Equatable {
+        enum Shape: String, Codable, CaseIterable, Identifiable {
+            case free, rect, wand
+            var id: String { rawValue }
+        }
+        var shape = Shape.free
+        var combine = SelectionMask.Combine.replace
+        /// 0–1: how far a colour may be from the one tapped, per channel, and still be picked.
+        var tolerance: Float = 0.2
+    }
+    var select = SelectOptions() { didSet { saveToolSettings() } }
     @ObservationIgnored private var smudgeScratch: MTLTexture?
     /// Where the last smudge dab was, so the next knows which way the finger is going.
     @ObservationIgnored private var lastSmudgeDab: SIMD2<Float>?
@@ -179,11 +192,37 @@ final class EditorState {
     }
     var showingPreferences = false
     /// The lasso being drawn, in canvas pixels. Empty when not drawing one.
-    var lassoPoints: [CGPoint] = []
+    var lassoPoints: [CGPoint] = [] { didSet { updateLassoPreview(started: oldValue.isEmpty) } }
+    /// Pixel art: the pixels the lasso or rectangle being drawn would select, as their outline,
+    /// so you see which pixels you're getting while you draw it.
+    private(set) var lassoPreview: CGPath?
+    /// What's drawn on screen when the lasso began, to preview against.
+    @ObservationIgnored private var lassoSeen: [UInt8]?
     /// What the lasso lifted, while it's being transformed. Nil when nothing is selected.
     private(set) var selection: FloatingSelection? {
         didSet { if (selection != nil) != hasSelection { hasSelection = selection != nil } }
     }
+    /// What's marked with Select, while it isn't lifted. Nil when nothing is.
+    private(set) var selectionMask: SelectionMask? { didSet { selectionMaskChanged() } }
+    /// Its border in canvas pixels: the marching ants.
+    private(set) var selectionOutline: CGPath?
+    /// The same mask on the GPU, which keeps strokes inside it.
+    @ObservationIgnored private var selectionMaskTexture: MTLTexture?
+    /// The marked area a floating selection was lifted from: put down, it goes where the drawing went.
+    @ObservationIgnored private var liftedMask: SelectionMask?
+    /// The other layers Transform lifted with the selection (the colour under the lines): each
+    /// moves with it, shows above its own layer, and lands, undoes or cancels with it.
+    private struct Companion {
+        let key: LayerKey
+        let lifted: [UInt8]
+        let before: MTLTexture?
+        var preview: MTLTexture?
+    }
+    @ObservationIgnored private var companions: [Companion] = []
+    /// After Arrange: the pieces drawn above what's floating, shown over it so its depth shows.
+    @ObservationIgnored private var selectionAbove: MTLTexture?
+    /// The drawing's pieces in their order before Arrange, for undo and cancel.
+    @ObservationIgnored private var arrangedFrom: [StrokePiece]?
     /// Whether something floats, apart from where: the chrome only needs this much, and so isn't
     /// redrawn on every step of a drag.
     private(set) var hasSelection = false
@@ -515,10 +554,8 @@ final class EditorState {
     /// Swaps in a project and its pixels, recreating the renderer if the canvas size changed.
     private func install(_ newProject: Project, images: [LayerKey: CGImage],
                          strokes loadedStrokes: [LayerKey: [StrokePiece]] = [:]) throws {
-        selection = nil; selectionBefore = nil; selectionPreview = nil; lassoPoints = []
-        tween = nil; tweenStart = nil
-        recipeStroke = nil; recipeScratch = nil; fillScratch = nil; smudgeScratch = nil; penEditing = nil; penBefore = nil
-        strokes = loadedStrokes; movingPieces = nil; lastPick = nil; moveHint = nil; strokeTexture = nil; strokeBase = nil
+        dropCanvasState()
+        strokes = loadedStrokes
         playRange = nil
         let size = SIMD2<Int>(newProject.canvas.width, newProject.canvas.height)
         if size != renderer.canvasSize {
@@ -549,6 +586,136 @@ final class EditorState {
         coalesceTag = nil
         pendingStroke = nil
         canvasTransform = CanvasTransform(insets: canvasTransform.insets)
+    }
+
+    /// Forgets everything sized to the canvas or tied to its drawings: what floats or is
+    /// selected, the path being edited, and the scratch textures.
+    private func dropCanvasState() {
+        selection = nil; selectionBefore = nil; selectionPreview = nil; lassoPoints = []
+        selectionMask = nil; liftedMask = nil; selectionMaskTexture = nil; companions = []
+        selectionAbove = nil; arrangedFrom = nil
+        tween = nil; tweenStart = nil
+        recipeStroke = nil; recipeScratch = nil; fillScratch = nil; smudgeScratch = nil; penEditing = nil; penBefore = nil
+        movingPieces = nil; lastPick = nil; moveHint = nil; strokeTexture = nil; strokeBase = nil
+    }
+
+    // MARK: - Canvas size
+
+    /// Every drawing's pixels and pieces, guides included: what a canvas resize swaps out whole.
+    private struct CanvasPixels {
+        var textures: [LayerKey: MTLTexture]
+        var strokes: [LayerKey: [StrokePiece]]
+    }
+
+    private func allTextureKeys() -> [LayerKey] {
+        project.clips.flatMap { clip in
+            clip.frames.flatMap { f in clip.layers.map { LayerKey(clip: clip.id, frame: f.id, layer: $0.id) } }
+        }
+    }
+
+    private func currentCanvasPixels() -> CanvasPixels {
+        var textures: [LayerKey: MTLTexture] = [:]
+        for k in allTextureKeys() { if let t = store.raw(k) { textures[k] = t } }
+        return CanvasPixels(textures: textures, strokes: strokes)
+    }
+
+    /// Where something is drawn, over every frame of every clip (guides left out), in canvas
+    /// pixels: what "fit to the drawing" crops to. Nil when nothing is drawn.
+    func drawingBounds() -> CGRect? {
+        let w = renderer.canvasSize.x, h = renderer.canvasSize.y
+        let guides = Set(project.clips.flatMap { c in c.layers.filter(\.guide).map { "\(c.id)/\($0.id)" } })
+        let rects = allTextureKeys().filter { !guides.contains("\($0.clip)/\($0.layer)") }.compactMap { k -> CGRect? in
+            store.raw(k).flatMap { renderer.readbackBytes($0) }.flatMap { SelectionPixels.contentBounds($0, width: w, height: h) }
+        }
+        return CanvasResize.fit(rects)
+    }
+
+    /// Makes the canvas `size`, the drawing moved by (dx, dy) canvas pixels: room added around
+    /// it, or what falls outside cut. Every clip, frame and layer; strokes stay sharp and the
+    /// pivots stay on the same pixel. One undo step, which brings back what was cut.
+    func resizeCanvas(to size: CanvasSize, dx: Int, dy: Int) {
+        let range = NewProjectConfig.sideRange
+        let old = project.canvas
+        guard range.contains(size.width), range.contains(size.height), size != old || dx != 0 || dy != 0 else { return }
+        stop()
+        finishPen()
+        commitSelection()
+        cancelTween()
+        frameRange = nil
+        coalesceTag = nil
+        guard let newRenderer = CanvasRenderer(device: renderer.device, canvasSize: SIMD2(size.width, size.height),
+                                               screenFormat: screenFormat) else { return }
+        let before = Snapshot(project: project, clipIndex: clipIndex, frameIndex: frameIndex, layerIndex: layerIndex,
+                              textures: [:], canvas: currentCanvasPixels())
+
+        var textures: [LayerKey: MTLTexture] = [:]
+        for (k, t) in before.canvas?.textures ?? [:] {
+            guard let px = renderer.readbackBytes(t) else { continue }
+            let moved = CanvasResize.shifted(px, from: old, to: size, dx: dx, dy: dy)
+            guard !SelectionPixels.isEmpty(moved), let nt = newRenderer.makeLayerTexture() else { continue }
+            newRenderer.upload(bytes: moved, into: nt)
+            textures[k] = nt
+        }
+        var pieces: [LayerKey: [StrokePiece]] = [:]
+        for (k, p) in strokes where textures[k] != nil {
+            pieces[k] = p.compactMap { CanvasResize.shifted($0, dx: dx, dy: dy, in: size) }
+        }
+        var resized = project
+        resized.canvas = size
+        if var sym = resized.symmetry {
+            sym.x = Symmetry.snapped(sym.x + Double(dx), limit: size.width)
+            sym.y = Symmetry.snapped(sym.y + Double(dy), limit: size.height)
+            resized.symmetry = sym
+        }
+        for i in resized.clips.indices {
+            resized.clips[i].pivot = CanvasResize.pivot(resized.clips[i].pivot, from: old, to: size, dx: dx, dy: dy)
+        }
+
+        undoStack.append(before)
+        if undoStack.count > Self.historyLimit { undoStack.removeFirst() }
+        redoStack.removeAll()
+        installCanvas(resized, renderer: newRenderer, pixels: CanvasPixels(textures: textures, strokes: pieces),
+                      clipIndex: clipIndex, frameIndex: frameIndex, layerIndex: layerIndex)
+    }
+
+    /// Swaps in a whole canvas: its size, its drawings and their pieces, keeping the history.
+    private func installCanvas(_ newProject: Project, renderer newRenderer: CanvasRenderer? = nil, pixels: CanvasPixels,
+                               clipIndex c: Int, frameIndex f: Int, layerIndex l: Int) {
+        stop()
+        dropCanvasState()
+        let size = SIMD2(newProject.canvas.width, newProject.canvas.height)
+        // What was copied is canvas-sized pixels: at another size it can't be pasted.
+        if size != renderer.canvasSize { clipboard = nil; frameClipboard = nil }
+        if let newRenderer {
+            renderer = newRenderer
+        } else if size != renderer.canvasSize,
+                  let r = CanvasRenderer(device: renderer.device, canvasSize: size, screenFormat: screenFormat) {
+            renderer = r
+        }
+        store = FrameStore(renderer: renderer)
+        for (k, t) in pixels.textures { store.set(t, for: k) }
+        strokes = pixels.strokes
+        project = newProject
+        clipIndex = min(c, project.clips.count - 1)
+        frameIndex = min(f, max(0, frames.count - 1))
+        layerIndex = min(l, max(0, layers.count - 1))
+        drawingThumbnails = [:]
+        drawingThumbnailSource = [:]
+        pendingThumbnails = [:]
+        for fr in frames { refreshThumbnail(for: fr.id) }
+        refreshClipThumbnails()
+        isDirty = true
+        canvasTransform = CanvasTransform(flipped: canvasTransform.flipped, insets: canvasTransform.insets)
+    }
+
+    /// Undo or redo of a canvas resize: puts `s` back, and returns what was there for the other stack.
+    private func swapCanvas(_ s: Snapshot) -> Snapshot {
+        let now = Snapshot(project: project, clipIndex: clipIndex, frameIndex: frameIndex, layerIndex: layerIndex,
+                           textures: [:], canvas: currentCanvasPixels())
+        if let pixels = s.canvas {
+            installCanvas(s.project, pixels: pixels, clipIndex: s.clipIndex, frameIndex: s.frameIndex, layerIndex: s.layerIndex)
+        }
+        return now
     }
 
     // MARK: - Clips
@@ -1547,6 +1714,12 @@ final class EditorState {
                 if let sel = selection, sel.key == key, let preview = selectionPreview {
                     out.append(.init(texture: preview, opacity: Float(layer.opacity), tint: .zero, tintAmount: 0, mask: mask))
                 }
+                if let sel = selection, sel.key == key, let above = selectionAbove {
+                    out.append(.init(texture: above, opacity: Float(layer.opacity), tint: .zero, tintAmount: 0, mask: mask))
+                }
+                if selection != nil, let c = companions.first(where: { $0.key == key }), let preview = c.preview {
+                    out.append(.init(texture: preview, opacity: Float(layer.opacity), tint: .zero, tintAmount: 0, mask: mask))
+                }
             }
         }
         return out
@@ -1691,8 +1864,10 @@ final class EditorState {
     /// The stroke builds up on its own texture, then the layer is redrawn as it was plus the
     /// stroke, at the brush's opacity: so a marker stays even where it crosses itself.
     func paintStroke(_ stamps: [CanvasRenderer.Stamp], into target: MTLTexture) {
+        if tool == .smudge { pendingStamps += stamps; smudgeStroke(stamps, into: target); return }
+        // With symmetry, the mirror images are part of the same stroke (and of its recipe).
+        let stamps = project.symmetry.map { $0.mirrored(stamps, hard: project.pixelArt) } ?? stamps
         pendingStamps += stamps
-        if tool == .smudge { smudgeStroke(stamps, into: target); return }
         guard let strokeTexture else {
             renderer.paint(stamps, into: target, color: color, tool: tool, hard: project.pixelArt, mode: paintMode)
             return
@@ -1701,7 +1876,8 @@ final class EditorState {
         renderer.paintStroke(stamps, into: strokeTexture, color: b.fixedColor ?? SIMD3(color.x, color.y, color.z),
                              tip: .init(b), hard: project.pixelArt)
         renderer.compositeStroke(strokeTexture, base: strokeBase, into: target,
-                                 opacity: tool == .eraser ? 1 : brushOpacity, mode: paintMode, erase: tool == .eraser)
+                                 opacity: tool == .eraser ? 1 : brushOpacity, mode: paintMode, erase: tool == .eraser,
+                                 mask: selectionClip)
     }
 
     /// Smudge dabs straight on the layer, each knowing how far the finger moved before it.
@@ -1715,8 +1891,18 @@ final class EditorState {
             return s.position - last
         }
         lastSmudgeDab = last
-        renderer.smudge(stamps, deltas: deltas, in: target, scratch: scratch, mode: smudge.mode,
-                        strength: smudge.strength, hardness: activeBrush.hardness)
+        guard let sym = project.symmetry else {
+            renderer.smudge(stamps, deltas: deltas, in: target, scratch: scratch, mode: smudge.mode,
+                            strength: smudge.strength, hardness: activeBrush.hardness)
+            return
+        }
+        // Each mirror image smears its own way: the mirrored dabs, moving the mirrored direction.
+        let count = sym.images(of: .zero).count
+        for i in 0..<count {
+            let dabs = stamps.map { s -> CanvasRenderer.Stamp in var m = s; m.position = sym.images(of: s.position)[i]; return m }
+            renderer.smudge(dabs, deltas: deltas.map { sym.images(ofDelta: $0)[i] }, in: target, scratch: scratch,
+                            mode: smudge.mode, strength: smudge.strength, hardness: activeBrush.hardness)
+        }
     }
 
     /// The stroke that just ended on its own, as the layer got it (at the brush's opacity).
@@ -1730,6 +1916,7 @@ final class EditorState {
     func strokeEnded() {
         let key = pendingStroke?.textures.keys.first
         if let s = pendingStroke {
+            if tool == .smudge, let key, let mask = selectionMask { keepInside(mask, key: key, before: s.textures[key] ?? nil) }
             coalesceTag = nil
             push(s)
             pendingStroke = nil
@@ -1737,6 +1924,15 @@ final class EditorState {
         }
         isDirty = true
         if let key { refreshThumbnails(showing: key) } else if let f = currentFrame { refreshThumbnail(for: f.id) }
+    }
+
+    /// Smudge works straight on the layer, so with a selection it's kept inside once it ends:
+    /// outside it, the layer goes back to how it was.
+    private func keepInside(_ mask: SelectionMask, key: LayerKey, before: MTLTexture?) {
+        guard let target = store.existingTexture(clip: key.clip, frame: key.frame, layer: key.layer),
+              let after = renderer.readbackBytes(target) else { return }
+        let old = before.flatMap { renderer.readbackBytes($0) } ?? [UInt8](repeating: 0, count: after.count)
+        renderer.upload(bytes: SelectionPixels.blend(after, old, mask: mask.coverage), into: target)
     }
 
     /// A gesture took over (two-finger tap, pinch): put the pixels back as if the stroke never happened.
@@ -1756,6 +1952,8 @@ final class EditorState {
     private func recordPieces(_ key: LayerKey, before: MTLTexture?) {
         let stamps = pendingStamps
         pendingStamps = []
+        // Clipped by a selection, a stroke isn't the one its recipe paints: Move finds the shapes again.
+        if selectionMask != nil { pendingShape = nil; strokes[key] = nil; return }
         let w = renderer.canvasSize.x, h = renderer.canvasSize.y
         if let shape = pendingShape {
             // A shape is a piece of its own, painted again from its recipe wherever Move takes it.
@@ -1800,7 +1998,7 @@ final class EditorState {
 
     /// `recipe`'s stroke over `base` (nil = blank) into `target`, as the brush laid it.
     private func paintRecipe(_ recipe: StrokeRecipe, stroke: MTLTexture, base: MTLTexture?, into target: MTLTexture,
-                             mode: CanvasRenderer.PaintMode = .front) {
+                             mode: CanvasRenderer.PaintMode = .front, mask: MTLTexture? = nil) {
         var base = base
         if let fill = recipe.fill, fill.count >= 3 {
             renderer.upload(bytes: Self.fillPixels(fill, color: recipe.fillColor, hard: recipe.hard,
@@ -1809,7 +2007,8 @@ final class EditorState {
             // An inside of its own colour goes down first and the line over it: in one texture
             // the two colours would mix where they meet. In the line's colour they're one shape.
             if recipe.fillColor != recipe.color, !recipe.stamps.isEmpty, let under = recipeTexture(\.fillScratch) {
-                renderer.compositeStroke(stroke, base: base, into: under, opacity: recipe.opacity, mode: mode, erase: false)
+                renderer.compositeStroke(stroke, base: base, into: under, opacity: recipe.opacity, mode: mode, erase: false,
+                                         mask: mask)
                 base = under
                 renderer.clear(stroke)
             }
@@ -1817,7 +2016,8 @@ final class EditorState {
             renderer.clear(stroke)
         }
         renderer.paintStroke(recipe.stamps, into: stroke, color: recipe.color, tip: recipe.tip, hard: recipe.hard)
-        renderer.compositeStroke(stroke, base: base, into: target, opacity: recipe.opacity, mode: mode, erase: false)
+        renderer.compositeStroke(stroke, base: base, into: target, opacity: recipe.opacity, mode: mode, erase: false,
+                                 mask: mask)
     }
 
     /// A shape's inside in one colour (premultiplied), the rest clear.
@@ -1866,7 +2066,7 @@ final class EditorState {
     func drawShape(from a: CGPoint, to b: CGPoint) {
         shapeDraft = nil
         guard let recipe = shapeRecipe(from: a, to: b), let target = beginStroke(), let stroke = strokeTexture else { return }
-        paintRecipe(recipe, stroke: stroke, base: strokeBase, into: target, mode: paintMode)
+        paintRecipe(recipe, stroke: stroke, base: strokeBase, into: target, mode: paintMode, mask: selectionClip)
         pendingShape = recipe
         strokeEnded()
     }
@@ -2092,7 +2292,7 @@ final class EditorState {
             return
         }
         guard let recipe, e.key == currentDrawingKey, let target = beginStroke(), let stroke = strokeTexture else { return }
-        paintRecipe(recipe, stroke: stroke, base: strokeBase, into: target, mode: paintMode)
+        paintRecipe(recipe, stroke: stroke, base: strokeBase, into: target, mode: paintMode, mask: selectionClip)
         pendingShape = recipe
         strokeEnded()
     }
@@ -2216,7 +2416,11 @@ final class EditorState {
                                       closingGaps: fillGaps.radius(forCanvasSide: max(w, h)))
         guard !region.isEmpty else { return }
         // Pixel-art lines are hard, so there's no soft edge to slide under (it would eat the line).
-        let mask = FloodFill.grow(region, width: w, height: h, by: project.pixelArt ? 0 : Self.fillGrow)
+        var mask = FloodFill.grow(region, width: w, height: h, by: project.pixelArt ? 0 : Self.fillGrow)
+        if let selected = selectionMask {
+            mask = zip(mask, selected.coverage).map { $0 && $1 >= 128 }
+            guard mask.contains(true) else { return }
+        }
 
         recordUndo(textures: [key], copyPixels: true)
         guard let target = store.texture(clip: key.clip, frame: key.frame, layer: key.layer),
@@ -2269,6 +2473,293 @@ final class EditorState {
         selection = FloatingSelection(key: key, lifted: lifted, outline: outline, bounds: bounds,
                                       anchor: CGPoint(x: bounds.midX, y: bounds.midY))
         renderSelectionPreview()
+    }
+
+    // MARK: - Select
+
+    private func updateLassoPreview(started: Bool) {
+        guard project.pixelArt, lassoPoints.count >= 3 else {
+            if lassoPoints.isEmpty { lassoSeen = nil }
+            if lassoPreview != nil { lassoPreview = nil }
+            return
+        }
+        let w = renderer.canvasSize.x, h = renderer.canvasSize.y
+        if started || lassoSeen == nil, let f = currentFrame {
+            lassoSeen = renderer.flattenBytes(frameLayers(f.id, opacity: 1, tint: nil, guides: false))
+        }
+        guard let seen = lassoSeen, seen.count == w * h * 4 else { return }
+        let area = SelectionPixels.rasterize(lassoPoints, width: w, height: h, hard: true)
+        let picked = area.indices.map { area[$0] >= 128 && seen[$0 * 4 + 3] != 0 ? UInt8(255) : 0 }
+        lassoPreview = SelectionMask(width: w, height: h, coverage: picked).outline
+    }
+
+    /// The selection's mask for the GPU while something is marked: strokes stay inside it.
+    private var selectionClip: MTLTexture? { selectionMask == nil ? nil : selectionMaskTexture }
+
+    private func selectionMaskChanged() {
+        guard let mask = selectionMask else { selectionOutline = nil; return }
+        selectionOutline = mask.outline
+        selectionMaskTexture = selectionMaskTexture ?? renderer.makeLayerTexture()
+        if let t = selectionMaskTexture { renderer.upload(bytes: mask.rgba, into: t) }
+    }
+
+    /// Marks `area` (one coverage byte per canvas pixel) the Select tool's way, or `combine`'s:
+    /// in place of the selection, added to it, or taken out of it.
+    func select(_ area: [UInt8], combine: SelectionMask.Combine? = nil) {
+        commitSelection()
+        let w = renderer.canvasSize.x, h = renderer.canvasSize.y
+        let area = project.pixelArt ? drawnOnly(area) : area
+        let next = (selectionMask ?? SelectionMask(width: w, height: h, coverage: [])).combined(with: area, combine ?? select.combine)
+        selectionMask = next.isEmpty ? nil : next
+    }
+
+    /// Marks what's inside a closed freehand outline. Too short to enclose anything, it's a tap:
+    /// in Replace, that selects nothing.
+    func selectPolygon(_ polygon: [CGPoint]) {
+        lassoPoints = []
+        guard polygon.count >= 3, Self.boundingBox(polygon).width >= 1, Self.boundingBox(polygon).height >= 1 else {
+            if select.combine == .replace { deselect() }
+            return
+        }
+        select(SelectionPixels.rasterize(polygon, width: renderer.canvasSize.x, height: renderer.canvasSize.y,
+                                         hard: project.pixelArt))
+    }
+
+    /// The rectangle from `a` to `b` on whole pixels, inside the canvas: its four corners.
+    func selectionRect(from a: CGPoint, to b: CGPoint) -> [CGPoint] {
+        let w = CGFloat(renderer.canvasSize.x), h = CGFloat(renderer.canvasSize.y)
+        let x0 = min(max(min(a.x, b.x).rounded(), 0), w), x1 = min(max(max(a.x, b.x).rounded(), 0), w)
+        let y0 = min(max(min(a.y, b.y).rounded(), 0), h), y1 = min(max(max(a.y, b.y).rounded(), 0), h)
+        return Self.corners(CGRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0))
+    }
+
+    /// Marks the rectangle dragged from `a` to `b`. Too small to hold a pixel, it's a tap.
+    func selectRect(from a: CGPoint, to b: CGPoint) {
+        lassoPoints = []
+        let corners = selectionRect(from: a, to: b)
+        let box = Self.boundingBox(corners)
+        guard box.width >= 1, box.height >= 1 else {
+            if select.combine == .replace { deselect() }
+            return
+        }
+        select(SelectionPixels.rasterize(corners, width: renderer.canvasSize.x, height: renderer.canvasSize.y, hard: true))
+    }
+
+    /// The magic wand: marks the patch of colour under `point`, as it looks on screen (all visible
+    /// layers), spreading to neighbours as alike as the tolerance allows, plus its soft edge.
+    func wandSelect(at point: CGPoint) {
+        guard !isPlaying, let f = currentFrame else { return }
+        let w = renderer.canvasSize.x, h = renderer.canvasSize.y
+        let seed = (x: Int(point.x.rounded(.down)), y: Int(point.y.rounded(.down)))
+        guard (0..<w).contains(seed.x), (0..<h).contains(seed.y),
+              let seen = renderer.flattenBytes(frameLayers(f.id, opacity: 1, tint: nil, guides: false)) else { return }
+        let region = FloodFill.region(in: seen, width: w, height: h, seed: seed,
+                                      tolerance: Int((min(max(select.tolerance, 0), 1) * 255).rounded()))
+        guard !region.isEmpty else { return }
+        // One pixel more takes in the soft edge of a line, which would otherwise stay behind
+        // as a ghost when it's moved. Pixel art has no soft edges.
+        let grown = FloodFill.grow(region, width: w, height: h, by: project.pixelArt ? 0 : 1)
+        select(grown.map { $0 ? 255 : 0 })
+    }
+
+    func deselect() {
+        commitSelection()
+        selectionMask = nil
+    }
+
+    /// Selects what wasn't, and unselects what was (with nothing marked, the whole canvas).
+    func invertSelection() {
+        commitSelection()
+        let w = renderer.canvasSize.x, h = renderer.canvasSize.y
+        let next = (selectionMask ?? SelectionMask(width: w, height: h, coverage: [])).inverted
+        selectionMask = next.isEmpty ? nil : next
+    }
+
+    /// The current colour inside the selection, on the drawing at the playhead. One undo step.
+    func fillSelection() {
+        let rgb = SIMD3(color.x, color.y, color.z), mode = paintMode
+        editInsideSelection { SelectionPixels.fill($0, mask: $1.coverage, color: rgb, mode: mode) }
+    }
+
+    /// Rubs out what's inside the selection, on the drawing at the playhead. One undo step.
+    func clearSelection() {
+        editInsideSelection { SelectionPixels.split($0, mask: $1.coverage).remaining }
+    }
+
+    private func editInsideSelection(_ edit: ([UInt8], SelectionMask) -> [UInt8]) {
+        guard !isPlaying, let mask = selectionMask, let key = currentDrawingKey, currentLayer?.locked == false else { return }
+        commitSelection()
+        recordUndo(textures: [key], copyPixels: true)
+        guard let target = store.texture(clip: key.clip, frame: key.frame, layer: key.layer),
+              let pixels = renderer.readbackBytes(target) else { return }
+        renderer.upload(bytes: edit(pixels, mask), into: target)
+        isDirty = true
+        refreshThumbnails(showing: key)
+    }
+
+    /// Lifts what's selected off the drawing at the playhead, to move, scale, rotate or flip it:
+    /// on every visible layer with something drawn inside, so the lines and their colour move
+    /// together. Locked layers and guides stay put. Put down (✓), the selection goes along with
+    /// it, all as one undo step. With nothing to lift, `selectNotice` says why.
+    func transformSelection() {
+        guard !isPlaying, let mask = selectionMask, let b = mask.bounds else { return }
+        commitSelection()
+        var lockedName: String?
+        var found: [(index: Int, key: LayerKey, target: MTLTexture, pixels: [UInt8])] = []
+        for (i, layer) in layers.enumerated() where layer.visible && !layer.guide {
+            guard let key = drawingKey(layer: layer.id, at: frameIndex),
+                  let target = store.existingTexture(clip: key.clip, frame: key.frame, layer: key.layer),
+                  let pixels = renderer.readbackBytes(target),
+                  !SelectionPixels.isEmpty(SelectionPixels.split(pixels, mask: mask.coverage).lifted) else { continue }
+            if layer.locked { lockedName = lockedName ?? layer.name; continue }
+            found.append((i, key, target, pixels))
+        }
+        // The current layer leads (its handles, Move's pieces); otherwise the topmost.
+        guard let lead = found.first(where: { $0.index == layerIndex }) ?? found.last else {
+            notify(lockedName.map { String(localized: "“\($0)” is locked", bundle: AppLanguage.bundle) }
+                   ?? String(localized: "Nothing drawn inside the selection", bundle: AppLanguage.bundle))
+            return
+        }
+        if lead.index != layerIndex { layerIndex = lead.index }
+        lift(lead.pixels, mask: mask.coverage, outline: Self.corners(b), bounds: b, key: lead.key, target: lead.target)
+        guard selection != nil else { return }
+        liftedMask = mask
+        for other in found where other.index != lead.index {
+            let (lifted, remaining) = SelectionPixels.split(other.pixels, mask: mask.coverage)
+            let before = store.copy(of: other.key)
+            renderer.upload(bytes: remaining, into: other.target)
+            companions.append(Companion(key: other.key, lifted: lifted, before: before, preview: renderer.makeLayerTexture()))
+        }
+        renderSelectionPreview()
+    }
+
+    /// Why a Select action did nothing, shown for a moment over the canvas.
+    private(set) var selectNotice: String?
+    @ObservationIgnored private var noticeTask: Task<Void, Never>?
+
+    private func notify(_ text: String) {
+        selectNotice = text
+        noticeTask?.cancel()
+        noticeTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2.5))
+            guard !Task.isCancelled else { return }
+            self?.selectNotice = nil
+        }
+    }
+
+    private static func corners(_ r: CGRect) -> [CGPoint] {
+        [CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.maxX, y: r.minY), CGPoint(x: r.maxX, y: r.maxY), CGPoint(x: r.minX, y: r.maxY)]
+    }
+
+    // MARK: - Symmetry
+
+    /// Symmetry on (vertical, horizontal or both axes) or off. Turned on, the axes go through
+    /// the middle, unless they were placed before.
+    func setSymmetry(_ mode: Symmetry.Mode?) {
+        guard let mode else { if project.symmetry != nil { project.symmetry = nil; isDirty = true }; return }
+        var sym = project.symmetry ?? .centered(mode, width: renderer.canvasSize.x, height: renderer.canvasSize.y)
+        sym.mode = mode
+        project.symmetry = sym
+        isDirty = true
+    }
+
+    /// Moves an axis to a canvas position (on the nearest half pixel).
+    func moveSymmetryAxis(x: Double? = nil, y: Double? = nil) {
+        guard var sym = project.symmetry else { return }
+        if let x { sym.x = Symmetry.snapped(x, limit: renderer.canvasSize.x) }
+        if let y { sym.y = Symmetry.snapped(y, limit: renderer.canvasSize.y) }
+        guard sym != project.symmetry else { return }
+        project.symmetry = sym
+        isDirty = true
+    }
+
+    func centerSymmetryAxes() {
+        guard let sym = project.symmetry else { return }
+        project.symmetry = .centered(sym.mode, width: renderer.canvasSize.x, height: renderer.canvasSize.y)
+        isDirty = true
+    }
+
+    // MARK: - Flip layer
+
+    /// Mirrors the current layer's drawing at the playhead (or, with `everyDrawing`, all its
+    /// drawings in this clip), left to right or top to bottom: a head turned the other way.
+    /// Strokes stay strokes, sharp and editable. One undo step.
+    func flipLayer(vertically: Bool = false, everyDrawing: Bool = false) {
+        guard !isPlaying, let layer = currentLayer, !layer.locked else { return }
+        finishPen()
+        commitSelection()
+        let candidates = everyDrawing ? frames.indices.compactMap { drawingKey(layer: layer.id, at: $0) }
+                                      : [currentDrawingKey].compactMap { $0 }
+        var keys: [LayerKey] = []
+        for k in candidates where !keys.contains(k) && store.raw(k) != nil { keys.append(k) }
+        guard !keys.isEmpty else { return }
+        let w = renderer.canvasSize.x, h = renderer.canvasSize.y
+        let t = vertically ? CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: CGFloat(h))
+                           : CGAffineTransform(a: -1, b: 0, c: 0, d: 1, tx: CGFloat(w), ty: 0)
+        let pieces = keys.map { strokes[$0] }
+        recordUndo(textures: keys, copyPixels: true)
+        for (k, known) in zip(keys, pieces) {
+            guard let target = store.texture(clip: k.clip, frame: k.frame, layer: k.layer),
+                  let px = renderer.readbackBytes(target) else { continue }
+            if let known {
+                // Each piece flips on its own; a stroke is painted again, mirrored, so it stays sharp.
+                let flipped = known.compactMap { p in
+                    p.recipe.map { paint($0.transformed(t)) } ?? p.transformed(t, canvasWidth: w, height: h, hard: true)
+                }
+                strokes[k] = flipped
+                renderer.upload(bytes: StrokePieces.composite(flipped, width: w, height: h), into: target)
+            } else {
+                renderer.upload(bytes: SelectionPixels.render(px, width: w, height: h, transform: t, hard: true), into: target)
+            }
+            refreshThumbnails(showing: k)
+        }
+        isDirty = true
+    }
+
+    // MARK: - Arrange
+
+    /// Where what Move picked goes in its drawing's stack of pieces.
+    enum Arrange { case front, forward, backward, back }
+
+    /// Whether Arrange can do anything: Move picked some pieces, and there are others to go past.
+    var canArrange: Bool {
+        guard selection != nil, let moving = movingPieces, let pieces = strokes[moving.key] else { return false }
+        return pieces.count > moving.indices.count
+    }
+
+    /// Moves what's floating in front of or behind the drawing's other pieces (strokes, shapes,
+    /// paths): to the front, one up, one down, or to the back. Several picked pieces move as a
+    /// block. It shows at once and lands with the rest when the selection is put down.
+    func arrange(_ to: Arrange) {
+        guard selection != nil, let moving = movingPieces, let pieces = strokes[moving.key],
+              let target = store.texture(clip: moving.key.clip, frame: moving.key.frame, layer: moving.key.layer) else { return }
+        let picked = Set(moving.indices.filter { pieces.indices.contains($0) })
+        guard !picked.isEmpty, picked.count < pieces.count else { return }
+        let block = pieces.indices.filter { picked.contains($0) }.map { pieces[$0] }
+        let others = pieces.indices.filter { !picked.contains($0) }.map { pieces[$0] }
+        // How many of the others are under the block now: those below its top piece.
+        let top = picked.max()!
+        let below = pieces.indices.filter { !picked.contains($0) && $0 < top }.count
+        let place: Int
+        switch to {
+        case .front: place = others.count
+        case .back: place = 0
+        case .forward: place = min(below + 1, others.count)
+        case .backward: place = max(below - 1, 0)
+        }
+        if arrangedFrom == nil { arrangedFrom = pieces }
+        strokes[moving.key] = Array(others[..<place]) + block + Array(others[place...])
+        movingPieces = (moving.key, Array(place..<(place + block.count)))
+        let w = renderer.canvasSize.x, h = renderer.canvasSize.y
+        renderer.upload(bytes: StrokePieces.composite(Array(others[..<place]), width: w, height: h), into: target)
+        let rest = Array(others[place...])
+        if rest.isEmpty {
+            selectionAbove = nil
+        } else {
+            selectionAbove = selectionAbove ?? renderer.makeLayerTexture()
+            if let above = selectionAbove { renderer.upload(bytes: StrokePieces.composite(rest, width: w, height: h), into: above) }
+        }
+        canvasVersion &+= 1
     }
 
     // MARK: - Move
@@ -2381,8 +2872,10 @@ final class EditorState {
     func commitSelection() {
         guard let sel = selection else { return }
         // Lifted and put back where it was: no change, no undo step.
-        if selectionIsLift && sel.isIdentity { cancelSelection(); return }
+        if selectionIsLift && sel.isIdentity && arrangedFrom == nil { cancelSelection(); return }
         relockIfNeeded()
+        let movedMask = liftedMask.map { $0.transformed(sel.transform, hard: project.pixelArt) }
+        liftedMask = nil
         selection = nil
         lassoPoints = []
         moveHint = nil
@@ -2393,8 +2886,23 @@ final class EditorState {
         let w = renderer.canvasSize.x, h = renderer.canvasSize.y
         var before: [LayerKey: MTLTexture?] = [:]
         before.updateValue(selectionBefore, forKey: sel.key)
+        for c in companions { before.updateValue(c.before, forKey: c.key) }
         coalesceTag = nil
-        push(snapshot(before))                  // with the pieces as they were
+        push(snapshot(before))                  // with the pieces (and the selection) as they were
+        // The selection goes where the drawing went; undo brings both back.
+        if let movedMask { selectionMask = movedMask.isEmpty ? nil : movedMask }
+        if let original = arrangedFrom { undoStack[undoStack.count - 1].pieces[sel.key] = .some(original) }
+        arrangedFrom = nil
+        selectionAbove = nil
+        for c in companions {
+            guard let t = store.texture(clip: c.key.clip, frame: c.key.frame, layer: c.key.layer),
+                  let under = renderer.readbackBytes(t) else { continue }
+            let placed = SelectionPixels.render(c.lifted, width: w, height: h, transform: sel.transform, hard: project.pixelArt)
+            renderer.upload(bytes: SelectionPixels.composite(placed, over: under), into: t)
+            strokes[c.key] = nil
+            refreshThumbnails(showing: c.key)
+        }
+        companions = []
         if let moving, moving.key == sel.key, var pieces = strokes[sel.key] {
             // Each piece moves on its own and stays a piece, in its place in the stack. A pencil
             // stroke is painted again where it lands, so it stays as sharp as when it was drawn.
@@ -2423,10 +2931,16 @@ final class EditorState {
     func cancelSelection() {
         guard let sel = selection else { return }
         selection = nil
+        liftedMask = nil
         lassoPoints = []
         movingPieces = nil
         moveHint = nil
         if let before = selectionBefore { store.set(before, for: sel.key) }
+        for c in companions { store.set(c.before, for: c.key); refreshThumbnails(showing: c.key) }
+        companions = []
+        if let original = arrangedFrom { strokes[sel.key] = original }
+        arrangedFrom = nil
+        selectionAbove = nil
         selectionBefore = nil
         relockIfNeeded()
         refreshThumbnails(showing: sel.key)
@@ -2441,11 +2955,26 @@ final class EditorState {
     }
     private(set) var clipboard: Clipboard?
 
-    /// Lifts the whole drawing at the playhead into a selection, ready to move, copy or cut.
+    /// Marks the whole canvas, with the Select tool.
     func selectAll() {
-        let w = CGFloat(renderer.canvasSize.x), h = CGFloat(renderer.canvasSize.y)
         tool = .lasso
-        liftSelection([CGPoint(x: 0, y: 0), CGPoint(x: w, y: 0), CGPoint(x: w, y: h), CGPoint(x: 0, y: h)])
+        commitSelection()
+        let all = SelectionMask.all(width: renderer.canvasSize.x, height: renderer.canvasSize.y)
+        if project.pixelArt {
+            let drawn = SelectionMask(width: all.width, height: all.height, coverage: drawnOnly(all.coverage))
+            selectionMask = drawn.isEmpty ? nil : drawn
+        } else {
+            selectionMask = all
+        }
+    }
+
+    /// Pixel art: a lasso, a rectangle or Select all keeps only the pixels drawn inside it (on the
+    /// visible layers at the playhead), each whole, so the selection hugs the sprite's pixels.
+    private func drawnOnly(_ area: [UInt8]) -> [UInt8] {
+        guard let f = currentFrame,
+              let seen = renderer.flattenBytes(frameLayers(f.id, opacity: 1, tint: nil, guides: false)),
+              seen.count == area.count * 4 else { return area }
+        return area.indices.map { area[$0] >= 128 && seen[$0 * 4 + 3] != 0 ? 255 : 0 }
     }
 
     /// Copies the selection as it's placed now, or the whole drawing at the playhead when nothing
@@ -2453,9 +2982,21 @@ final class EditorState {
     func copySelection() {
         let w = renderer.canvasSize.x, h = renderer.canvasSize.y
         if let sel = selection {
-            let placed = SelectionPixels.render(sel.lifted, width: w, height: h, transform: sel.transform, hard: project.pixelArt)
+            let order = layers.map(\.id)
+            let all = ([(sel.key, sel.lifted)] + companions.map { ($0.key, $0.lifted) })
+                .sorted { (order.firstIndex(of: $0.0.layer) ?? 0) < (order.firstIndex(of: $1.0.layer) ?? 0) }
+            let flat = all.dropFirst().reduce(all[0].1) { SelectionPixels.composite($1.1, over: $0) }
+            let placed = SelectionPixels.render(flat, width: w, height: h, transform: sel.transform, hard: project.pixelArt)
             guard !SelectionPixels.isEmpty(placed) else { return }
             clipboard = Clipboard(pixels: placed, outline: sel.outline.map { $0.applying(sel.transform) })
+            lastCopyWasFrames = false
+        } else if let mask = selectionMask {
+            guard let key = currentDrawingKey, let b = mask.bounds,
+                  let t = store.existingTexture(clip: key.clip, frame: key.frame, layer: key.layer),
+                  let pixels = renderer.readbackBytes(t) else { return }
+            let inside = SelectionPixels.split(pixels, mask: mask.coverage).lifted
+            guard !SelectionPixels.isEmpty(inside) else { return }
+            clipboard = Clipboard(pixels: inside, outline: Self.corners(b))
             lastCopyWasFrames = false
         } else if let key = currentDrawingKey,
                   let t = store.existingTexture(clip: key.clip, frame: key.frame, layer: key.layer),
@@ -2470,7 +3011,7 @@ final class EditorState {
     /// Copy, then take it away: the selection, or the whole drawing when nothing is selected.
     func cutSelection() {
         copySelection()
-        if selection != nil { deleteSelection() } else { clearCurrentLayer() }
+        if selection != nil { deleteSelection() } else if selectionMask != nil { clearSelection() } else { clearCurrentLayer() }
     }
 
     /// Throws the floating selection away, leaving the hole it was lifted from. One undo step.
@@ -2478,17 +3019,30 @@ final class EditorState {
         guard let sel = selection else { return }
         relockIfNeeded()
         selection = nil
+        liftedMask = nil
         lassoPoints = []
         moveHint = nil
         let moving = movingPieces
         movingPieces = nil
         var before: [LayerKey: MTLTexture?] = [:]
         before.updateValue(selectionBefore, forKey: sel.key)
+        for c in companions { before.updateValue(c.before, forKey: c.key) }
         coalesceTag = nil
         push(snapshot(before))
+        let wasArranged = arrangedFrom != nil
+        if let original = arrangedFrom { undoStack[undoStack.count - 1].pieces[sel.key] = .some(original) }
+        arrangedFrom = nil
+        selectionAbove = nil
+        for c in companions { strokes[c.key] = nil; refreshThumbnails(showing: c.key) }
+        companions = []
         if let moving, moving.key == sel.key, var pieces = strokes[sel.key] {
             for i in moving.indices.sorted(by: >) where pieces.indices.contains(i) { pieces.remove(at: i) }
             strokes[sel.key] = pieces
+            // Arranged, the layer held only what was under the selection: put the rest back.
+            if wasArranged, let t = store.texture(clip: sel.key.clip, frame: sel.key.frame, layer: sel.key.layer) {
+                renderer.upload(bytes: StrokePieces.composite(pieces, width: renderer.canvasSize.x,
+                                                              height: renderer.canvasSize.y), into: t)
+            }
         } else {
             strokes[sel.key] = nil
         }
@@ -2520,6 +3074,12 @@ final class EditorState {
     private func renderSelectionPreview() {
         guard let sel = selection, var preview = selectionPreview else { return }
         let w = renderer.canvasSize.x, h = renderer.canvasSize.y
+        for c in companions {
+            if let t = c.preview {
+                renderer.upload(bytes: SelectionPixels.render(c.lifted, width: w, height: h, transform: sel.transform,
+                                                              hard: project.pixelArt), into: t)
+            }
+        }
         var recipes: [StrokeRecipe] = []
         var lifted = sel.lifted
         if let moving = movingPieces, moving.key == sel.key, let pieces = strokes[sel.key] {
@@ -2597,6 +3157,7 @@ final class EditorState {
         static let pencilOnly = "tool.pencilOnly"
         static let shapes = "tool.shapes"
         static let smudge = "tool.smudge"
+        static let select = "tool.select"
     }
 
     @ObservationIgnored private var loadingToolSettings = false
@@ -2638,6 +3199,10 @@ final class EditorState {
             o.strength = min(max(o.strength, 0.05), 1)
             smudge = o
         }
+        if let data = defaults.data(forKey: ToolKey.select), var o = try? JSONDecoder().decode(SelectOptions.self, from: data) {
+            o.tolerance = min(max(o.tolerance, 0), 1)
+            select = o
+        }
     }
 
     private func saveToolSettings() {
@@ -2657,6 +3222,7 @@ final class EditorState {
         defaults.set(pencilOnly, forKey: ToolKey.pencilOnly)
         defaults.set(try? JSONEncoder().encode(shapeOptions), forKey: ToolKey.shapes)
         defaults.set(try? JSONEncoder().encode(smudge), forKey: ToolKey.smudge)
+        defaults.set(try? JSONEncoder().encode(select), forKey: ToolKey.select)
     }
 
     /// Apple Pencil double tap / squeeze set to "switch to eraser": eraser, and back to what you had.
@@ -3162,6 +3728,10 @@ final class EditorState {
         var textures: [LayerKey: MTLTexture?]
         /// The same drawings' pieces (nil: not known).
         var pieces: [LayerKey: [StrokePiece]?] = [:]
+        /// A canvas resize: every drawing as it was, at the size it was.
+        var canvas: CanvasPixels? = nil
+        /// What was selected, so undo puts the selection back with the drawing it was on.
+        var mask: SelectionMask? = nil
     }
 
     var canUndo: Bool { !undoStack.isEmpty }
@@ -3175,7 +3745,7 @@ final class EditorState {
         var pieces: [LayerKey: [StrokePiece]?] = [:]
         for k in textures.keys { pieces.updateValue(strokes[k], forKey: k) }
         return Snapshot(project: project, clipIndex: clipIndex, frameIndex: frameIndex,
-                        layerIndex: layerIndex, textures: textures, pieces: pieces)
+                        layerIndex: layerIndex, textures: textures, pieces: pieces, mask: selectionMask)
     }
 
     /// Call right before an edit. `textures` are the layers the edit creates, removes or paints into;
@@ -3213,6 +3783,7 @@ final class EditorState {
         if selection != nil { cancelSelection(); return }
         if penEditing != nil { cancelPen(); return }
         guard let s = undoStack.popLast() else { return }
+        if s.canvas != nil { redoStack.append(swapCanvas(s)); return }
         redoStack.append(snapshot(currentTextures(s)))
         apply(s)
     }
@@ -3221,6 +3792,7 @@ final class EditorState {
         cancelStroke()
         commitSelection()
         guard let s = redoStack.popLast() else { return }
+        if s.canvas != nil { undoStack.append(swapCanvas(s)); return }
         undoStack.append(snapshot(currentTextures(s)))
         apply(s)
     }
@@ -3240,6 +3812,7 @@ final class EditorState {
         layerIndex = min(s.layerIndex, max(0, layers.count - 1))
         for (k, t) in s.textures { store.set(t, for: k) }
         for (k, p) in s.pieces { strokes[k] = p }
+        if s.mask != selectionMask { selectionMask = s.mask }
         isDirty = true
         for f in frames { refreshThumbnail(for: f.id) }
     }

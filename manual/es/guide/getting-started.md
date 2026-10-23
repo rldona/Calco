@@ -10,7 +10,7 @@ El lienzo ocupa toda la pantalla, sobre una cuadrícula suave, y los paneles flo
 
 | Zona | Para qué sirve |
 |---|---|
-| **Barra de herramientas** (izquierda, centrada) | Pincel, goma, relleno, cuentagotas, lazo, mover, color, tamaño, deshacer y rehacer. Ver [Herramientas de dibujo](./drawing). |
+| **Barra de herramientas** (izquierda, centrada) | Pincel, goma, relleno, cuentagotas, seleccionar, mover, color, tamaño, deshacer y rehacer. Ver [Herramientas de dibujo](./drawing). |
 | **Lienzo** (centro) | Donde dibujas. Pellizca para ampliar y usa dos dedos para desplazar y girar. |
 | **Riel de animación** (derecha, centrado) | Nuevo dibujo, duplicar, mantener, eliminar, más, el papel cebolla y si actúan sobre la capa o sobre todas. Ver [Línea de tiempo y dibujos](./timeline). |
 | **Barra superior** | El menú de archivo a la izquierda; voltear la vista y modo Zen a la derecha. |

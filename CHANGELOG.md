@@ -8,6 +8,12 @@ A release is made by pushing a tag `vX.Y.Z`: the release workflow tests and buil
 
 ### Added
 
+- **Compact timeline** (the dots button above the layer names): thin rows with a dot per drawing and a line through its held frames, many frames in view. Pixel-art projects show it compact, the rest with previews.
+- **Symmetry** (top right): paint with a mirror, left–right, top–bottom or four ways. The brush, eraser and smudge paint again in the mirror; drag an axis by its dot. Axes sit on pixel edges or centres, so pixel art mirrors exactly. Saved with the project.
+- **Flip** a layer (long-press its name): this drawing horizontally or vertically, or every drawing of the layer; strokes stay sharp and editable.
+- **Bring to front, forward, backward, to back**: with strokes, shapes or paths picked with Move, change their place in the drawing.
+- **Canvas size…** (file menu): make the canvas bigger or smaller mid-project without scaling the drawing. Type the width and height or grow it by 25 %, 50 % or × 2, or fit it to the drawing, and pick which side the drawing stays against. Every clip, frame and layer changes at once; strokes stay sharp and editable, pivots stay on the same pixel, and Undo brings back anything that was cut.
+- **Select** (L), in place of the Lasso: mark part of the drawing **freehand**, with a **rectangle**, or by colour with the **magic wand** (with a tolerance), and **add** to the selection or **subtract** from it. It stays marked, with marching ants, without lifting anything: the brush, eraser, fill, shapes and smudge only reach inside it. Its bar fills it, clears it, copies, cuts, pastes, inverts it, or lifts it to **transform** (every visible layer at once, so lines and colour move together), and the selection follows the drawing when it's put down. ⌘D deselects, ⇧⌘I inverts. In pixel art, a lasso or rectangle keeps only the drawn pixels inside it, and shows them outlined while you draw it.
 - **Folders** in the gallery: make one, drag a project onto it (or use ⋯ › Move to), and drag it onto All projects to take it out. A folder's card peeks at its projects; deleting a folder never deletes them. **New folder** and **New project** are always the first cards of their rows, even in an empty gallery. Folders are plain folders in On My iPad › Calco.
 - A **new gallery**: the Continue card plays the clip you pick and has Export and Duplicate at hand; every card shows its size and date and a **⋯** menu (open, rename, duplicate, export, delete); **search** by project or clip name, **sort** by recent, name or size, and drop a `.calco` on the New card to bring it in.
 - The timeline goes on past the last frame with **empty slots**: tap one to draw there, the frames in between holding the last drawings.
@@ -36,6 +42,8 @@ A release is made by pushing a tag `vX.Y.Z`: the release workflow tests and buil
 
 ### Fixed
 
+- The selection's marching ants, the lasso and the handles over the canvas no longer sit a little off the drawing (more so near its edges): they now share the canvas's full-screen space.
+- **Pixel art**: the brush is a square block at every size (it was round, a "+" at small sizes), and the Pencil's pressure and tilt no longer change its size.
 - A path opened with Node no longer vanishes from the canvas when you tap away to finish it.
 
 ### Changed

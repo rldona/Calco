@@ -150,11 +150,16 @@ final class CanvasUIView: UIView {
             mode = .tap
             moveStart = (canvasPoint(t, in: state), t.location(in: self))
         case .lasso:
-            // Touching the canvas outside a floating selection drops it and starts a new lasso.
+            // Touching the canvas outside a floating selection drops it and starts a new mark.
             state.commitSelection()
             activeTouch = t
-            mode = .lasso
-            state.lassoPoints = [canvasPoint(t, in: state)]
+            let p = canvasPoint(t, in: state)
+            moveStart = (p, t.location(in: self))
+            switch state.select.shape {
+            case .wand: mode = .tap                          // picks on the lift
+            case .rect: mode = .lasso; state.lassoPoints = state.selectionRect(from: p, to: p)
+            case .free: mode = .lasso; state.lassoPoints = [p]
+            }
         case .shape:
             state.commitSelection()
             guard state.currentLayer?.locked == false else { return }
@@ -206,6 +211,9 @@ final class CanvasUIView: UIView {
             draft.to = end
             draft.snap = snap
             state.shapeDraft = draft
+        case .lasso where state.select.shape == .rect:
+            guard let start = moveStart else { break }
+            state.lassoPoints = state.selectionRect(from: start.canvas, to: canvasPoint(t, in: state))
         case .lasso:
             for s in event?.coalescedTouches(for: t) ?? [t] {
                 let p = canvasPoint(s, in: state)
@@ -243,10 +251,17 @@ final class CanvasUIView: UIView {
             // The stroke under the tap; on a blank spot, puts down what's floating (or, with
             // nothing floating, picks up the whole drawing).
             case .move: state.liftForMove(at: p, dropOnMiss: state.selection != nil)
+            case .lasso: state.wandSelect(at: p)
             default: state.pickColor(at: point)
             }
         case .lasso:
-            state.liftSelection(state.lassoPoints)
+            let start = moveStart?.canvas
+            moveStart = nil
+            if state.select.shape == .rect, let start {
+                state.selectRect(from: start, to: canvasPoint(t, in: state))
+            } else {
+                state.selectPolygon(state.lassoPoints)
+            }
         case .shape:
             if let draft = state.shapeDraft { state.drawShape(from: draft.from, to: draft.to) }
         case .pen:
@@ -267,7 +282,7 @@ final class CanvasUIView: UIView {
         touchLive = false
         switch mode {
         case .tap, .moveDrag: moveStart = nil
-        case .lasso: state?.lassoPoints = []
+        case .lasso: state?.lassoPoints = []; moveStart = nil
         case .shape: state?.shapeDraft = nil
         case .pen: penGrab = nil
         case .node:
@@ -307,12 +322,13 @@ final class CanvasUIView: UIView {
         for s in samples {
             let canvasPos = renderer.canvasPoint(fromViewPoint: s.preciseLocation(in: self),
                                                  viewSize: bounds.size, transform: state.canvasTransform)
-            // Without pressure every stroke is the full size, Pencil or finger.
-            let force: Float = !state.usePressure ? 1
+            // Without pressure every stroke is the full size, Pencil or finger. Pixel art never
+            // follows it: a line one pixel wide stays one pixel wide.
+            let force: Float = !state.usePressure || state.project.pixelArt ? 1
                 : s.type == .pencil ? Float(s.force / max(s.maximumPossibleForce, 1))
                 : 0.5
             // 0 upright, 1 flat on the glass; fingers don't lean.
-            let tilt: Float = s.type == .pencil ? Float(1 - s.altitudeAngle / (.pi / 2)) : 0
+            let tilt: Float = s.type == .pencil && !state.project.pixelArt ? Float(1 - s.altitudeAngle / (.pi / 2)) : 0
             stamps += builder.add(.init(position: canvasPos, force: force, tilt: tilt))
         }
         state.paintStroke(stamps, into: target)

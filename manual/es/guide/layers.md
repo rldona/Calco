@@ -10,9 +10,13 @@ A la izquierda de cada fila:
 
 - **Ojo**: muestra u oculta la capa. Las capas ocultas no se exportan (Calco te avisa antes de exportar).
 - **Nombre**: tócalo para dibujar en esa capa. Se resalta en naranja.
-- **Candado**: protege la capa del lápiz, la goma, el relleno y el lazo.
+- **Candado**: protege la capa del lápiz, la goma, el relleno y las selecciones.
 
-Mantén pulsado el nombre para **Renombrar…**, **Opacidad…**, **Enmascarar con la capa de abajo**, **Solo guía (no se exporta)**, **Subir**, **Bajar** y **Eliminar capa…**.
+Mantén pulsado el nombre para **Renombrar…**, **Opacidad…**, **Enmascarar con la capa de abajo**, **Solo guía (no se exporta)**, **Voltear**, **Subir**, **Bajar** y **Eliminar capa…**.
+
+**Voltear** hace el espejo del dibujo de la capa en el cabezal, en horizontal o en vertical (una cabeza que mira hacia el otro lado), o de todos los dibujos de la capa en el clip a la vez. Los trazos siguen siendo trazos, nítidos y editables; un paso de deshacer.
+
+El botón de puntos sobre los nombres de las capas pone el timeline en modo **compacto**: filas finas con un punto por dibujo (hueco si está en blanco) y una línea por los fotogramas que lo mantienen, para ver muchas capas y fotogramas a la vez. Tócalo otra vez para volver a las miniaturas. Los proyectos de pixel art lo muestran compacto, y el resto con miniaturas.
 
 ## El panel de capas
 

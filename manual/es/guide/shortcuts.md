@@ -17,6 +17,8 @@ Con un teclado físico, mantén pulsado **⌘** para ver todos los atajos en iPa
 | ⌘Z / ⇧⌘Z | Deshacer / Rehacer |
 | ⌘C ⌘X ⌘V | Copiar, cortar, pegar |
 | ⌘A | Seleccionar todo |
+| ⌘D | Deseleccionar |
+| ⇧⌘I | Invertir selección |
 
 ## Dibujo
 
@@ -26,14 +28,14 @@ Con un teclado físico, mantén pulsado **⌘** para ver todos los atajos en iPa
 | E | Goma |
 | G | Relleno |
 | I | Cuentagotas |
-| L | Lazo |
+| L | Seleccionar |
 | V | Mover |
 | U | Formas |
 | P | Pluma |
 | A | Nodo |
 | S | Dedo |
 | [ / ] | Más pequeño / más grande |
-| Retorno / Esc | Aplicar / cancelar selección |
+| Retorno / Esc | Aplicar / cancelar selección (Esc sin nada levantado: deseleccionar) |
 | ⇧H | Voltear selección |
 | ⇧⌘⌫ | Vaciar capa |
 

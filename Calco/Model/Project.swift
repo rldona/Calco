@@ -18,6 +18,8 @@ struct Project: Codable, Equatable {
     var pixelArt = false
     /// The character's colours, named. Optional in the file, written when there are any.
     var palette: [PaletteColor] = []
+    /// Drawing with a mirror, and where its axes are. Optional in the file, written when on.
+    var symmetry: Symmetry?
 
     init(version: Int = Project.currentFormatVersion, name: String, canvas: CanvasSize, fps: Int = 12,
          clips: [Clip] = [], references: [Reference] = [], pixelArt: Bool = false, palette: [PaletteColor] = []) {
@@ -25,7 +27,7 @@ struct Project: Codable, Equatable {
         self.clips = clips; self.references = references; self.pixelArt = pixelArt; self.palette = palette
     }
 
-    private enum CodingKeys: String, CodingKey { case version, name, canvas, fps, clips, references, pixelArt, palette }
+    private enum CodingKeys: String, CodingKey { case version, name, canvas, fps, clips, references, pixelArt, palette, symmetry }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -37,6 +39,7 @@ struct Project: Codable, Equatable {
         references = try c.decodeIfPresent([Reference].self, forKey: .references) ?? []
         pixelArt = try c.decodeIfPresent(Bool.self, forKey: .pixelArt) ?? false
         palette = try c.decodeIfPresent([PaletteColor].self, forKey: .palette) ?? []
+        symmetry = try c.decodeIfPresent(Symmetry.self, forKey: .symmetry)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -49,6 +52,7 @@ struct Project: Codable, Equatable {
         try c.encode(references, forKey: .references)
         if pixelArt { try c.encode(pixelArt, forKey: .pixelArt) }
         if !palette.isEmpty { try c.encode(palette, forKey: .palette) }
+        if let symmetry { try c.encode(symmetry, forKey: .symmetry) }
     }
 }
 

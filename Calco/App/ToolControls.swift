@@ -68,8 +68,8 @@ struct ToolRail: View {
             RailButton(icon: "eyedropper", label: "Eyedropper", active: state.tool == .eyedropper, size: size) {
                 state.tool = .eyedropper
             }
-            // Tap once for the lasso, again for select all and paste.
-            RailButton(icon: "lasso", label: "Lasso", active: state.tool == .lasso, size: size) {
+            // Shows how it marks; tap again for freehand, rectangle or wand, and select all, invert and paste.
+            RailButton(icon: state.select.shape.icon, label: "Select", active: state.tool == .lasso, size: size) {
                 if state.tool == .lasso { editingLasso = true } else { state.tool = .lasso }
             }
             .popover(isPresented: $editingLasso, arrowEdge: edge) { LassoOptions(state: state) { editingLasso = false } }
@@ -508,27 +508,83 @@ extension CanvasRenderer.PaintMode {
     }
 }
 
-/// The lasso's options: select the whole drawing, or paste what was copied.
+/// The Select tool's options: how it marks, how a new mark meets the selection, the wand's
+/// tolerance, then select all, invert and paste.
 struct LassoOptions: View {
     @Bindable var state: EditorState
     let done: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Lasso").font(.headline)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Select").font(.headline)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Shape").font(.subheadline).foregroundStyle(.secondary)
+                Picker("Shape", selection: $state.select.shape) {
+                    ForEach(EditorState.SelectOptions.Shape.allCases) { Label($0.title, systemImage: $0.icon).tag($0) }
+                }
+                .pickerStyle(.segmented)
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("When you mark").font(.subheadline).foregroundStyle(.secondary)
+                Picker("When you mark", selection: $state.select.combine) {
+                    ForEach(SelectionMask.Combine.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+            }
+            if state.select.shape == .wand {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Tolerance · \(Int((state.select.tolerance * 100).rounded())) %")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    Slider(value: $state.select.tolerance, in: 0...1, step: 0.01)
+                    Text("How alike a colour must be to the one you tap to be picked too.")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Divider()
             Button { state.selectAll(); done() } label: {
                 Label("Select all", systemImage: "selection.pin.in.out").frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Button { state.invertSelection(); done() } label: {
+                Label("Invert selection", systemImage: "arrow.left.arrow.right.square").frame(maxWidth: .infinity, alignment: .leading)
             }
             Button { state.paste(); done() } label: {
                 Label("Paste", systemImage: "doc.on.clipboard").frame(maxWidth: .infinity, alignment: .leading)
             }
             .disabled(state.clipboard == nil)
-            Text("Copy or cut from the bar above a selection. Paste lands where it was copied, on whichever frame and layer you're on.")
+            Text("While something is selected, the brush, eraser, fill, shapes and smudge only reach inside it.")
                 .font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .buttonStyle(.bordered)
         .padding(20)
-        .frame(width: 280)
+        .frame(width: 320)
+    }
+}
+
+extension EditorState.SelectOptions.Shape {
+    var icon: String {
+        switch self {
+        case .free: "lasso"
+        case .rect: "rectangle.dashed"
+        case .wand: "wand.and.stars"
+        }
+    }
+    var title: String {
+        switch self {
+        case .free: String(localized: "Freehand", bundle: AppLanguage.bundle)
+        case .rect: String(localized: "Rectangle", bundle: AppLanguage.bundle)
+        case .wand: String(localized: "Wand", bundle: AppLanguage.bundle)
+        }
+    }
+}
+
+extension SelectionMask.Combine {
+    var title: String {
+        switch self {
+        case .replace: String(localized: "Replace", bundle: AppLanguage.bundle)
+        case .add: String(localized: "Add", bundle: AppLanguage.bundle)
+        case .subtract: String(localized: "Subtract", bundle: AppLanguage.bundle)
+        }
     }
 }

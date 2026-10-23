@@ -17,9 +17,19 @@ struct TimelineView: View {
     @State private var lastNumberTap: (index: Int, time: CFTimeInterval)?
     private static let tick = UISelectionFeedbackGenerator()
 
+    /// Compact: thin rows with a dot per drawing instead of previews, many frames in view.
+    /// Pixel-art projects show the compact sheet (tiny drawings, many frames), the rest the
+    /// previews. The button switches it for a while; another project starts from the rule again.
+    @State private var compactOverride: Bool?
+    private var compact: Bool {
+        get { compactOverride ?? state.project.pixelArt }
+        nonmutating set { compactOverride = newValue == state.project.pixelArt ? nil : newValue }
+    }
+
     /// Width of one tick (one `hold` unit).
-    private let tick: CGFloat = 58
-    private let labelWidth: CGFloat = 168
+    private var tick: CGFloat { compact ? 26 : 58 }
+    private var labelWidth: CGFloat { compact ? 150 : 168 }
+    private static let compactRow: CGFloat = 24
 
     /// Height of the layer grid set with the grip, remembered; 0 = automatic (up to 6 rows).
     @AppStorage("timeline.gridHeight") private var gridHeight: Double = 0
@@ -33,18 +43,26 @@ struct TimelineView: View {
 
     /// Rows grow (up to `maxRow`) to fill a grid stretched taller than the layers need.
     private var rowHeight: CGFloat {
+        if compact { return Self.compactRow }
         guard gridHeight > 0, !state.layers.isEmpty else { return Self.minRow }
         let fit = (CGFloat(gridHeight) - Self.rulerHeight) / CGFloat(state.layers.count) - Self.rowGap
         return min(max(fit, Self.minRow), Self.maxRow)
     }
 
     private var automaticGridHeight: CGFloat {
-        Self.rulerHeight + CGFloat(min(state.layers.count, 4)) * (Self.minRow + Self.rowGap)
+        if compact { return Self.rulerHeight + CGFloat(min(state.layers.count, 8)) * (Self.compactRow + Self.rowGap) }
+        return Self.rulerHeight + CGFloat(min(state.layers.count, 4)) * (Self.minRow + Self.rowGap)
     }
 
     /// A height saved with smaller rows never cuts a row in half: at least two whole rows.
     private var gridMaxHeight: CGFloat {
         guard gridHeight > 0 else { return automaticGridHeight }
+        if compact {
+            // Rows keep their size: the grip only shows more or fewer of them.
+            let all = Self.rulerHeight + CGFloat(state.layers.count) * (Self.compactRow + Self.rowGap)
+            let two = Self.rulerHeight + 2 * (Self.compactRow + Self.rowGap)
+            return min(max(CGFloat(gridHeight), two), max(all, two), Self.maxGridHeight)
+        }
         let least = Self.rulerHeight + CGFloat(min(state.layers.count, 2)) * (Self.minRow + Self.rowGap)
         return min(max(CGFloat(gridHeight), least), Self.maxGridHeight)
     }
@@ -123,6 +141,8 @@ struct TimelineView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: collapsed)
+        .onChange(of: state.documentURL) { _, _ in compactOverride = nil }
+        .onChange(of: state.project.pixelArt) { _, _ in compactOverride = nil }
     }
 
     private var expanded: some View {
@@ -237,21 +257,13 @@ struct TimelineView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Button { state.togglePlayback() } label: {
-                Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Theme.onAccent)
-                    .frame(width: 48, height: 36)
-                    .background(Theme.accent, in: RoundedRectangle(cornerRadius: 10))
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(state.isPlaying ? "Pause" : "Play")
+            Transport(state: state)
 
             FrameCounter(state: state, font: .system(.subheadline, design: .monospaced))
                 .fixedSize()
 
             ClipTabs(state: state)
+                .layoutPriority(1)        // the clip names stay whole; the frame length gives way
 
             ClipSettingsButton(state: state)
 
@@ -269,6 +281,13 @@ struct TimelineView: View {
         HStack(spacing: 6) {
             Text("Layers").font(.caption).foregroundStyle(Theme.textFaint)
             Spacer(minLength: 2)
+            // Previews, or compact: thin rows with a dot per drawing, many frames in view.
+            Button { withAnimation(.easeInOut(duration: 0.2)) { compact.toggle() } } label: {
+                Image(systemName: compact ? "photo" : "circle.grid.3x3")
+                    .frame(width: 26, height: 26)
+            }
+            .accessibilityLabel(compact ? "Show previews" : "Compact timeline")
+            .help(compact ? "Show the drawings' previews" : "Compact: thin rows with a dot per drawing")
             NewLayerMenu(state: state)
             LayersButton(state: state, iconOnly: true)
         }
@@ -283,10 +302,9 @@ struct TimelineView: View {
         return HStack(spacing: 0) {
             ForEach(Array(state.frames.enumerated()), id: \.element.id) { i, frame in
                 Text("\(i + 1)")
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundStyle(i == state.markedFrameIndex ? Theme.accentText : Theme.textFaint)
-                    .padding(.leading, 3)
-                    .frame(width: width(frame), height: Self.rulerHeight, alignment: .bottomLeading)
+                    .frame(width: width(frame), height: Self.rulerHeight)
                     .background(state.playRange != nil && range.contains(i) ? Theme.accent.opacity(0.12) : .clear)
                     .overlay(alignment: .bottomLeading) { Rectangle().fill(Theme.hairline).frame(width: 1, height: 8) }
                     .contentShape(Rectangle())
@@ -317,10 +335,9 @@ struct TimelineView: View {
             }
             ForEach(state.frames.count..<(state.frames.count + Self.ghostSlots), id: \.self) { k in
                 Text("\(k + 1)")
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundStyle(Theme.textFaint.opacity(0.45))
-                    .padding(.leading, 3)
-                    .frame(width: tick, height: Self.rulerHeight, alignment: .bottomLeading)
+                    .frame(width: tick, height: Self.rulerHeight)
                     .overlay(alignment: .bottomLeading) { Rectangle().fill(Theme.hairline.opacity(0.5)).frame(width: 1, height: 8) }
                     .accessibilityHidden(true)
             }
@@ -381,6 +398,10 @@ struct TimelineView: View {
                     ? runIndex[clip.sourceIndex(layer: layer.id, at: run.start)]
                     : nil
                 let preview = key.flatMap { state.drawingThumbnails[$0] }
+                Group {
+                if compact {
+                    CompactRun(widths: span.map { width($0) }, drawn: drawn, selected: selected, linked: linkedTo != nil)
+                } else {
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 4)
                         .fill(selected ? Theme.accentWash : (drawn ? Theme.raised : Color.clear))
@@ -422,6 +443,8 @@ struct TimelineView: View {
                     .padding(.bottom, drawn && preview != nil ? 2 : 0)
                     .allowsHitTesting(false)
                 }
+                }
+                }
                 .frame(width: max(4, w - 2), height: rowHeight)
                 .padding(.trailing, 2)
                 .opacity(layer.visible ? 1 : 0.45)
@@ -439,11 +462,11 @@ struct TimelineView: View {
                 .overlay(alignment: .trailing) {
                     // Drag the right edge (Pencil or finger) to make the drawing last more or fewer
                     // frames; what comes after moves along.
-                    if !layer.locked {
+                    if !layer.locked && (!compact || selected) {
                         Capsule()
                             .fill(selected ? Theme.accent : Theme.textDim)
-                            .frame(width: 4, height: rowHeight * 0.65)
-                            .frame(width: 22, height: rowHeight)
+                            .frame(width: compact ? 3 : 4, height: rowHeight * 0.65)
+                            .frame(width: compact ? 10 : 22, height: rowHeight)
                             .contentShape(Rectangle())
                             .highPriorityGesture(DragGesture(minimumDistance: 2, coordinateSpace: .named(Self.sheet))
                                 .onChanged { g in dragEdge(layer: layer.id, start: run.start, toX: g.location.x) }
@@ -469,7 +492,7 @@ struct TimelineView: View {
                     state.addDrawing()
                 } label: {
                     Image(systemName: "plus")
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.system(size: compact ? 11 : 15, weight: .bold))
                         .foregroundStyle(Theme.accent)
                         .frame(width: tick, height: rowHeight)
                         .overlay(RoundedRectangle(cornerRadius: 4)
@@ -482,8 +505,14 @@ struct TimelineView: View {
             // The sheet goes on, faint, so it's clear there's room: a tap draws there.
             let first = state.frames.count + (isCurrentLayer && !layer.locked ? 1 : 0)
             ForEach(first..<(state.frames.count + Self.ghostSlots), id: \.self) { k in
-                RoundedRectangle(cornerRadius: 4)
-                    .strokeBorder(Theme.hairline, style: StrokeStyle(lineWidth: 0.75, dash: [3, 3]))
+                Group {
+                    if compact {
+                        Circle().strokeBorder(Theme.hairline, lineWidth: 1).frame(width: 8, height: 8)
+                    } else {
+                        RoundedRectangle(cornerRadius: 4)
+                            .strokeBorder(Theme.hairline, style: StrokeStyle(lineWidth: 0.75, dash: [3, 3]))
+                    }
+                }
                     .frame(width: tick, height: rowHeight)
                     .contentShape(Rectangle())
                     .onTapGesture { if !layer.locked { state.addDrawing(at: k, layer: layer.id) } }
@@ -492,8 +521,8 @@ struct TimelineView: View {
         }
     }
 
-    /// Empty slots shown after the last frame, enough to reach past the edge of the sheet.
-    private static let ghostSlots = 16
+    /// Empty slots shown after the last frame, enough to reach past the edge of the sheet even compact.
+    private static let ghostSlots = 50
 
     /// Long-press a cell: what the exposure sheet can do with it.
     @ViewBuilder
@@ -615,6 +644,19 @@ private struct LayerLabel: View {
                 if layer.guide {
                     Button { replacingSequence = true } label: { Label("Replace sequence…", systemImage: "photo.stack") }
                 }
+                // Mirror the drawing: a head turned the other way, or the whole layer facing back.
+                Menu {
+                    Button { state.layerIndex = index; state.flipLayer() } label: {
+                        Label("This drawing, horizontally", systemImage: "arrow.left.and.right.righttriangle.left.righttriangle.right")
+                    }
+                    Button { state.layerIndex = index; state.flipLayer(vertically: true) } label: {
+                        Label("This drawing, vertically", systemImage: "arrow.up.and.down.righttriangle.up.righttriangle.down")
+                    }
+                    Button { state.layerIndex = index; state.flipLayer(everyDrawing: true) } label: {
+                        Label("Every drawing, horizontally", systemImage: "square.stack")
+                    }
+                } label: { Label("Flip", systemImage: "arrow.left.and.right.righttriangle.left.righttriangle.right") }
+                .disabled(layer.locked)
                 Button { state.moveLayer(from: index, to: index + 1) } label: { Label("Move up", systemImage: "arrow.up") }
                     .disabled(index == state.layers.count - 1)
                 Button { state.moveLayer(from: index, to: index - 1) } label: { Label("Move down", systemImage: "arrow.down") }
@@ -715,10 +757,13 @@ private struct HoldControl: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: "timer")
-            Text(hold == 1 ? "Lasts 1 frame" : "Lasts \(hold) frames")
-                .font(.subheadline.weight(.medium))
-                .monospacedDigit()
-                .fixedSize()
+            // Short of room (the transport, many clips), just the number.
+            ViewThatFits(in: .horizontal) {
+                Text(hold == 1 ? "Lasts 1 frame" : "Lasts \(hold) frames").fixedSize()
+                Text(verbatim: "\(hold)").fixedSize()
+            }
+            .font(.subheadline.weight(.medium))
+            .monospacedDigit()
             step("minus", by: -1).disabled(hold <= 1)
             step("plus", by: 1).disabled(hold >= 24)
         }
@@ -864,6 +909,58 @@ private struct NewLayerMenu: View {
 // stays put.
 
 /// Frame / total.
+/// Play / pause.
+private struct Transport: View {
+    @Bindable var state: EditorState
+
+    var body: some View {
+        Button { state.togglePlayback() } label: {
+            Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Theme.onAccent)
+                .frame(width: 48, height: 36)
+                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 10))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(state.isPlaying ? "Pause" : "Play")
+    }
+}
+
+/// A drawing in the compact sheet: a dot on its first frame (hollow while it's blank), a line
+/// through the frames that hold it.
+private struct CompactRun: View {
+    let widths: [CGFloat]
+    let drawn: Bool
+    let selected: Bool
+    let linked: Bool
+
+    var body: some View {
+        let ink = selected ? Theme.accentText : (linked ? Theme.textDim : Theme.text)
+        HStack(spacing: 0) {
+            ForEach(widths.indices, id: \.self) { k in
+                ZStack {
+                    if k == 0 {
+                        if drawn {
+                            Circle().fill(ink).frame(width: 11, height: 11)
+                                .overlay { if linked { Circle().fill(Theme.panel).frame(width: 4, height: 4) } }
+                        } else {
+                            Circle().strokeBorder(ink.opacity(0.6), lineWidth: 1.5).frame(width: 10, height: 10)
+                        }
+                    } else {
+                        Capsule().fill(selected ? Theme.accent.opacity(0.7) : Theme.textFaint)
+                            .frame(width: max(4, widths[k] - 4), height: 3)
+                    }
+                }
+                .frame(width: widths[k])
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(selected ? Theme.accentWash : .clear, in: RoundedRectangle(cornerRadius: 4))
+        .overlay { if selected { RoundedRectangle(cornerRadius: 4).strokeBorder(Theme.accent, lineWidth: 1.5) } }
+    }
+}
+
 private struct FrameCounter: View {
     @Bindable var state: EditorState
     let font: Font

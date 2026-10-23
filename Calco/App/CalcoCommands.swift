@@ -38,6 +38,9 @@ struct CalcoCommands: Commands {
             Button("Paste") { state.pasteMakesFrames ? state.pasteFrames() : state.paste() }
                 .keyboardShortcut("v").disabled(state.isInGallery || (state.clipboard == nil && state.frameClipboard == nil))
             Button("Select All") { state.selectAll() }.keyboardShortcut("a").disabled(state.isInGallery)
+            Button("Deselect") { state.deselect() }.keyboardShortcut("d").disabled(state.isInGallery || state.selectionMask == nil)
+            Button("Invert Selection") { state.invertSelection() }.keyboardShortcut("i", modifiers: [.command, .shift])
+                .disabled(state.isInGallery)
         }
         CommandGroup(replacing: .undoRedo) {
             Button("Undo") { state.undo() }.keyboardShortcut("z").disabled(!state.canUndo)
@@ -49,7 +52,7 @@ struct CalcoCommands: Commands {
             Button("Eraser") { state.tool = .eraser }.keyboardShortcut("e", modifiers: [])
             Button("Fill") { state.tool = .fill }.keyboardShortcut("g", modifiers: [])
             Button("Eyedropper") { state.tool = .eyedropper }.keyboardShortcut("i", modifiers: [])
-            Button("Lasso") { state.tool = .lasso }.keyboardShortcut("l", modifiers: [])
+            Button("Select") { state.tool = .lasso }.keyboardShortcut("l", modifiers: [])
             Button("Move") { state.tool = .move }.keyboardShortcut("v", modifiers: [])
             Button("Shapes") { state.tool = .shape }.keyboardShortcut("u", modifiers: [])
             Button("Pen") { state.tool = .pen }.keyboardShortcut("p", modifiers: [])
@@ -57,8 +60,10 @@ struct CalcoCommands: Commands {
             Button("Smudge") { state.tool = .smudge }.keyboardShortcut("s", modifiers: [])
             Button("Apply Selection") { state.commitSelection() }.keyboardShortcut(.return, modifiers: [])
                 .disabled(!state.hasSelection)
-            Button("Cancel Selection") { state.cancelSelection() }.keyboardShortcut(.escape, modifiers: [])
-                .disabled(!state.hasSelection)
+            // Floating: put it back. Only marked: let it go.
+            Button("Cancel Selection") { state.hasSelection ? state.cancelSelection() : state.deselect() }
+                .keyboardShortcut(.escape, modifiers: [])
+                .disabled(!state.hasSelection && state.selectionMask == nil)
             Button("Flip Selection") { state.updateSelection { $0.flipped.toggle() } }
                 .keyboardShortcut("h", modifiers: [.shift])
                 .disabled(!state.hasSelection)
