@@ -78,9 +78,9 @@ Toca en cualquier punto del lienzo para coger ese color. Después Calco vuelve a
 
 ## Seleccionar
 
-Marca una parte del dibujo y luego decide qué hacer con ella. Toca otra vez la herramienta para sus opciones:
+Marca una parte del dibujo y luego decide qué hacer con ella. Mientras Seleccionar está activa, una barra bajo el lienzo tiene la forma, cómo se combina cada marca, la tolerancia de la varita y Pegar si has copiado algo; tocando otra vez la herramienta se abre el resto:
 
-- **Forma**: **Libre** (rodéalo), **Rectángulo** (arrastra una caja) o **Varita** (toca un color: coge la mancha de ese color, tal como se ve con todas las capas, y los vecinos tan parecidos como permita la **tolerancia**).
+- **Forma**: **Libre** (rodéalo), **Rectángulo** (arrastra una caja) o **Varita** (toca un color: coge la mancha de ese color, tal como se ve con todas las capas, y los vecinos tan parecidos como permita la **tolerancia**; en **Bloque**, todo lo dibujado que se toca con él, sea del color que sea: una cabeza con su contorno, ojos y relleno de un toque).
 - **Al marcar**: **Nueva** selección, **Añadir** a la que hay o **Restar** de ella. Un toque en Nueva quita la selección.
 - **Seleccionar todo** (⌘A), **Invertir selección** (⇧⌘I) y **Pegar**.
 

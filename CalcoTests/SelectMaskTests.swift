@@ -239,4 +239,23 @@ final class SelectToolTests: XCTestCase {
         state.redo()
         XCTAssertEqual(state.selectionMask?.bounds, CGRect(x: 110, y: 10, width: 20, height: 20))
     }
+
+    func testWandBlockTakesEverythingTouchingWhateverTheColour() throws {
+        let state = try makeState()
+        state.selectRect(from: CGPoint(x: 10, y: 10), to: CGPoint(x: 20, y: 20))
+        state.color = SIMD4(1, 0, 0, 1)
+        state.fillSelection()
+        state.selectRect(from: CGPoint(x: 20, y: 10), to: CGPoint(x: 30, y: 20))
+        state.color = SIMD4(0, 0, 1, 1)
+        state.fillSelection()                                   // touching, another colour
+        state.selectRect(from: CGPoint(x: 100, y: 100), to: CGPoint(x: 110, y: 110))
+        state.fillSelection()                                   // apart
+        state.deselect()
+        state.select.wandBlock = true
+        state.wandSelect(at: CGPoint(x: 12, y: 12))
+        XCTAssertEqual(state.selectionMask?.bounds, CGRect(x: 10, y: 10, width: 20, height: 10))
+        state.select.wandBlock = false
+        state.wandSelect(at: CGPoint(x: 12, y: 12))
+        XCTAssertEqual(state.selectionMask?.bounds?.maxX ?? 0, 21, accuracy: 1, "by colour: only the red")
+    }
 }

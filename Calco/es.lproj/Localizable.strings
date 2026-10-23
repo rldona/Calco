@@ -75,6 +75,7 @@
 "Bend the arc" = "Curvar el arco";
 "Bigger" = "Más grande";
 "Blank inbetween halfway" = "Intermedio vacío a mitad";
+"Block" = "Bloque";
 "Blue" = "Azul";
 "Blue pencil" = "Lápiz azul";
 "Blur" = "Desenfocar";
@@ -86,6 +87,7 @@
 "Brush" = "Pincel";
 "Brush size" = "Tamaño del pincel";
 "Brushes" = "Pinceles";
+"By colour" = "Por color";
 "Calco" = "Calco";
 "Calco is in English unless you choose otherwise. Your projects, layer and clip names don't change." = "Calco está en inglés salvo que elijas otro idioma. Tus proyectos y los nombres de capas y clips no cambian.";
 "Cancel" = "Cancelar";
@@ -493,6 +495,8 @@
 "Symmetry" = "Simetría";
 "Symmetry: paint with a mirror" = "Simetría: pintar con un espejo";
 "Sync Layers" = "Sincronizar capas";
+"Takes everything drawn that touches the tap, whatever its colour." = "Coge todo lo dibujado que se toca con lo que tocas, sea del color que sea.";
+"Takes the patch of the colour you tap." = "Coge la mancha del color que tocas.";
 "Tap a path or a shape to edit its points; drag on empty canvas to pick several and move them together. Tap a point twice to switch it between corner and curve." = "Toca un trazado o una forma para editar sus nodos; arrastra en un hueco para coger varios y moverlos juntos. Toca dos veces un nodo para pasarlo de esquina a curva.";
 "Tap to place points; drag as you place one, or pull a point, to curve it. Tap the line to add a point, the first point to close the path. The fill is for closed paths." = "Toca para poner puntos; arrastra al ponerlo, o tira de un punto, para curvarlo. Toca la línea para añadir un punto y el primer punto para cerrar el trazado. El relleno es para trazados cerrados.";
 "Taps add strokes to what you're moving, or take them out" = "Cada toque añade un trazo a lo que mueves, o lo quita";
@@ -508,6 +512,7 @@
 "Timeline height" = "Altura de la línea de tiempo";
 "Tint" = "Tinte";
 "Tip" = "Punta";
+"Tolerance" = "Tolerancia";
 "Tolerance · %lld %%" = "Tolerancia · %lld %%";
 "Top–bottom" = "Arriba–abajo";
 "Transform" = "Transformar";

@@ -552,4 +552,9 @@ ES = {
     "Compact: thin rows with a dot per drawing": "Compacto: filas finas con un punto por dibujo",
     "Show previews": "Ver miniaturas",
     "Show the drawings' previews": "Ver las miniaturas de los dibujos",
+    "Tolerance": "Tolerancia",
+    "Block": "Bloque",
+    "By colour": "Por color",
+    "Takes everything drawn that touches the tap, whatever its colour.": "Coge todo lo dibujado que se toca con lo que tocas, sea del color que sea.",
+    "Takes the patch of the colour you tap.": "Coge la mancha del color que tocas.",
 }

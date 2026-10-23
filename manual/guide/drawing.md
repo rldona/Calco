@@ -78,9 +78,9 @@ Tap anywhere on the canvas to take that colour. Calco then switches back to the 
 
 ## Select
 
-Mark part of the drawing, then decide what to do with it. Tap the tool again for its options:
+Mark part of the drawing, then decide what to do with it. While Select is on, a bar under the canvas has its shape, how a new mark combines, the wand's tolerance, and Paste once something is copied; tapping the tool again opens the rest:
 
-- **Shape**: **Freehand** (draw around it), **Rectangle** (drag a box) or **Wand** (tap a colour: it takes the patch of that colour, as it looks with every layer, and the neighbours as alike as the **tolerance** allows).
+- **Shape**: **Freehand** (draw around it), **Rectangle** (drag a box) or **Wand** (tap a colour: it takes the patch of that colour, as it looks with every layer, and the neighbours as alike as the **tolerance** allows; in **Block**, everything drawn that touches it, whatever its colour: a head with its outline, eyes and fill in one tap).
 - **When you mark**: **Replace** the selection, **Add** to it, or **Subtract** from it. A tap in Replace lets the selection go.
 - **Select all** (⌘A), **Invert selection** (⇧⌘I) and **Paste**.
 

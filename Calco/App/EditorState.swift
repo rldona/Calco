@@ -131,6 +131,20 @@ final class EditorState {
         var combine = SelectionMask.Combine.replace
         /// 0–1: how far a colour may be from the one tapped, per channel, and still be picked.
         var tolerance: Float = 0.2
+        /// The wand takes the whole block under the tap (every drawn pixel touching it, any
+        /// colour) instead of one colour.
+        var wandBlock = false
+
+        init() {}
+
+        /// Settings saved before an option existed keep the rest.
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            shape = try c.decodeIfPresent(Shape.self, forKey: .shape) ?? .free
+            combine = try c.decodeIfPresent(SelectionMask.Combine.self, forKey: .combine) ?? .replace
+            tolerance = try c.decodeIfPresent(Float.self, forKey: .tolerance) ?? 0.2
+            wandBlock = try c.decodeIfPresent(Bool.self, forKey: .wandBlock) ?? false
+        }
     }
     var select = SelectOptions() { didSet { saveToolSettings() } }
     @ObservationIgnored private var smudgeScratch: MTLTexture?
@@ -2553,6 +2567,12 @@ final class EditorState {
         let seed = (x: Int(point.x.rounded(.down)), y: Int(point.y.rounded(.down)))
         guard (0..<w).contains(seed.x), (0..<h).contains(seed.y),
               let seen = renderer.flattenBytes(frameLayers(f.id, opacity: 1, tint: nil, guides: false)) else { return }
+        if select.wandBlock {
+            // Everything drawn that touches the tap, diagonals included, whatever its colour.
+            guard let block = SelectionPixels.connectedShape(seen, width: w, height: h, at: seed, reach: 3) else { return }
+            select(block)
+            return
+        }
         let region = FloodFill.region(in: seen, width: w, height: h, seed: seed,
                                       tolerance: Int((min(max(select.tolerance, 0), 1) * 255).rounded()))
         guard !region.isEmpty else { return }

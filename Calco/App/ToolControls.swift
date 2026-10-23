@@ -532,6 +532,17 @@ struct LassoOptions: View {
                 .pickerStyle(.segmented)
             }
             if state.select.shape == .wand {
+                Picker("Wand", selection: $state.select.wandBlock) {
+                    Text("By colour").tag(false)
+                    Text("Block").tag(true)
+                }
+                .pickerStyle(.segmented)
+                Text(state.select.wandBlock ? "Takes everything drawn that touches the tap, whatever its colour."
+                                            : "Takes the patch of the colour you tap.")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if state.select.shape == .wand && !state.select.wandBlock {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Tolerance · \(Int((state.select.tolerance * 100).rounded())) %")
                         .font(.subheadline).foregroundStyle(.secondary)

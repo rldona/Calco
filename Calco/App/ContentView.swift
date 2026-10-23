@@ -138,9 +138,8 @@ struct ContentView: View {
                         .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(Theme.hairline))
                         .padding(.bottom, state.bottomInset + 6)
                         .transition(.opacity)
-                } else if state.tool == .lasso && !state.hasSelection && state.selectionMask == nil
-                            && state.clipboard != nil && state.lassoPoints.isEmpty {
-                    PasteHint(state: state)
+                } else if state.tool == .lasso && !state.hasSelection {
+                    SelectModeBar(state: state)
                         .padding(.bottom, state.bottomInset + 6)
                 } else if state.hasSelection {
                     ScaleModePicker()
@@ -243,24 +242,85 @@ struct MoveLockedHint: View {
 
 /// Under the canvas while Move holds something: which stroke of the ones under the finger it
 /// is, the switch to pick several, and how the corner scales.
-/// With Select and nothing marked, what was copied is one tap away.
-struct PasteHint: View {
+/// Under the canvas while Select is on: how it marks (lasso, rectangle, wand), how a new mark
+/// meets the selection, the wand's tolerance, and Paste once something is copied. Always in
+/// view, so the modes don't hide in the tool's panel.
+struct SelectModeBar: View {
     @Bindable var state: EditorState
 
     var body: some View {
-        Button { state.paste() } label: {
-            Label("Paste", systemImage: "doc.on.clipboard")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Theme.onAccent)
-                .padding(.horizontal, 14).padding(.vertical, 8)
-                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 10))
-                .fixedSize()
+        HStack(spacing: 6) {
+            segment {
+                ForEach(EditorState.SelectOptions.Shape.allCases) { shape in
+                    option(on: state.select.shape == shape, label: shape.title) {
+                        Image(systemName: shape.icon)
+                    } action: { state.select.shape = shape }
+                }
+            }
+            segment {
+                ForEach(SelectionMask.Combine.allCases) { c in
+                    option(on: state.select.combine == c, label: c.title) {
+                        Text(c.title)
+                    } action: { state.select.combine = c }
+                }
+            }
+            if state.select.shape == .wand {
+                segment {
+                    option(on: !state.select.wandBlock, label: String(localized: "By colour", bundle: AppLanguage.bundle)) {
+                        Text("By colour")
+                    } action: { state.select.wandBlock = false }
+                    option(on: state.select.wandBlock, label: String(localized: "Block", bundle: AppLanguage.bundle)) {
+                        Text("Block")
+                    } action: { state.select.wandBlock = true }
+                }
+            }
+            if state.select.shape == .wand && !state.select.wandBlock {
+                HStack(spacing: 6) {
+                    Text("Tolerance").foregroundStyle(Theme.textDim)
+                    Slider(value: $state.select.tolerance, in: 0...1, step: 0.01).frame(width: 110)
+                    Text(verbatim: "\(Int((state.select.tolerance * 100).rounded())) %")
+                        .monospacedDigit().foregroundStyle(Theme.textDim).frame(width: 40, alignment: .trailing)
+                }
+                .font(.subheadline)
+                .padding(.horizontal, 6)
+            }
+            if state.clipboard != nil && state.selectionMask == nil {
+                Button { state.paste() } label: {
+                    Label("Paste", systemImage: "doc.on.clipboard")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.onAccent)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(Theme.accent, in: RoundedRectangle(cornerRadius: 9))
+                        .fixedSize()
+                }
+                .buttonStyle(.plain)
+                .help("Floats what you copied where it was, on this frame and layer")
+            }
         }
-        .buttonStyle(.plain)
         .padding(4)
         .background(Theme.panel, in: RoundedRectangle(cornerRadius: 13))
         .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(Theme.hairline))
-        .help("Floats what you copied where it was, on this frame and layer")
+    }
+
+    private func segment<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        HStack(spacing: 2) { content() }
+            .padding(3)
+            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func option<Label: View>(on: Bool, label: String, @ViewBuilder _ content: () -> Label,
+                                     action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            content()
+                .font(.subheadline.weight(on ? .semibold : .regular))
+                .foregroundStyle(on ? Theme.text : Theme.textDim)
+                .padding(.horizontal, 10).padding(.vertical, 5)
+                .background(on ? Theme.panel : .clear, in: RoundedRectangle(cornerRadius: 7))
+                .fixedSize()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(verbatim: label))
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
 
