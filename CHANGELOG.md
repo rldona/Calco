@@ -43,6 +43,7 @@ A release is made by pushing a tag `vX.Y.Z`: the release workflow tests and buil
 
 ### Fixed
 
+- The bar over what Move or Transform lifted has **Paste** again once something is copied, and pasting keeps you in Move; on a blank drawing (another frame, say), Move shows the yellow **Paste** button under the canvas.
 - Zoomed in, a drawing shows smooth instead of in blocky pixels; pixel-art projects stay crisp.
 - A side handle stretches from the opposite side, which stays put, instead of both sides at once around the centre.
 - The selection's marching ants, the lasso and the handles over the canvas no longer sit a little off the drawing (more so near its edges): they now share the canvas's full-screen space.

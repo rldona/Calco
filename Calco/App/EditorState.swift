@@ -3099,7 +3099,8 @@ final class EditorState {
     /// move; apply (✓) drops it, cancel (✕) leaves the drawing as it was.
     func paste() {
         guard let clip = clipboard, !isPlaying, currentLayer?.locked == false, let key = currentDrawingKey else { return }
-        tool = .lasso
+        // With Move it stays Move; from anything else, Select.
+        if tool != .move { tool = .lasso }
         commitSelection()
         guard store.texture(clip: key.clip, frame: key.frame, layer: key.layer) != nil else { return }
         let w = CGFloat(renderer.canvasSize.x), h = CGFloat(renderer.canvasSize.y)

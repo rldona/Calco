@@ -127,6 +127,11 @@ struct ContentView: View {
                    let layer = state.layers.first(where: { $0.id == id }) {
                     MoveLockedHint(state: state, layerName: layer.name)
                         .padding(.bottom, state.bottomInset + 6)
+                } else if state.tool == .move && !state.hasSelection && state.clipboard != nil {
+                    // Move on a blank drawing (another frame, say): nothing to pick up, but what
+                    // was copied is one tap away.
+                    PasteHint(state: state)
+                        .padding(.bottom, state.bottomInset + 6)
                 } else if state.tool == .move && state.hasSelection {
                     MoveStrokesHint(state: state)
                         .padding(.bottom, state.bottomInset + 6)
@@ -330,6 +335,27 @@ struct SelectModeBar: View {
         .buttonStyle(.plain)
         .accessibilityLabel(Text(verbatim: label))
         .accessibilityAddTraits(on ? .isSelected : [])
+    }
+}
+
+/// What was copied, one tap away: floats it where it was copied from, on this frame and layer.
+struct PasteHint: View {
+    @Bindable var state: EditorState
+
+    var body: some View {
+        Button { state.paste() } label: {
+            Label("Paste", systemImage: "doc.on.clipboard")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.onAccent)
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 10))
+                .fixedSize()
+        }
+        .buttonStyle(.plain)
+        .padding(4)
+        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 13))
+        .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(Theme.hairline))
+        .help("Floats what you copied where it was, on this frame and layer")
     }
 }
 

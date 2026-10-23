@@ -96,7 +96,7 @@ Con Seleccionar, la barra de encima tiene **Transformar**, **Rellenar** (con el 
 - **Tirador de la esquina**: escalar. **Tiradores de los lados**: estirar a lo ancho o a lo alto desde el lado contrario, que no se mueve, para el *squash & stretch*. **Tirador redondo**: girar. **Punto central**: el punto alrededor del que escala, estira y gira; arrástralo para moverlo (a los pies, por ejemplo, para que al aplastar sigan en el suelo).
 - Mientras escalas o estiras, una etiqueta muestra el ancho y el alto en porcentaje. Cada uno **encaja** en el 100 %, o en las proporciones del otro, con un toque háptico suave.
 - **Uniforme | Libre**, bajo el lienzo, es lo que hace la esquina: mantener las proporciones, o estirar el ancho y el alto por separado.
-- La barra de encima: **Copiar**, **Cortar**, **Eliminar**, **Voltear en horizontal**, **Cancelar** (✕, Esc) y **Aplicar** (✓, Retorno). Tocar fuera también aplica. Al aplicar, la selección se va con el dibujo.
+- La barra de encima: **Copiar**, **Cortar**, **Pegar** (si has copiado algo), **Eliminar**, **Voltear en horizontal**, **Cancelar** (✕, Esc) y **Aplicar** (✓, Retorno). Tocar fuera también aplica. Al aplicar, la selección se va con el dibujo.
 
 Lo pegado aparece donde lo copiaste, en el fotograma y la capa en que estés: útil para llevar una pose a otro dibujo y ajustarla.
 

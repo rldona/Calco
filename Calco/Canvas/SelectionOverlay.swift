@@ -382,7 +382,7 @@ private struct MaskBar: View {
     }
 }
 
-/// Copy, cut, delete, flip, (for pieces picked with Move) arrange, cancel and apply, floating above the selection.
+/// Copy, cut, paste, delete, flip, (for pieces picked with Move) arrange, cancel and apply, floating above the selection.
 private struct SelectionBar: View {
     @Bindable var state: EditorState
 
@@ -390,6 +390,10 @@ private struct SelectionBar: View {
         HStack(spacing: 2) {
             RailButton(icon: "doc.on.doc", label: "Copy", size: 32) { state.copySelection() }
             RailButton(icon: "scissors", label: "Cut", size: 32) { state.cutSelection() }
+            // Puts down what's floating and floats what was copied, in the place it was copied from.
+            if state.clipboard != nil {
+                RailButton(icon: "doc.on.clipboard", label: "Paste", size: 32) { state.paste() }
+            }
             RailButton(icon: "trash", label: "Delete selection", size: 32) { state.deleteSelection() }
             RailButton(icon: "arrow.left.and.right.righttriangle.left.righttriangle.right", label: "Flip horizontally", size: 32) {
                 state.updateSelection { $0.flipped.toggle() }
