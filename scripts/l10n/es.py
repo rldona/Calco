@@ -486,7 +486,6 @@ ES = {
 "Draw on frame %lld": "Dibujar en el fotograma %lld",
 "%lld found": "%lld encontrados",
 "Actions for %@": "Acciones de %@",
-"All projects · %lld": "Todos los proyectos · %lld",
 "Clear search": "Borrar búsqueda",
 "Drop to open": "Suelta para abrir",
 "Recent": "Recientes",

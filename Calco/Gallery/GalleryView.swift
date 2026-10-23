@@ -71,56 +71,55 @@ struct GalleryView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             header
-            if entries.isEmpty && folders.isEmpty {
-                emptyState
-            } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        if search.isEmpty, folder == nil, !entries.isEmpty {
-                            ContinueCard(entry: entries[0],
-                                         preview: continueClip == 0 ? previews[entries[0].url] : clipPreviews[continueClip],
-                                         clip: $continueClip,
-                                         open: { open(entries[0]) },
-                                         export: { export(entries[0]) },
-                                         duplicate: { attempt { try library.duplicate(entries[0]) } })
-                                .contextMenu { menu(for: entries[0]) }
-                        }
-                        if let folder {
-                            breadcrumb(folder)
-                        } else if search.isEmpty, !folders.isEmpty {
-                            sectionTitle("Folders · \(folders.count)")
-                            LazyVGrid(columns: columns, spacing: 12) {
-                                ForEach(folders, id: \.self) { name in folderCard(name) }
-                                NewFolderCard { startNewFolder(moving: nil) }
-                            }
-                        }
-                        if !search.isEmpty {
-                            sectionTitle("\(listed.count) found")
-                        } else if folder == nil {
-                            sectionTitle(folders.isEmpty ? "All projects · \(entries.count)" : "Projects · \(listed.count)")
-                        } else if listed.isEmpty {
-                            Text("This folder is empty. Drag projects here from All projects, or make a new one.")
-                                .font(.callout).foregroundStyle(Theme.textDim)
-                        }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if entries.isEmpty && folders.isEmpty { welcome }
+                    if search.isEmpty, folder == nil, !entries.isEmpty {
+                        ContinueCard(entry: entries[0],
+                                     preview: continueClip == 0 ? previews[entries[0].url] : clipPreviews[continueClip],
+                                     clip: $continueClip,
+                                     open: { open(entries[0]) },
+                                     export: { export(entries[0]) },
+                                     duplicate: { attempt { try library.duplicate(entries[0]) } })
+                            .contextMenu { menu(for: entries[0]) }
+                    }
+                    if let folder {
+                        breadcrumb(folder)
+                    } else if search.isEmpty {
+                        // Making a folder is always one tap away, first in the row.
+                        sectionTitle("Folders · \(folders.count)")
                         LazyVGrid(columns: columns, spacing: 12) {
-                            ForEach(listed) { entry in
-                                ProjectCard(entry: entry, preview: previews[entry.url],
-                                            place: search.isEmpty || folder != nil ? nil : entry.folder,
-                                            open: { open(entry) }) {
-                                    menu(for: entry)
-                                }
-                                .contextMenu { menu(for: entry) }
-                                .draggable(entry.url) {
-                                    AnimatedPreview(preview: previews[entry.url]).frame(width: 120, height: 120)
-                                }
-                            }
-                            if search.isEmpty { NewCard(dropping: dropping) { showingNew = true } }
+                            NewFolderCard { startNewFolder(moving: nil) }
+                            ForEach(folders, id: \.self) { name in folderCard(name) }
                         }
                     }
-                    .padding(.bottom, 16)
+                    if !search.isEmpty {
+                        sectionTitle("\(listed.count) found")
+                    } else if folder == nil {
+                        sectionTitle("Projects · \(listed.count)")
+                    } else if listed.isEmpty {
+                        Text("This folder is empty. Drag projects here from All projects, or make a new one.")
+                            .font(.callout).foregroundStyle(Theme.textDim)
+                    }
+                    LazyVGrid(columns: columns, spacing: 12) {
+                        // Likewise a new project, first in the grid.
+                        if search.isEmpty { NewCard(dropping: dropping) { showingNew = true } }
+                        ForEach(listed) { entry in
+                            ProjectCard(entry: entry, preview: previews[entry.url],
+                                        place: search.isEmpty || folder != nil ? nil : entry.folder,
+                                        open: { open(entry) }) {
+                                menu(for: entry)
+                            }
+                            .contextMenu { menu(for: entry) }
+                            .draggable(entry.url) {
+                                AnimatedPreview(preview: previews[entry.url]).frame(width: 120, height: 120)
+                            }
+                        }
+                    }
                 }
-                .scrollIndicators(.hidden)
+                .padding(.bottom, 16)
             }
+            .scrollIndicators(.hidden)
         }
         .padding(20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -265,24 +264,14 @@ struct GalleryView: View {
         .buttonStyle(.plain)
     }
 
-    private var emptyState: some View {
-        VStack(spacing: 14) {
-            Spacer()
-            Image(systemName: "figure.run").font(.system(size: 48)).foregroundStyle(Theme.textFaint)
+    /// Above the shortcuts the first time, before there's anything else.
+    private var welcome: some View {
+        VStack(alignment: .leading, spacing: 4) {
             Text("Start your first animation").font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
             Text("Pick a sprite size and the clips you need. Everything saves here on its own.")
-                .font(.callout).foregroundStyle(Theme.textDim).multilineTextAlignment(.center)
-            Button { showingNew = true } label: {
-                Text("New project")
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(Theme.onAccent)
-                    .padding(.horizontal, 22).padding(.vertical, 10)
-                    .background(Theme.accent, in: RoundedRectangle(cornerRadius: 10))
-            }
-            .buttonStyle(.plain)
-            Spacer()
+                .font(.callout).foregroundStyle(Theme.textDim)
         }
-        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
     }
 
     private var sortTitle: String {
@@ -687,7 +676,7 @@ private struct NewFolderCard: View {
                 Text("New folder").font(.callout)
             }
             .foregroundStyle(Theme.textFaint)
-            .frame(maxWidth: .infinity, minHeight: 200)
+            .frame(maxWidth: .infinity, minHeight: 200, maxHeight: .infinity)
             .overlay(RoundedRectangle(cornerRadius: Theme.corner)
                 .strokeBorder(Theme.hairline, style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
         }
@@ -703,14 +692,14 @@ private struct NewCard: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 6) {
-                Image(systemName: dropping ? "square.and.arrow.down" : "plus").font(.system(size: 24))
-                Text(dropping ? "Drop to open" : "New").font(.callout)
+                Image(systemName: dropping ? "square.and.arrow.down" : "pencil.tip").font(.system(size: 24))
+                Text(dropping ? "Drop to open" : "New project").font(.callout)
                 if !dropping {
                     Text("or drop a .calco here").font(.caption2).foregroundStyle(Theme.textFaint)
                 }
             }
             .foregroundStyle(dropping ? Theme.accentText : Theme.textFaint)
-            .frame(maxWidth: .infinity, minHeight: 200)
+            .frame(maxWidth: .infinity, minHeight: 200, maxHeight: .infinity)
             .background(dropping ? Theme.accentWash : .clear, in: RoundedRectangle(cornerRadius: Theme.corner))
             .overlay(RoundedRectangle(cornerRadius: Theme.corner)
                 .strokeBorder(dropping ? Theme.accent : Theme.hairline, style: StrokeStyle(lineWidth: 1, dash: [5, 4])))

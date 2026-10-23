@@ -7,13 +7,13 @@ Calco opens on the gallery: every project on this iPad, with the last one ready 
 - **Continue** opens the project you were working on. Its card plays a clip: tap a clip's name to watch another one. It shows the sprite size, the speed and when you last edited it, with **Export…** and **Duplicate** at hand.
 - **All projects** lists the rest, with their size and date. Tap **⋯** on a card (or long-press it) to **open**, **rename**, **duplicate**, **export**, **move** or **delete** it.
 - **Search** finds a project by its name or by the name of one of its clips, and **Sort** orders them by **Recent**, **Name** or **Size**.
-- The **arrow into a tray** opens a `.calco` project from Files, iCloud Drive or AirDrop. You can also drop a `.calco` on the **New** card: Calco copies it in and opens it.
+- The **arrow into a tray** opens a `.calco` project from Files, iCloud Drive or AirDrop. You can also drop a `.calco` on the **New project** card: Calco copies it in and opens it.
 
 ## Folders
 
 Put the projects of a game together: characters, enemies, effects…
 
-- The **folder with a +** at the top (or the **New folder** card) makes one. Folders show first, each with a peek at its projects.
+- The **New folder** card, always first among the folders (or the **folder with a +** at the top), makes one. Each folder shows a peek at its projects. Likewise **New project** is always the first card among the projects, even when there are none yet.
 - **Drag a project onto a folder** to put it there: the folder lights up while you hold it over. Inside a folder, drag a project onto **All projects** to take it out.
 - Or use **⋯ › Move to** on a project, which can also make a new folder and put the project in it.
 - A folder's **⋯** renames or deletes it. Deleting a folder never deletes its projects: they go back to All projects.
@@ -24,7 +24,7 @@ Folders are ordinary folders in **On My iPad › Calco**, so the Files app shows
 
 ## New project
 
-Tap **New** to choose how the character starts.
+Tap **New** at the top, or the **New project** card, to choose how the character starts.
 
 ![New project](/crops/en/new-project.jpg)
 
