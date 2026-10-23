@@ -99,6 +99,62 @@ final class ProjectLibraryTests: XCTestCase {
         XCTAssertEqual(Set(library.entries().map(\.name)), ["Villain", "Villain 2 copy"])
     }
 
+    func testFoldersListTheirProjectsOneLevelDeep() throws {
+        _ = try write("Top")
+        let library = ProjectLibrary(directory: dir)
+        XCTAssertEqual(try library.createFolder("Enemies"), "Enemies")
+        XCTAssertEqual(try library.createFolder("enemies"), "enemies 2", "names don't clash, whatever the case")
+        XCTAssertEqual(try library.createFolder(".hidden.calco"), "hidden", "never hidden, never a package")
+        XCTAssertEqual(try library.createFolder("Exports"), "Exports 2", "the app's own folders are kept apart")
+        try FileManager.default.createDirectory(at: dir.appendingPathComponent("Exports"), withIntermediateDirectories: true)
+        try ProjectDocument.save(Project(name: "Slime", canvas: CanvasSize(width: 8, height: 8), fps: 8,
+                                         clips: [EditorState.defaultClip()]), to: library.url(for: "Slime", in: "Enemies"))
+
+        XCTAssertEqual(library.folders(), ["enemies 2", "Enemies", "Exports 2", "hidden"].sorted {
+            $0.localizedStandardCompare($1) == .orderedAscending })
+        let entries = library.entries()
+        XCTAssertEqual(Set(entries.map(\.name)), ["Top", "Slime"])
+        XCTAssertEqual(entries.first { $0.name == "Slime" }?.folder, "Enemies")
+        XCTAssertNil(entries.first { $0.name == "Top" }?.folder)
+    }
+
+    func testMoveKeepsNamesApartAndRenameStaysInTheFolder() throws {
+        _ = try write("Hero")
+        let library = ProjectLibrary(directory: dir)
+        try library.createFolder("Cast")
+        _ = try ProjectDocument.save(Project(name: "Hero", canvas: CanvasSize(width: 8, height: 8), fps: 8,
+                                             clips: [EditorState.defaultClip()]), to: library.url(for: "Hero", in: "Cast"))
+        let top = try XCTUnwrap(library.entries().first { $0.folder == nil })
+
+        let moved = try library.move(top, to: "Cast")
+        XCTAssertEqual(moved, library.url(for: "Hero 2", in: "Cast"), "never overwrites the one already there")
+        XCTAssertEqual(try ProjectDocument.load(from: moved).name, "Hero 2")
+        XCTAssertTrue(library.entries().allSatisfy { $0.folder == "Cast" })
+
+        let entry = try XCTUnwrap(library.entries().first { $0.name == "Hero 2" })
+        XCTAssertEqual(try library.rename(entry, to: "Rival"), library.url(for: "Rival", in: "Cast"))
+        let rival = try XCTUnwrap(library.entries().first { $0.name == "Rival" })
+        XCTAssertEqual(try library.duplicate(rival), library.url(for: "Rival copy", in: "Cast"))
+
+        let back = try library.move(rival, to: nil)
+        XCTAssertEqual(back, library.url(for: "Rival"))
+    }
+
+    func testRenameAndDeleteAFolderKeepItsProjects() throws {
+        _ = try write("Hero")
+        let library = ProjectLibrary(directory: dir)
+        try library.createFolder("Cast")
+        _ = try ProjectDocument.save(Project(name: "Hero", canvas: CanvasSize(width: 8, height: 8), fps: 8,
+                                             clips: [EditorState.defaultClip()]), to: library.url(for: "Hero", in: "Cast"))
+        XCTAssertEqual(try library.renameFolder("Cast", to: "cast"), "cast", "a change of case is fine")
+        XCTAssertEqual(try library.renameFolder("cast", to: "Heroes"), "Heroes")
+
+        try library.deleteFolder("Heroes")
+        XCTAssertEqual(library.folders(), [])
+        XCTAssertEqual(Set(library.entries().map(\.name)), ["Hero", "Hero 2"], "projects come back to the top")
+        XCTAssertTrue(library.entries().allSatisfy { $0.folder == nil })
+    }
+
     func testPreviewFollowsHoldsAndLoops() {
         let blank = CGContext(data: nil, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 0,
                               space: CGColorSpaceCreateDeviceRGB(),

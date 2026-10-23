@@ -5,9 +5,21 @@ Calco opens on the gallery: every project on this iPad, with the last one ready 
 ![The gallery](/screens/en/gallery.jpg)
 
 - **Continue** opens the project you were working on. Its card plays a clip: tap a clip's name to watch another one. It shows the sprite size, the speed and when you last edited it, with **Export…** and **Duplicate** at hand.
-- **All projects** lists the rest, with their size and date. Tap **⋯** on a card (or long-press it) to **open**, **rename**, **duplicate**, **export** or **delete** it.
+- **All projects** lists the rest, with their size and date. Tap **⋯** on a card (or long-press it) to **open**, **rename**, **duplicate**, **export**, **move** or **delete** it.
 - **Search** finds a project by its name or by the name of one of its clips, and **Sort** orders them by **Recent**, **Name** or **Size**.
-- The **folder** opens a `.calco` project from Files, iCloud Drive or AirDrop. You can also drop a `.calco` on the **New** card: Calco copies it in and opens it.
+- The **arrow into a tray** opens a `.calco` project from Files, iCloud Drive or AirDrop. You can also drop a `.calco` on the **New** card: Calco copies it in and opens it.
+
+## Folders
+
+Put the projects of a game together: characters, enemies, effects…
+
+- The **folder with a +** at the top (or the **New folder** card) makes one. Folders show first, each with a peek at its projects.
+- **Drag a project onto a folder** to put it there: the folder lights up while you hold it over. Inside a folder, drag a project onto **All projects** to take it out.
+- Or use **⋯ › Move to** on a project, which can also make a new folder and put the project in it.
+- A folder's **⋯** renames or deletes it. Deleting a folder never deletes its projects: they go back to All projects.
+- New projects, and `.calco` files dropped in, go to the folder you're in. Search inside a folder looks only there.
+
+Folders are ordinary folders in **On My iPad › Calco**, so the Files app shows the same thing.
 - The **gear** opens [Preferences](./preferences).
 
 ## New project

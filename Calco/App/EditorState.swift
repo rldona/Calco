@@ -471,13 +471,19 @@ final class EditorState {
         save(to: documentURL ?? Self.packageURL(named: project.name))
     }
 
-    /// Renames the project and writes it as a new package in Documents.
+    /// Renames the project and writes it as a new package in Documents, in the gallery folder
+    /// it was in.
     func saveAs(name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "/", with: "-")
         guard !trimmed.isEmpty else { return }
         project.name = trimmed
-        save(to: Self.packageURL(named: trimmed))
+        let parent = documentURL?.deletingLastPathComponent().standardizedFileURL
+        if let parent, parent.deletingLastPathComponent() == Self.documentsDirectory.standardizedFileURL {
+            save(to: parent.appendingPathComponent(trimmed).appendingPathExtension(ProjectDocument.fileExtension))
+        } else {
+            save(to: Self.packageURL(named: trimmed))
+        }
     }
 
     /// Writes the current project if it already has a file. Used when the app goes to the background.

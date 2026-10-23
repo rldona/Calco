@@ -30,12 +30,14 @@
 "%lld of %lld images couldn't be read; their frames have no guide." = "No se pudieron leer %lld de %lld imágenes; sus fotogramas quedan sin guía.";
 "%lld pixels per unit" = "%lld píxeles por unidad";
 "%lld points" = "%lld puntas";
+"%lld projects" = "%lld proyectos";
 "%lld sides" = "%lld lados";
 "%lld strokes" = "%lld trazos";
 "1 clip" = "1 clip";
 "1 clip ·" = "1 clip ·";
 "1 frame" = "1 fotograma";
 "1 image" = "1 imagen";
+"1 project" = "1 proyecto";
 "1:1" = "1:1";
 "A drawing labelled \"step\" calls OnCalcoLabel(\"step\") on the GameObject when its frame plays. Add that method to a script on the same object." = "Un dibujo con la etiqueta \"step\" llama a OnCalcoLabel(\"step\") en el GameObject cuando se reproduce su fotograma. Añade ese método a un script del mismo objeto.";
 "A faint grid behind the canvas, like a cutting mat." = "Una cuadrícula suave detrás del lienzo, como una plancha de corte.";
@@ -121,6 +123,7 @@
 "Couldn't read that image." = "No se pudo leer esa imagen.";
 "Couldn't save %@.\n%@" = "No se pudo guardar %@.\n%@";
 "Cover" = "Rellenar";
+"Create" = "Crear";
 "Create and start drawing" = "Crear y empezar a dibujar";
 "Current layer only" = "Solo la capa actual";
 "Curve" = "Curva";
@@ -142,6 +145,7 @@
 "Delete point" = "Borrar punto";
 "Delete profile" = "Eliminar perfil";
 "Delete selection" = "Eliminar selección";
+"Delete the folder %@?" = "¿Eliminar la carpeta %@?";
 "Delete…" = "Eliminar…";
 "Done" = "OK";
 "Dotted" = "Puntos";
@@ -157,6 +161,7 @@
 "Drawings before" = "Dibujos antes";
 "Drawings before colour" = "Color de los dibujos antes";
 "Draws" = "Pinta";
+"Drop to move" = "Suelta para mover";
 "Drop to open" = "Suelta para abrir";
 "Duplicate" = "Duplicar";
 "Duplicate %@" = "Duplicar %@";
@@ -204,6 +209,7 @@
 "Flip horizontally" = "Voltear en horizontal";
 "Flip the view (H): see the drawing mirrored without changing it" = "Voltear la vista (H): ver el dibujo en espejo sin modificarlo";
 "Flip view" = "Voltear vista";
+"Folders · %lld" = "Carpetas · %lld";
 "For roughing out the motion" = "Para encajar el movimiento";
 "Frame" = "Fotograma";
 "Frame %lld" = "Fotograma %lld";
@@ -245,6 +251,7 @@
 "Its drawing in all %lld frames of %@ goes with it. You can undo this." = "Su dibujo en los %lld fotogramas de %@ se elimina con ella. Puedes deshacerlo.";
 "Its drawings in all %lld frames of %@ go with it. You can undo this." = "Sus dibujos en los %lld fotogramas de %@ se eliminan con ella. Puedes deshacerlo.";
 "Its own" = "Otro color";
+"Its projects aren't deleted: they go back to All projects." = "Sus proyectos no se borran: vuelven a Todos los proyectos.";
 "Label drawing" = "Etiquetar dibujo";
 "Labels as animation events" = "Etiquetas como eventos de animación";
 "Label…" = "Etiqueta…";
@@ -283,6 +290,7 @@
 "Move down" = "Bajar";
 "Move earlier" = "Mover antes";
 "Move later" = "Mover después";
+"Move to" = "Mover a";
 "Move up" = "Subir";
 "Name" = "Nombre";
 "Name (idle, run, jump…)" = "Nombre (idle, run, jump…)";
@@ -296,6 +304,8 @@
 "New clip…" = "Nuevo clip…";
 "New drawing" = "Nuevo dibujo";
 "New drawing here" = "Nuevo dibujo aquí";
+"New folder" = "Nueva carpeta";
+"New folder…" = "Nueva carpeta…";
 "New frame" = "Nuevo fotograma";
 "New frames last" = "Los nuevos duran";
 "New guide layer" = "Capa guía nueva";
@@ -356,6 +366,7 @@
 "Pressing harder works the paint more. The size is the bar's." = "Cuanto más aprietas, más trabaja la pintura. El tamaño es el de la barra.";
 "Previous Frame" = "Fotograma anterior";
 "Project name" = "Nombre del proyecto";
+"Projects · %lld" = "Proyectos · %lld";
 "Recent" = "Recientes";
 "Rectangle" = "Rectángulo";
 "Red" = "Rojo";
@@ -366,6 +377,7 @@
 "Rename %@…" = "Renombrar %@…";
 "Rename clip" = "Renombrar clip";
 "Rename colour" = "Renombrar color";
+"Rename folder" = "Renombrar carpeta";
 "Rename layer" = "Renombrar capa";
 "Rename project" = "Renombrar proyecto";
 "Rename…" = "Renombrar…";
@@ -392,6 +404,7 @@
 "Saved to On My iPad › Calco as a .calco package." = "Guardado en En mi iPad › Calco como paquete .calco.";
 "Scale" = "Escala";
 "Scale selection" = "Escalar selección";
+"Search in this folder" = "Buscar en esta carpeta";
 "Search projects" = "Buscar proyectos";
 "See the drawings before and after this one, faded, to draw in between" = "Ver en transparencia los dibujos de antes y de después, para dibujar los intermedios";
 "Select All" = "Seleccionar todo";
@@ -455,6 +468,7 @@
 "The whole drawing" = "Todo el dibujo";
 "There are no PNG images there." = "Ahí no hay imágenes PNG.";
 "Thickness" = "Grosor";
+"This folder is empty. Drag projects here from All projects, or make a new one." = "Esta carpeta está vacía. Arrastra proyectos aquí desde Todos los proyectos, o crea uno nuevo.";
 "This project: brush, eraser, fill and lasso with hard edges, every pixel fully on or off." = "Este proyecto: pincel, goma, relleno y lazo con bordes duros, cada píxel pintado o vacío del todo.";
 "Timeline height" = "Altura de la línea de tiempo";
 "Tint" = "Tinte";

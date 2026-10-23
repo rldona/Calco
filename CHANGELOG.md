@@ -8,6 +8,7 @@ A release is made by pushing a tag `vX.Y.Z`: the release workflow tests and buil
 
 ### Added
 
+- **Folders** in the gallery: make one, drag a project onto it (or use ⋯ › Move to), and drag it onto All projects to take it out. A folder's card peeks at its projects; deleting a folder never deletes them. Folders are plain folders in On My iPad › Calco.
 - A **new gallery**: the Continue card plays the clip you pick and has Export and Duplicate at hand; every card shows its size and date and a **⋯** menu (open, rename, duplicate, export, delete); **search** by project or clip name, **sort** by recent, name or size, and drop a `.calco` on the New card to bring it in.
 - The timeline goes on past the last frame with **empty slots**: tap one to draw there, the frames in between holding the last drawings.
 - **Pick several frames** in the timeline (tap a number twice, then drag): copy, cut, paste, reverse, duplicate or delete them together, whole frames or the drawings of the layers you choose (tap a layer's name to add or remove it), as one undo.
